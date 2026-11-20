@@ -1,6 +1,10 @@
 // All player-facing text, RU / EN (CLAUDE.md, section 9). The server only sends keys + params.
 
 const RU = {
+  map_caption: "Квадрат поиска · рейс AQ-271",
+  map_legend: "1 слой бумаги ≈ 1% вероятности",
+  north: "С",
+  dev_hint: "Временно (до M6): клик по клетке — курс и прогноз соперника · N — ход по совету офицеров · C — принять улику",
   title: "ABYSS · Карта капитана",
   title_sub: "Карта капитана",
   mode_play: "Искать самому",
@@ -69,6 +73,10 @@ const RU = {
 };
 
 const EN = {
+  map_caption: "Search square · flight AQ-271",
+  map_legend: "1 sheet of paper ≈ 1% probability",
+  north: "N",
+  dev_hint: "Temporary (until M6): click a cell — course and rival forecast · N — one move by the officers' advice · C — accept a clue",
   title: "ABYSS · The Captain's Chart",
   title_sub: "The Captain's Chart",
   mode_play: "Search yourself",
