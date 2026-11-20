@@ -37,19 +37,19 @@ export function createView(canvas) {
 
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x0e0905);
-  scene.fog = new THREE.Fog(0x0e0905, 28, 50);
+  scene.fog = new THREE.Fog(0x0e0905, 40, 70);
   const pmrem = new THREE.PMREMGenerator(renderer);
   scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-  scene.environmentIntensity = 0.3;
+  scene.environmentIntensity = 0.13;     // a hint for the brass and the table edges: the lamp does the lighting
 
-  const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 120);
+  const camera = new THREE.PerspectiveCamera(22, 1, 0.1, 160);
 
-  // one warm lamp above the table; it sways a little, so the shadows on the relief move
-  scene.add(new THREE.HemisphereLight(0xc9c2b5, 0x2a1a10, 0.25));
-  const lamp = new THREE.SpotLight(0xFFD9A0, 5.4, 0, deg(40), 0.85, 0);
-  const LAMP_POS = new THREE.Vector3(-6, 15, -1);
+  // one warm hanging lamp, low and to the side: the paper steps cast shadows; it sways a little
+  scene.add(new THREE.HemisphereLight(0xd8c6a8, 0x2a1a10, 0.12));
+  const lamp = new THREE.SpotLight(0xFFCF98, 3.6, 0, deg(31), 0.85, 0);     // a warm pool on the chart, darker edges
+  const LAMP_POS = new THREE.Vector3(-5, 7, -8);      // the scene moves it to the visible lamp shade
   lamp.position.copy(LAMP_POS);
-  lamp.target.position.set(0.5, 0, 0.8);
+  lamp.target.position.set(0.3, 0, 0.8);
   lamp.castShadow = true;
   lamp.shadow.mapSize.set(2048, 2048);
   lamp.shadow.bias = -0.0002;
@@ -58,7 +58,7 @@ export function createView(canvas) {
   lamp.shadow.camera.near = 6;
   lamp.shadow.camera.far = 40;
   scene.add(lamp, lamp.target);
-  const fill = new THREE.DirectionalLight(0x9cc3d6, 0.28);   // cool porthole light from the right
+  const fill = new THREE.DirectionalLight(0x9cc3d6, 0.18);   // faint cool porthole light from the right
   fill.position.set(14, 7, -6);
   scene.add(fill);
 
@@ -72,10 +72,11 @@ export function createView(canvas) {
   composer.addPass(hBlur);
   composer.addPass(vBlur);
   composer.addPass(new OutputPass());
-  const BLUR = 0.9;
+  const BLUR = 0.35;                                        // just a hint at the very top and bottom
 
-  // camera rig: look at `target` from `dist` at `tilt` degrees; can be re-aimed per screen size
-  const rig = { target: new THREE.Vector3(), dist: 20, tilt: 50, yaw: 0 };
+  // camera rig: look at `target` from `dist` at `tilt` degrees above the horizon.
+  // hfov = horizontal field of view: a long lens (30-35°) keeps the chart from looking like a trapezoid
+  const rig = { target: new THREE.Vector3(), dist: 36, tilt: 40, yaw: 0, hfov: 33 };
   function aim() {
     const t = deg(rig.tilt), y = deg(rig.yaw);
     camera.position.set(rig.target.x + Math.sin(y) * Math.cos(t) * rig.dist,
@@ -92,8 +93,9 @@ export function createView(canvas) {
     hBlur.uniforms.h.value = BLUR / w;
     vBlur.uniforms.v.value = BLUR / h;
     camera.aspect = w / h;
-    camera.updateProjectionMatrix();
     for (const fn of resizeHooks) fn(w, h);
+    camera.fov = THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(deg(rig.hfov) / 2) / camera.aspect));
+    camera.updateProjectionMatrix();
     aim();
   }
   window.addEventListener("resize", resize);
@@ -120,8 +122,9 @@ export function createView(canvas) {
   function frame() {
     const dt = Math.min(0.05, clock.getDelta());
     const time = clock.elapsedTime;
-    lamp.position.set(LAMP_POS.x + Math.sin(time * 0.55) * 0.7, LAMP_POS.y, LAMP_POS.z + Math.sin(time * 0.37) * 0.5);
-    for (const fn of frameHooks) fn(dt, time);
+    const sway = { x: Math.sin(time * 0.55) * 0.18, z: Math.sin(time * 0.37) * 0.12 };   // a gentle swing
+    lamp.position.set(LAMP_POS.x + sway.x, LAMP_POS.y, LAMP_POS.z + sway.z);
+    for (const fn of frameHooks) fn(dt, time, sway);
     composer.render();
     for (const p of pins) {
       const s = toScreen(p.anchor);
@@ -132,8 +135,15 @@ export function createView(canvas) {
     requestAnimationFrame(frame);
   }
 
+  /** The scene hangs the visible lamp shade here; the spotlight sits in its bulb. */
+  function placeLamp(bulb, target) {
+    LAMP_POS.copy(bulb);
+    lamp.position.copy(bulb);
+    lamp.target.position.copy(target);
+  }
+
   return {
-    renderer, scene, camera, rig, aim, lamp, pin, toScreen,
+    renderer, scene, camera, rig, aim, lamp, pin, toScreen, placeLamp,
     onFrame: (fn) => frameHooks.push(fn),
     onResize: (fn) => resizeHooks.push(fn),
     start() { resize(); requestAnimationFrame(frame); },

@@ -17,8 +17,8 @@ async function loadFonts() {
 /** Camera per screen: the map sits to the left (the officers' panel will be on the right). */
 function aimCamera(view, w, h) {
   const r = view.rig;
-  if (w / h >= 1.15) { r.target.set(2.6, 0, 0.9); r.dist = 25.5; r.tilt = 50; }
-  else { r.target.set(0, 0, 0.9); r.dist = 31; r.tilt = 58; }             // narrow screens / phones
+  if (w / h >= 1.15) { r.target.set(2.6, 0, -0.6); r.dist = 41; r.tilt = 40; r.hfov = 31; }
+  else { r.target.set(0, 0, 0.3); r.dist = 44; r.tilt = 52; r.hfov = 34; }   // narrow screens / phones
 }
 
 async function start() {
@@ -47,7 +47,7 @@ async function start() {
   async function step() {
     if (busy || state.status !== "playing") return;
     busy = true;
-    map.target(null); map.setRoute("ours", null); map.showForecast(null); target = null;
+    map.target(null); map.setRoute("ours", null); target = null;
     try {
       for (const c of state.clues) state = (await api.clue(c.id, true)).state;
       const before = state;
@@ -64,15 +64,14 @@ async function start() {
     const cell = map.cellAt(e.clientX, e.clientY);
     if (busy || !cell) return;
     if (target && target[0] === cell[0] && target[1] === cell[1]) {
-      target = null; map.target(null); map.setRoute("ours", null); map.showForecast(null); return;
+      target = null; map.target(null); map.setRoute("ours", null); return;
     }
     target = cell;
     map.target(cell);
     try {
       const pv = await api.preview({ type: "go", target: cell, tool: "sonar" });
-      map.setRoute("ours", pv.path.length > 1 ? pv.path : null);
-      map.showForecast(pv.rival ? pv.rival.pos : null);
-    } catch { map.setRoute("ours", null); map.showForecast(null); }
+      map.setRoute("ours", pv.path.length > 1 ? pv.path : null);   // only our course: forecasts come with the M6 tags
+    } catch { map.setRoute("ours", null); }
   });
   window.addEventListener("keydown", async (e) => {
     const k = e.key.toLowerCase();

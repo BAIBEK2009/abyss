@@ -56,7 +56,7 @@ html, body {
   position: fixed;
   inset: 0;
   pointer-events: none;
-  background: radial-gradient(ellipse 80% 75% at 40% 45%, transparent 55%, rgba(10, 6, 3, 0.45) 85%, rgba(6, 3, 1, 0.8) 100%);
+  background: radial-gradient(ellipse 72% 70% at 40% 52%, transparent 40%, rgba(10, 6, 3, 0.5) 78%, rgba(4, 2, 1, 0.92) 100%);
 }
 
 #overlay { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }

@@ -5,9 +5,11 @@
 //   L(p)      layers: 1 % per layer up to 30 %, then 1 layer per 5 %
 //   terraces  each layer rises in its last 22 % (soft paper steps)
 //   height    = terraces * T, T = 0.5 / 30 (30 layers = half a cell, a peak never hides neighbours)
-// Everything else is drawn by the fragment shader directly on the relief: ink contour lines
-// (every 5th thicker), alternating layer tone, paper grain, pencil grid, gold above 50 %,
-// reef hatching, dive marks, the last-signal cross, highlights and sonar rings.
+// The fragment shader makes it read as a stack of paper sheets, using a height texture:
+// a soft drop shadow of every sheet on the one below (towards away from the lamp), darkening
+// at the foot of each step, a light rim along each sheet's edge, darker walls facing away from
+// the lamp, thin ink contour lines. It also draws paper grain, the pencil grid, gold above 50 %,
+// reef islands with a pencil shoreline, dive marks, the last-signal cross, highlights and rings.
 import * as THREE from "three";
 
 export const N = 200;                 // vertices per side
@@ -54,7 +56,7 @@ function field(P) {
 }
 
 const COLORS = {
-  paper: new THREE.Color(0xEFE6D2), sea: new THREE.Color(0xE9E1CB), deep: new THREE.Color(0xC9B791),
+  paper: new THREE.Color(0xF3EAD6), sea: new THREE.Color(0xEDE5D0), deep: new THREE.Color(0xD6BC8E),
   ink: new THREE.Color(0x2B2A33), pencil: new THREE.Color(0x6A6A74), gold: new THREE.Color(0xE8B04A),
   teal: new THREE.Color(0x2F7D86), red: new THREE.Color(0xC2412D), brass: new THREE.Color(0xB8893B),
 };
@@ -81,6 +83,10 @@ uniform float uTime;
 uniform vec4 uRings[4];        // x, y, radius, alpha
 uniform vec3 uRingColor[4];
 uniform vec3 uPaper, uSea, uDeep, uInk, uPencil, uGold, uTeal, uRed;
+uniform sampler2D uHeight;     // r = terraced height (layers), g = continuous layers L; uv = map / 10
+uniform vec2 uLight;           // map-space direction TOWARDS the lamp (normalised)
+
+vec2 HT(vec2 m) { return texture2D(uHeight, clamp(m, 0.0, 10.0) / 10.0).rg; }
 
 float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float vnoise(vec2 p) {
@@ -115,35 +121,76 @@ const FRAG_BODY = /* glsl */`
   // paper: flat sea below the first layer, then darker foot -> lighter top, alternating tone
   vec3 col = uSea;
   if (L >= 1.0) {
-    col = mix(uDeep, uPaper, clamp((n - 1.0) / 7.0, 0.0, 1.0));
-    col *= mod(n, 2.0) < 0.5 ? 0.93 : 1.0;
+    col = mix(uDeep * 0.95, uPaper, clamp((n - 1.0) / 6.0, 0.0, 1.0));
+    col *= mod(n, 2.0) < 0.5 ? 0.94 : 1.0;
   }
-  col *= 0.95 + 0.07 * vnoise(vMap * 70.0) + 0.03 * vnoise(vMap * 9.0);      // paper grain
+  col *= 0.955 + 0.06 * vnoise(vMap * 90.0) + 0.025 * vnoise(vMap * 11.0);   // paper grain
 
-  // pencil grid on every cell border
+  // --- stacked paper sheets ------------------------------------------------------------
+  vec2 h0 = HT(vMap);
+  // soft drop shadow: walk towards the lamp; a higher sheet nearby shades this one
+  float shade = 0.0;
+  for (int i = 1; i <= 8; i++) {
+    float s = float(i) * 0.036;
+    float rise = HT(vMap + uLight * s).r - h0.r - s * 3.6;        // 3.6 layers per unit = a low lamp
+    shade = max(shade, clamp(rise * 0.9, 0.0, 1.0) * (1.0 - float(i) / 9.5));
+  }
+  // darkening at the foot of a step: paper rises right next to this point
+  float foot = 0.0;
+  for (int i = 0; i < 8; i++) {
+    float a = float(i) * 0.7854;
+    foot += clamp(HT(vMap + vec2(cos(a), sin(a)) * 0.06).r - h0.r, 0.0, 1.0);
+  }
+  foot /= 8.0;
+  // step walls: steep terraced gradient; walls facing away from the lamp are darker
+  float e = 0.012;
+  vec2 gT = vec2(HT(vMap + vec2(e, 0.0)).r - HT(vMap - vec2(e, 0.0)).r,
+                 HT(vMap + vec2(0.0, e)).r - HT(vMap - vec2(0.0, e)).r) / (2.0 * e);
+  float wall = smoothstep(6.0, 22.0, length(gT));
+  float facing = length(gT) > 1e-3 ? dot(-normalize(gT), uLight) : 0.0;
+  // one combined light factor for the paper sheets, applied after the islands (so they get shaded too);
+  // clamped so steep slopes facing away from the lamp stay paper-coloured, never black
+  float sheet = mix(1.0, facing > 0.0 ? 1.07 : 0.74, wall) * (1.0 - 0.42 * shade - 0.25 * clamp(foot, 0.0, 1.0));
+  sheet = clamp(sheet, 0.6, 1.1);
+  // light rim just inside the upper edge of every sheet
+  vec2 gL = vec2(HT(vMap + vec2(e, 0.0)).g - HT(vMap - vec2(e, 0.0)).g,
+                 HT(vMap + vec2(0.0, e)).g - HT(vMap - vec2(0.0, e)).g) / (2.0 * e);
+  float dEdge = fract(L) / max(length(gL), 1e-3);               // map distance above the contour
+  float rim = (1.0 - smoothstep(0.004, 0.022, dEdge)) * step(1.0, L) * (1.0 - wall);
+
+  // pencil grid on every cell border (light)
   vec2 g = abs(fract(vMap + 0.5) - 0.5);
-  float grid = max(aaLine(g.x, 0.008, pxm), aaLine(g.y, 0.008, pxm));
-  col = mix(col, uPencil, grid * 0.45);
+  float grid = max(aaLine(g.x, 0.006, pxm), aaLine(g.y, 0.006, pxm));
+  col = mix(col, uPencil, grid * 0.3);
 
-  // ink contour lines at every whole layer; every 5th is thicker (like a topo map)
+  // thin ink contour lines at every whole layer; every 5th a little stronger
   if (L > 0.6) {
     float d = abs(fract(L + 0.5) - 0.5);
     float wl = fwidth(L);
     float major = abs(mod(floor(L + 0.5), 5.0)) < 0.5 ? 1.0 : 0.0;
-    float line = aaLine(d, wl * mix(0.55, 1.25, major), wl * 0.9);
-    col = mix(col, uInk, line * mix(0.6, 0.85, major));
+    float line = aaLine(d, wl * mix(0.35, 0.8, major), wl * 0.8);
+    col = mix(col, uInk, line * mix(0.28, 0.5, major));
   }
 
   // gold where the belief is above 50 %
   col = mix(col, uGold, smoothstep(0.5, 0.53, vP) * 0.8);
 
-  // reefs: diagonal pencil hatching
+  // reefs: a small stony island with a pencil shoreline
   vec4 cellData = texture2D(uCells, (cell + 0.5) / 10.0);
   if (cellData.r > 0.5) {
-    float hd = abs(fract((vMap.x + vMap.y) * 7.0) - 0.5) / 7.0;
-    float hatch = aaLine(hd, 0.012, pxm) * step(max(abs(lc.x), abs(lc.y)), 0.46);
-    col = mix(col, uPencil, hatch * 0.75);
+    float ang = atan(lc.y, lc.x);
+    float rad = 0.36 + 0.045 * sin(ang * 3.0 + cell.x * 1.7) + 0.03 * sin(ang * 5.0 + cell.y * 2.3);
+    float dist = length(lc) - rad;
+    float land = 1.0 - smoothstep(-pxm, pxm, dist);
+    vec3 sand = vec3(0.86, 0.80, 0.68) * (0.92 + 0.12 * vnoise(vMap * 40.0));
+    col = mix(col, sand, land);
+    col = mix(col, uPencil, aaLine(abs(dist), 0.008, pxm) * 0.85);          // shoreline
+    col = mix(col, uPencil, aaLine(abs(dist - 0.05), 0.004, pxm) * 0.35);   // surf line
   }
+
+  // apply the paper-sheet light: shadows, foot, walls, then the light rim on every sheet edge
+  col *= sheet * mix(vec3(1.0), vec3(1.0, 0.93, 0.84), 1.0 - smoothstep(0.6, 1.0, sheet));   // warm sepia shadows
+  col = mix(col, vec3(1.0, 0.985, 0.94), rim * 0.75);
 
   // dive marks: 1 our "nothing" (pencil cross), 2 our debris (circle + shard),
   //             3 rival "nothing" (red cross), 4 rival debris (red circle)
@@ -218,6 +265,12 @@ export function createRelief(scene, rows, reefs, signal) {
   for (const [x, y] of reefs) cellData[(y * 10 + x) * 4] = 255;
   cells.needsUpdate = true;
 
+  // height texture for the paper-sheet shading (half float: filterable everywhere)
+  const heightData = new Uint16Array(count * 4);
+  const heightTex = new THREE.DataTexture(heightData, N, N, THREE.RGBAFormat, THREE.HalfFloatType);
+  heightTex.magFilter = heightTex.minFilter = THREE.LinearFilter;
+  heightTex.wrapS = heightTex.wrapT = THREE.ClampToEdgeWrapping;
+
   const uniforms = {
     uCells: { value: cells },
     uHover: { value: new THREE.Vector2(-9, -9) },
@@ -231,6 +284,8 @@ export function createRelief(scene, rows, reefs, signal) {
     uPaper: { value: COLORS.paper }, uSea: { value: COLORS.sea }, uDeep: { value: COLORS.deep },
     uInk: { value: COLORS.ink }, uPencil: { value: COLORS.pencil }, uGold: { value: COLORS.gold },
     uTeal: { value: COLORS.teal }, uRed: { value: COLORS.red },
+    uHeight: { value: heightTex },
+    uLight: { value: new THREE.Vector2(-0.55, -0.83).normalize() },
   };
 
   const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.92, metalness: 0 });
@@ -262,6 +317,12 @@ export function createRelief(scene, rows, reefs, signal) {
     }
     pos.needsUpdate = la.needsUpdate = pa.needsUpdate = true;
     geo.computeVertexNormals();
+    const toHalf = THREE.DataUtils.toHalfFloat;
+    for (let k = 0; k < count; k++) {
+      heightData[k * 4] = toHalf(f.h[k] / LAYER_T);
+      heightData[k * 4 + 1] = toHalf(f.L[k]);
+    }
+    heightTex.needsUpdate = true;
     for (const fn of listeners) fn();
   }
   apply(cur);
@@ -334,6 +395,7 @@ export function createRelief(scene, rows, reefs, signal) {
   const set = (u, v) => (cell) => (cell ? u.value.set(cell[0], cell[1]) : u.value.set(-9, -9));
   return {
     mesh, update, setBelief, heightAt, setMarks, ring,
+    setLight(dirToLamp) { uniforms.uLight.value.set(dirToLamp.x, dirToLamp.y).normalize(); },
     onChange: (fn) => listeners.push(fn),
     hover: set(uniforms.uHover), target: set(uniforms.uTarget),
     zone(cell, tool) { uniforms.uZone.value.set(cell ? cell[0] : 0, cell ? cell[1] : 0, !cell ? 0 : tool === "dive" ? 2 : 1); },
