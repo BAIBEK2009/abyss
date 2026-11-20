@@ -56,8 +56,8 @@ function field(P) {
 }
 
 const COLORS = {
-  paper: new THREE.Color(0xF3EAD6), sea: new THREE.Color(0xEDE5D0), deep: new THREE.Color(0xD6BC8E),
-  ink: new THREE.Color(0x2B2A33), pencil: new THREE.Color(0x6A6A74), gold: new THREE.Color(0xE8B04A),
+  paper: new THREE.Color(0xF6EFE0), sea: new THREE.Color(0xEBE2CC), deep: new THREE.Color(0xD2A86E),
+  ink: new THREE.Color(0x2B2A33), pencil: new THREE.Color(0x6A6A74), gold: new THREE.Color(0xE3A635),
   teal: new THREE.Color(0x2F7D86), red: new THREE.Color(0xC2412D), brass: new THREE.Color(0xB8893B),
 };
 
@@ -85,6 +85,7 @@ uniform vec3 uRingColor[4];
 uniform vec3 uPaper, uSea, uDeep, uInk, uPencil, uGold, uTeal, uRed;
 uniform sampler2D uHeight;     // r = terraced height (layers), g = continuous layers L; uv = map / 10
 uniform vec2 uLight;           // map-space direction TOWARDS the lamp (normalised)
+uniform float uMaxL;           // the highest sheet on the map right now
 
 vec2 HT(vec2 m) { return texture2D(uHeight, clamp(m, 0.0, 10.0) / 10.0).rg; }
 
@@ -119,10 +120,14 @@ const FRAG_BODY = /* glsl */`
   float pxm = fwidth(vMap.x);           // one screen pixel in map units
 
   // paper: flat sea below the first layer, then darker foot -> lighter top, alternating tone
+  // paper colour by height (relative to the highest sheet now): light paper at the foot,
+  // warm beige in the middle, gold on the top sheets; alternating tone so every sheet reads
   vec3 col = uSea;
   if (L >= 1.0) {
-    col = mix(uDeep * 0.95, uPaper, clamp((n - 1.0) / 6.0, 0.0, 1.0));
-    col *= mod(n, 2.0) < 0.5 ? 0.94 : 1.0;
+    float t = clamp((n - 1.0) / max(uMaxL - 1.0, 5.0), 0.0, 1.0);
+    col = mix(uPaper, uDeep, smoothstep(0.0, 0.55, t));
+    col = mix(col, uGold, smoothstep(0.6, 1.0, t) * 0.85);
+    col *= mod(n, 2.0) < 0.5 ? 0.95 : 1.0;
   }
   col *= 0.955 + 0.06 * vnoise(vMap * 90.0) + 0.025 * vnoise(vMap * 11.0);   // paper grain
 
@@ -286,6 +291,7 @@ export function createRelief(scene, rows, reefs, signal) {
     uTeal: { value: COLORS.teal }, uRed: { value: COLORS.red },
     uHeight: { value: heightTex },
     uLight: { value: new THREE.Vector2(-0.55, -0.83).normalize() },
+    uMaxL: { value: 1 },
   };
 
   const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.92, metalness: 0 });
@@ -323,6 +329,9 @@ export function createRelief(scene, rows, reefs, signal) {
       heightData[k * 4 + 1] = toHalf(f.L[k]);
     }
     heightTex.needsUpdate = true;
+    let maxL = 1;
+    for (let k = 0; k < count; k++) if (f.L[k] > maxL) maxL = f.L[k];
+    uniforms.uMaxL.value = Math.floor(maxL);
     for (const fn of listeners) fn();
   }
   apply(cur);

@@ -103,6 +103,17 @@ html, body {
   margin-bottom: 1px;
 }
 
+.map-base {
+  padding: 1px 6px 2px;
+  border-radius: 2px;
+  background: rgba(239, 230, 210, 0.85);
+  font-family: var(--hand);
+  font-weight: 700;
+  font-size: 17px;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
 /* temporary M5 hint (replaced by the table UI in M6) */
 .devhint {
   position: fixed;

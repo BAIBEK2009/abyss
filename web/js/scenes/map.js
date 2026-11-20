@@ -199,6 +199,51 @@ function shipModel(kind, ghost = false) {
 }
 
 // ------------------------------------------------------------------ chart objects
+/** The rival's target: a small red flag on a pole, planted in a corner of the cell. */
+function flagModel() {
+  const g = new THREE.Group();
+  const pole = mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.62, 8), lacquer(0x2B2A33));
+  pole.position.y = 0.31;
+  const knob = mesh(new THREE.SphereGeometry(0.024, 10, 8), lacquer(0xD9C27A));
+  knob.position.y = 0.63;
+  const s = new THREE.Shape([new THREE.Vector2(0, 0), new THREE.Vector2(0.3, -0.08), new THREE.Vector2(0, -0.17)]);
+  const cloth = mesh(new THREE.ExtrudeGeometry(s, { depth: 0.008, bevelEnabled: false }),
+    new THREE.MeshStandardMaterial({ color: 0xD23A26, roughness: 0.6, side: THREE.DoubleSide }));
+  cloth.position.set(0.012, 0.6, -0.004);
+  const foot = mesh(new THREE.CylinderGeometry(0.05, 0.06, 0.03, 14), lacquer(0x2B2A33));
+  foot.position.y = 0.015;
+  g.add(pole, knob, cloth, foot);
+  return { group: g, cloth };
+}
+
+/** Red dashed outline of a ship lying on the chart (where the rival will be after a hovered action). */
+function dashedShip() {
+  const pts = [[-0.36, -0.15], [0.14, -0.15], [0.42, 0], [0.14, 0.15], [-0.36, 0.15]];
+  const geo = new THREE.BoxGeometry(1, 0.01, 1);
+  const m = new THREE.InstancedMesh(geo, new THREE.MeshBasicMaterial({ color: 0xC2412D }), 64);
+  const tmp = new THREE.Object3D();
+  let n = 0;
+  for (let i = 0; i < pts.length; i++) {
+    const a = pts[i], b = pts[(i + 1) % pts.length];
+    const len = Math.hypot(b[0] - a[0], b[1] - a[1]), dashes = Math.max(2, Math.round(len / 0.07));
+    for (let d = 0; d < dashes; d++) {
+      const t0 = d / dashes, t1 = t0 + 0.55 / dashes;
+      const x0 = a[0] + (b[0] - a[0]) * t0, z0 = a[1] + (b[1] - a[1]) * t0;
+      const x1 = a[0] + (b[0] - a[0]) * t1, z1 = a[1] + (b[1] - a[1]) * t1;
+      tmp.position.set((x0 + x1) / 2, 0, (z0 + z1) / 2);
+      tmp.scale.set(Math.hypot(x1 - x0, z1 - z0), 1, 0.022);
+      tmp.rotation.set(0, Math.atan2(-(z1 - z0), x1 - x0), 0);
+      tmp.updateMatrix(); m.setMatrixAt(n++, tmp.matrix);
+    }
+  }
+  m.count = n;
+  m.frustumCulled = false;
+  const g = new THREE.Group();
+  g.add(m);
+  g.scale.setScalar(1.45);
+  return { group: g };
+}
+
 function lighthouse() {
   const g = new THREE.Group();
   const white = lacquer(0xF4EFE4), red = lacquer(COLORS.red);
@@ -219,6 +264,8 @@ function lighthouse() {
   const cap = mesh(new THREE.ConeGeometry(0.065, 0.07, 14), red);
   cap.position.y = 0.555;
   g.add(lamp, cap);
+  g.traverse((o) => { if (o.isMesh) o.castShadow = false; });   // no long shadow across the chart
+  g.scale.setScalar(0.85);
   return g;
 }
 
@@ -395,7 +442,12 @@ export function createMap(view, state) {
   relief.setLight(new THREE.Vector2(LAMP.x, LAMP.z));            // map-space direction to the lamp
   state.reefs.forEach((c, i) => root.add(island(c, 100 + i)));
   const light = lighthouse();
-  light.position.copy(toWorld(state.base[0] - MARGIN_X * 0.5, state.base[1] + 1 + MARGIN_Z * 0.3)).setY(0.04);  // margin corner by A10
+  // the base: a small lighthouse inside A10 (top-left corner of the cell) with an HTML label
+  const baseSpot = [state.base[0] + 0.2, state.base[1] + 0.22];
+  light.position.copy(toWorld(...baseSpot)).setY(BASE_Y);
+  const baseLabel = document.createElement("div");
+  baseLabel.className = "map-base"; baseLabel.textContent = t("base");
+  pin(baseLabel, toWorld(baseSpot[0], baseSpot[1] - 0.05).setY(0.75));
   root.add(light);
 
   // desk props around the chart (kept off the right side, where the officers' panel will be)
@@ -431,10 +483,10 @@ export function createMap(view, state) {
   // ---- ships and ghosts
   const aurora = shipModel("aurora");
   const rival = shipModel("rival");
-  const ghost = shipModel("rival", true);              // the rival's target
-  const forecastGhost = shipModel("rival", true);      // where it will be after a hovered action (M6)
+  const flag = flagModel();                            // the rival's target: a red flag in the cell corner
+  const forecastGhost = dashedShip();                  // where it will be after a hovered action
   forecastGhost.group.visible = false;
-  root.add(aurora.group, rival.group, ghost.group, forecastGhost.group);
+  root.add(aurora.group, rival.group, flag.group, forecastGhost.group);
 
   const ships = {
     you: { obj: aurora, u: 0, v: 0, heading: deg(20), bob: 0 },
@@ -519,16 +571,12 @@ export function createMap(view, state) {
     const plan = st.rival?.plan;
     if (plan && st.status === "playing" && plan.path.length > 1) {
       setRoute("rival", plan.path);
-      ghost.group.visible = true;
-      // the rival's target is our own cell: shift the ghost to the corner so our ship stays readable
-      const onUs = plan.target[0] === st.pos[0] && plan.target[1] === st.pos[1];
-      const [cu, cv] = centre(plan.target);
-      const u = cu + (onUs ? 0.27 : 0), v = cv + (onUs ? 0.27 : 0);
-      ghost.group.position.copy(toWorld(u, v)).setY(relief.heightAt(u, v));
-      const [pu, pv] = centre(plan.path[plan.path.length - 2]);
-      ghost.group.rotation.y = Math.atan2(-(v - pv), u - pu);
+      flag.group.visible = true;
+      // planted in the cell's top-right corner: the top of the hill stays visible
+      const u = plan.target[0] + 0.8, v = plan.target[1] + 0.2;
+      flag.group.position.copy(toWorld(u, v)).setY(relief.heightAt(u, v));
     } else {
-      setRoute("rival", null); ghost.group.visible = false;
+      setRoute("rival", null); flag.group.visible = false;
     }
     const adv = st.advice?.advice?.action;
     setRoute("advice", adviceShown && adv?.type === "go" && st.advice.lev.path.length > 1 ? st.advice.lev.path : null);
@@ -602,13 +650,12 @@ export function createMap(view, state) {
     lamp.group.position.set(LAMP.x + sway.x, LAMP.y, LAMP.z + sway.z);
     // two ships in one cell: move them apart so both stay visible
     const close = shown.rival && Math.hypot(ships.you.u - ships.rival.u, ships.you.v - ships.rival.v) < 0.6;
-    const plan = shown.rival?.plan;
-    const ghostOnUs = !playing && ghost.group.visible && plan &&
-      Math.hypot(ships.you.u - (plan.target[0] + 0.5), ships.you.v - (plan.target[1] + 0.5)) < 0.3;
+    const atBase = Math.hypot(ships.you.u - (shown.base[0] + 0.5), ships.you.v - (shown.base[1] + 0.5)) < 0.3;
     for (const [name, s] of Object.entries(ships)) {
       const g = s.obj.group;
-      const off = close ? (name === "you" ? -0.24 : 0.24) : (ghostOnUs && name === "you" ? -0.2 : 0);
-      const u = s.u + off, v = s.v + off;
+      const off = close ? (name === "you" ? -0.24 : 0.24) : 0;
+      const shift = name === "you" && atBase && !close ? 0.16 : 0;      // leave room for the lighthouse
+      const u = s.u + off + shift, v = s.v + off + shift * 0.6;
       g.position.copy(toWorld(u, v)).setY(relief.heightAt(u, v) + Math.sin(time * 1.6 + s.bob) * 0.008);
       const r = g.rotation;
       r.y += Math.atan2(Math.sin(s.heading - r.y), Math.cos(s.heading - r.y)) * Math.min(1, dt * 6);
@@ -616,6 +663,7 @@ export function createMap(view, state) {
       if (s.obj.light) s.obj.light.material.emissiveIntensity = (Math.sin(time * 3 + s.bob) > 0.2) ? 1.6 : 0.2;
     }
     rival.group.visible = !!shown.rival;
+    flag.cloth.rotation.y = Math.sin(time * 2.4) * 0.22;
     for (let i = bubbles.length - 1; i >= 0; i--) {
       const b = bubbles[i];
       b.userData.t += dt;
@@ -650,7 +698,7 @@ export function createMap(view, state) {
       forecastGhost.group.visible = !!cell;
       if (!cell) return;
       const [u, v] = centre(cell);
-      forecastGhost.group.position.copy(toWorld(u, v)).setY(relief.heightAt(u, v));
+      forecastGhost.group.position.copy(toWorld(u, v)).setY(relief.heightAt(u, v) + 0.02);
     },
     showZone(cell, tool) { relief.zone(cell, tool); },
     showRivalZone(on) {

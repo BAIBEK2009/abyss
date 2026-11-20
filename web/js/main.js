@@ -17,7 +17,7 @@ async function loadFonts() {
 /** Camera per screen: the map sits to the left (the officers' panel will be on the right). */
 function aimCamera(view, w, h) {
   const r = view.rig;
-  if (w / h >= 1.15) { r.target.set(2.6, 0, -0.6); r.dist = 41; r.tilt = 40; r.hfov = 31; }
+  if (w / h >= 1.15) { r.target.set(2.2, 0, 0.1); r.dist = 31.5; r.tilt = 40; r.hfov = 31; }
   else { r.target.set(0, 0, 0.3); r.dist = 44; r.tilt = 52; r.hfov = 34; }   // narrow screens / phones
 }
 
