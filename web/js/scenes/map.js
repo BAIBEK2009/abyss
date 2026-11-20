@@ -701,6 +701,8 @@ export function createMap(view, state) {
       forecastGhost.group.position.copy(toWorld(u, v)).setY(relief.heightAt(u, v) + 0.02);
     },
     showZone(cell, tool) { relief.zone(cell, tool); },
+    /** A golden ring that runs out from a cell (an officer points at something). */
+    pulse(cell, color = 0xE3A635) { relief.ring(cell, color, 1.6); },
     showRivalZone(on) {
       const plan = shown.rival?.plan;
       relief.rivalZone(on && plan ? plan.target : null, plan?.tool);
