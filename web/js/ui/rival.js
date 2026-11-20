@@ -11,7 +11,7 @@ export function createRivalBanner(root) {
   return {
     update(st) {
       const plan = st.rival?.plan;
-      b.hidden = !st.rival;
+      b.hidden = !st.rival || st.status !== "playing";      // after the end the results card says it all
       if (!plan) { p.innerHTML = `<b>${t("rival_name")}</b> ${t("rival_done")}`; b.classList.remove("urgent"); return; }
       const cell = cellName(st.cols, plan.target);
       const tool = t(plan.tool === "dive" ? "rival_tool_dive" : "rival_tool_sonar");

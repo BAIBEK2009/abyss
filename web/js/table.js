@@ -7,6 +7,9 @@ import { createOfficers } from "./ui/officers.js";
 import { createActions } from "./ui/actions.js";
 import { createCellTip } from "./ui/celltip.js";
 import { createToasts } from "./ui/toasts.js";
+import { createRadio } from "./ui/radio.js";
+import { createCoach } from "./ui/coach.js";
+import { showResult } from "./ui/result.js";
 import { ICONS } from "./ui/icons.js";
 import { cellName, pct, hours } from "./ui/fmt.js";
 import { t, plural } from "./strings.js";
@@ -32,7 +35,7 @@ export function createTable(view, map, initialState) {
     { id: "stand", icon: ICONS.stand, label: t("btn_stand"), soon: "M7" },
     { id: "autopilot", icon: ICONS.autopilot, label: t("btn_autopilot"), onClick: () => toggleAutopilot() },
     { id: "journal", icon: ICONS.journal, label: t("btn_journal_top"), soon: "M8" },
-    { id: "hints", icon: ICONS.hints, label: t("btn_hints"), soon: "M6" },
+    { id: "hints", icon: ICONS.hints, label: t("btn_hints"), onClick: () => coach.start() },
     { id: "music", icon: ICONS.music, label: t("btn_music"), soon: "M8" },
     { id: "sound", icon: ICONS.sound, label: t("btn_sound"), soon: "M8" },
   ]);
@@ -47,7 +50,24 @@ export function createTable(view, map, initialState) {
     onHover: (tag, pv) => previewAction(tag?.action, pv),
   });
   const toasts = createToasts(ui);
+  const radio = createRadio(ui);
   const tip = createCellTip();
+
+  // tutorial: each step highlights a part of the screen (CLAUDE.md 11)
+  const rectOf = (sel) => () => document.querySelector(sel).getBoundingClientRect();
+  const chartRect = () => {
+    const pts = [[0, 0], [9, 0], [0, 9], [9, 9]].map(([x, y]) => map.cellScreen(x, y));
+    const xs = pts.map((p) => p.x), ys = pts.map((p) => p.y);
+    const left = Math.min(...xs) - 30, top = Math.min(...ys) - 30;
+    return { left, top, width: Math.max(...xs) - left + 30, height: Math.max(...ys) - top + 30 };
+  };
+  const coach = createCoach(ui, [
+    { title: t("coach1_t"), text: t("coach1"), rect: chartRect },
+    { title: t("coach2_t"), text: t("coach2"), rect: rectOf(".officers") },
+    { title: t("coach3_t"), text: t("coach3"), rect: rectOf(".actions") },
+    { title: t("coach4_t"), text: t("coach4"), rect: rectOf(".rival-banner") },
+    { title: t("coach5_t"), text: t("coach5"), rect: rectOf(".hud-left") },
+  ]);
   const banner = document.getElementById("autopilot-banner");
   banner.textContent = t("autopilot_on");
 
@@ -152,22 +172,37 @@ export function createTable(view, map, initialState) {
       await map.play(res.events, before, { onEvent: speak });
       state = res.state;
       map.setState(state);
+      if (state.status === "playing") await handleClues();
     } catch (err) {
       if (err.key === "reef") toasts.say("lev", t("toast_reef"));
     } finally {
       busy = false;
       render();
+      if (state.status !== "playing") finish();
     }
   }
 
-  async function acceptClues() {
+  /** Radio clues that arrived during the move: the captain decides (the autopilot always accepts). */
+  async function handleClues() {
     for (const c of state.clues) {
-      const res = await api.clue(c.id, true);
+      const accept = autopilot ? true : await radio.ask(c);
+      const res = await api.clue(c.id, accept);
       state = res.state;
       res.events.forEach(speak);
       await map.setState(state, { animate: true });
     }
-    render();
+  }
+  async function acceptClues() { await handleClues(); render(); }
+
+  let finished = false;
+  function finish() {
+    if (finished) return;
+    finished = true;
+    toggleAutopilot(false);
+    setTimeout(() => showResult(ui, state, {
+      onAgain: async () => { await api.newGame(state.seed); location.reload(); },
+      onNew: async () => { await api.newGame(null); location.reload(); },
+    }), 900);
   }
 
   async function acceptAdvice() {
@@ -185,6 +220,7 @@ export function createTable(view, map, initialState) {
     if (state.status !== "playing") toggleAutopilot(false);
   }
   function toggleAutopilot(on = !autopilot) {
+    if (on && state.status !== "playing") return;
     autopilot = on;
     hud.setActive("autopilot", on);
     banner.hidden = !on;
@@ -194,6 +230,8 @@ export function createTable(view, map, initialState) {
   }
 
   render();
+  if (state.status !== "playing") finish();
+  else setTimeout(() => coach.startIfFirstTime(), 600);
   return {
     get state() { return state; },
     get busy() { return busy; },

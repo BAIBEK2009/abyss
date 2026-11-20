@@ -3,7 +3,7 @@ import { createView } from "./view.js";
 import { createMap } from "./scenes/map.js";
 import { createTable } from "./table.js";
 import { api } from "./api.js";
-import { setLang, t } from "./strings.js";
+import { setLang } from "./strings.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -37,15 +37,6 @@ async function start() {
   const map = createMap(view, state);
   const table = createTable(view, map, state);
   view.start();
-
-  // ---- until the radio window (M6 part 3): C = accept a pending radio clue
-  const hint = $("devhint");
-  hint.textContent = t("dev_hint");
-  hint.hidden = false;
-  window.addEventListener("keydown", async (e) => {
-    const k = e.key.toLowerCase();
-    if ((k === "c" || k === "с") && table.state.clues.length && !table.busy) await table.acceptClues();
-  });
 
   window.__abyss = { state: () => table.state, busy: () => table.busy, cellScreen: map.cellScreen };
 }
