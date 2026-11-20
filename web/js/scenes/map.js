@@ -599,7 +599,7 @@ export function createMap(view, state) {
 
   /** Play the events of one action on the shared clock: both ships sail at the same time. */
   const tickers = new Set();
-  async function play(events, before) {
+  async function play(events, before, { onEvent } = {}) {
     playing = true;
     const t0 = before.hours;
     const segs = { you: [], rival: [] };
@@ -619,6 +619,9 @@ export function createMap(view, state) {
         moments.push({ t: e.t, fn: () => bubbleBurst(e.cell, who === "rival" ? 0xff8a70 : 0xfff2b0) });
       } else if (e.type === "belief") {
         moments.push({ t: e.t, fn: () => { relief.setBelief(e.P, true); } });
+      }
+      if (onEvent && (e.type === "msg" || e.type === "clue" || e.type === "end")) {
+        moments.push({ t: e.t ?? t0, fn: () => onEvent(e) });     // officers speak at the moment it happens
       }
     }
     const tEnd = Math.max(t0, ...events.map((e) => e.t ?? t0));
@@ -653,7 +656,7 @@ export function createMap(view, state) {
     const atBase = Math.hypot(ships.you.u - (shown.base[0] + 0.5), ships.you.v - (shown.base[1] + 0.5)) < 0.3;
     for (const [name, s] of Object.entries(ships)) {
       const g = s.obj.group;
-      const off = close ? (name === "you" ? -0.24 : 0.24) : 0;
+      const off = close ? (name === "you" ? -0.3 : 0.3) : 0;
       const shift = name === "you" && atBase && !close ? 0.16 : 0;      // leave room for the lighthouse
       const u = s.u + off + shift, v = s.v + off + shift * 0.6;
       g.position.copy(toWorld(u, v)).setY(relief.heightAt(u, v) + Math.sin(time * 1.6 + s.bob) * 0.008);

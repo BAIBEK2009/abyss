@@ -27,7 +27,9 @@ export function createHud(root, buttons) {
   left.append(el("div", "hud-goal", `${ICONS.target}<span>${t("goal")}</span>`));
   const beacon = gauge(ICONS.clock, t("beacon"));
   const fuel = gauge(ICONS.fuel, t("fuel_label"));
-  left.append(beacon.el, fuel.el);
+  const gauges = el("div", "hud-gauges");
+  gauges.append(beacon.el, fuel.el);
+  left.append(gauges);
 
   const right = el("div", "hud hud-right");
   const btns = {};
