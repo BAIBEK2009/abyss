@@ -29,8 +29,13 @@ def shot(page, name):
 
 
 def settle(page):
-    """Wait for the move to end; answer the radio if a clue arrived."""
-    page.wait_for_function("!window.__abyss.busy() || document.querySelector('.radio-back:not([hidden])')", timeout=60000)
+    """Wait for the move to end; surface from a live dive; answer the radio if a clue arrived."""
+    page.wait_for_function("!window.__abyss.busy() || document.querySelector('.radio-back:not([hidden])') || document.querySelector('.cockpit.live')", timeout=90000)
+    if page.is_visible(".cockpit.live"):
+        page.wait_for_timeout(1500)
+        shot(page, "smoke_dive")
+        page.keyboard.press("q")
+        page.wait_for_function("!window.__abyss.busy() || document.querySelector('.radio-back:not([hidden])')", timeout=60000)
     page.wait_for_timeout(500)
     if page.is_visible(".radio-back"):
         page.wait_for_timeout(1800)                       # let the typewriter finish
