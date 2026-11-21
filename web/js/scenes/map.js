@@ -13,6 +13,7 @@ import { drawChart, CH0, CHS } from "./chart.js";
 import { canvasTexture, deg, rng } from "../view.js";
 import { walnut, brass, glass, paperFibres, contactShadow } from "./materials.js";
 import { t } from "../strings.js";
+import { anim, ease, sleep } from "../anim.js";
 
 const SEC_PER_HOUR = 0.16;                               // playback speed of the shared clock
 const COLORS = { red: 0xC2412D, teal: 0x2F7D86, navy: 0x1f3550, rivalRed: 0xb8432f };
@@ -79,6 +80,7 @@ function shipTextures() {
 function shipModel(kind) {
   shipTextures();
   const aurora = kind === "aurora";
+  let bathy = null, cable = null;
   const o = aurora
     ? { hull: 0xf29a1c, bottom: 0x7a2a1c, house: 0xf4f1ea, funnel: 0xf4f1ea, band: 0xe9a63a }
     : { hull: 0x1d1f24, bottom: 0x7a1c14, house: 0x9a2a20, funnel: 0x1d1f24, band: 0xd9573b };
@@ -132,11 +134,14 @@ function shipModel(kind) {
     const fm = std({ color: 0xf2b632, roughness: 0.45, metalness: 0.3 });
     for (const s of [-1, 1]) { const leg = bx(0.018, 0.22, 0.018, fm, s * 0.13, 0.27, 0.47); leg.rotation.x = 0.25; }
     bx(0.28, 0.02, 0.02, fm, 0, 0.38, 0.5);
-    const bs = mesh(new THREE.SphereGeometry(0.07, 20, 14), std({ color: 0xf2b632, roughness: 0.35, metalness: 0.25 }));
-    bs.position.set(0, 0.27, 0.53); g.add(bs);
+    bathy = new THREE.Group();                 // "Nerpa" hangs on the A-frame and can be lowered
+    bathy.position.set(0, 0.27, 0.53); g.add(bathy);
+    bathy.add(mesh(new THREE.SphereGeometry(0.07, 20, 14), std({ color: 0xf2b632, roughness: 0.35, metalness: 0.25 })));
     const pw = mesh(new THREE.SphereGeometry(0.03, 12, 8), std({ color: 0x0f2f38, roughness: 0.1, metalness: 0.6, emissive: 0x0a3a44 }), false);
-    pw.position.set(0, 0.27, 0.47); g.add(pw);
-    bx(0.004, 0.05, 0.004, std({ color: 0x1a1a1a }), 0, 0.355, 0.52);
+    pw.position.set(0, 0, -0.06); bathy.add(pw);
+    cable = new THREE.Mesh(new THREE.CylinderGeometry(0.003, 0.003, 1, 5), std({ color: 0x1a1a1a }));
+    cable.geometry.translate(0, -0.5, 0);      // hangs down from the A-frame top
+    cable.position.set(0, 0.38, 0.52); cable.scale.y = 0.05; g.add(cable);
   } else {                                    // cranes, cargo, trident logo
     const cm = std({ color: 0xb8432f, roughness: 0.5, metalness: 0.3 });
     for (const z of [0.18, 0.36]) {
@@ -154,7 +159,7 @@ function shipModel(kind) {
   shade.position.y = 0.006;
   outer.add(shade);
   outer.scale.setScalar(1.1);
-  return { group: outer, lights, wake, funnelTop: new THREE.Vector3(0, 0.56, 0.07), body: g };
+  return { group: outer, lights, wake, funnelTop: new THREE.Vector3(0, 0.56, 0.07), body: g, bathy, cable };
 }
 
 /** Red dashed outline of a ship lying on the chart (where the rival will be after a hovered action). */
@@ -587,6 +592,56 @@ export function createMap(view, state) {
     }
   });
 
+  // ---- the launch of "Nerpa" (CLAUDE.md v3.1, 19 p. 1-2): the pin comes out, the crane lowers the
+  // bathyscaphe, a splash with rings and droplets; the camera watches from a medium shot (>= 3 units)
+  const fx = [];                                   // short-lived ripples and droplets
+  function ripple(p, color, size, dur) {
+    const m = new THREE.Mesh(new THREE.RingGeometry(0.8, 1, 48), new THREE.MeshBasicMaterial({ color, transparent: true, depthWrite: false }));
+    m.rotation.x = -Math.PI / 2; m.position.copy(p).setY(p.y + 0.01);
+    root.add(m);
+    fx.push({ m, t: 0, dur, update(k) { m.scale.setScalar(0.05 + k * size); m.material.opacity = 0.8 * (1 - k); } });
+  }
+  function droplets(p) {
+    for (let i = 0; i < 26; i++) {
+      const d = new THREE.Sprite(new THREE.SpriteMaterial({ map: whiteSoft, color: 0xe8f6ff, transparent: true, depthWrite: false }));
+      d.scale.setScalar(0.035 + Math.random() * 0.03);
+      d.position.copy(p);
+      const a = Math.random() * Math.PI * 2, sp = 0.4 + Math.random() * 0.7;
+      const v = new THREE.Vector3(Math.cos(a) * sp * 0.6, 1.2 + Math.random() * 1.1, Math.sin(a) * sp * 0.6);
+      root.add(d);
+      fx.push({ m: d, t: 0, dur: 0.9, update(k, dt) { v.y -= 4.5 * dt; d.position.addScaledVector(v, dt); d.material.opacity = 1 - k; } });
+    }
+  }
+  const nerpaWorld = (v) => aurora.bathy.getWorldPosition(v);
+  async function launchNerpa() {
+    const y0 = goldPin.position.y;
+    await anim(0.8, (k) => { goldPin.position.y = y0 + ease(k) * 1.4; goldPin.scale.setScalar(1 - k * 0.999); });
+    goldPin.visible = false;
+    view.follow(nerpaWorld, { dist: 3.4, tilt: 18, yaw: 38, rate: 1.6 });
+    await sleep(1300);
+    await anim(1.8, (k) => { aurora.bathy.position.y = 0.27 - ease(k) * 0.3; aurora.cable.scale.y = 0.05 + ease(k) * 0.3; });
+    const p = nerpaWorld(new THREE.Vector3());
+    ripple(p, 0xffffff, 0.9, 1.6); ripple(p, 0xcfe9ef, 0.55, 1.2); droplets(p);
+    await sleep(450);
+    anim(1.3, (k) => { aurora.bathy.position.y = -0.03 - k * 0.25; aurora.bathy.scale.setScalar(1 - k * 0.7); aurora.cable.scale.y = 0.35 + k * 0.25; });
+    await sleep(1000);
+  }
+  /** After the dive: Nerpa back on the A-frame, the camera back at the table, the gold pin back. */
+  function resetNerpa() {
+    aurora.bathy.position.y = 0.27; aurora.bathy.scale.setScalar(1); aurora.cable.scale.y = 0.05;
+    goldPin.scale.setScalar(1);
+    view.follow(null);
+    placePins();
+  }
+  view.onFrame((dt) => {
+    for (let i = fx.length - 1; i >= 0; i--) {
+      const f = fx[i]; f.t += dt;
+      const k = Math.min(1, f.t / f.dur);
+      f.update(k, dt);
+      if (k >= 1) { root.remove(f.m); f.m.material.dispose(); fx.splice(i, 1); }
+    }
+  });
+
   // ---- picking
   const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
   function cellAt(clientX, clientY) {
@@ -600,6 +655,7 @@ export function createMap(view, state) {
   return {
     setState, play, cellAt, setRoute,
     hover: kalka.hover, target: kalka.target,
+    launchNerpa, resetNerpa,
     /** World point of our ship (the cinema camera follows it). */
     shipPoint: (v) => v.copy(aurora.group.position),
     showAdvice(on) { adviceShown = on; showPlans(shown); },

@@ -1,6 +1,9 @@
 // All player-facing text, RU / EN (CLAUDE.md, section 9). The server only sends keys + params.
 
 const RU = {
+  // ---- M8: the dive
+  nerpa_plate: "НЕРПА-2",
+  toast_crane: "Кран готов. Спускаем «Нерпу», капитан. <b>Кислорода — на одну минуту</b>.",
   // ---- M7 part 2: things on the table
   cap_title: "ABYSS · стол капитана",
   btn_who: "Кто есть кто",
@@ -224,6 +227,9 @@ const RU = {
 };
 
 const EN = {
+  // ---- M8: the dive
+  nerpa_plate: "NERPA-2",
+  toast_crane: "The crane is ready. Lowering Nerpa, captain. <b>Oxygen for one minute</b>.",
   // ---- M7 part 2: things on the table
   cap_title: "ABYSS · the captain's table",
   btn_who: "Who is who",

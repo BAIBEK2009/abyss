@@ -2,6 +2,7 @@
 import { createView } from "./view.js";
 import { createMap } from "./scenes/map.js";
 import { createCabin } from "./scenes/cabin.js";
+import { createDive } from "./scenes/dive.js";
 import { createTable } from "./table.js";
 import { api } from "./api.js";
 import { setLang } from "./strings.js";
@@ -44,7 +45,8 @@ async function start() {
   const cabin = createCabin(view.scene);
   view.onFrame((dt, time, sway) => cabin.update(dt, time, sway));
   const map = createMap(view, state);
-  const table = createTable(view, map, state, { cabin });
+  const dive = createDive(view);
+  const table = createTable(view, map, state, { cabin, dive });
   view.start();
   // the opening shot: the whole cabin first, then the camera glides down to the chart table
   if (!new URLSearchParams(location.search).has("nointro")) {

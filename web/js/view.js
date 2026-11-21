@@ -74,7 +74,8 @@ export function createView(canvas) {
   const rt = new THREE.WebGLRenderTarget(1, 1, { samples: 4, type: THREE.HalfFloatType, depthTexture: depthTex });
   const composer = new EffectComposer(renderer, rt);
   composer.renderTarget2.depthTexture = depthTex;            // both buffers share one depth: GTAO always reads it
-  composer.addPass(new RenderPass(scene, camera));
+  const renderPass = new RenderPass(scene, camera);
+  composer.addPass(renderPass);
   const gtao = new GTAOPass(scene, camera, 1, 1);
   gtao.setGBuffer(depthTex);          // set after construction (r170 needs its own targets to exist first)
   gtao.blendIntensity = 0.55;
@@ -112,13 +113,14 @@ export function createView(canvas) {
   // the cinema mode), to a fixed `pose` (standing up from the table) or start from somewhere else
   // and glide home (`flyFrom`, the opening shot of the cabin).
   const home = { target: new THREE.Vector3(), dist: 36, tilt: 40, yaw: 0 };
-  let follow = null, pose = null, settled = true, rate = 2.2;
+  let follow = null, followOpt = { dist: 9.5, tilt: 34 }, pose = null, settled = true, rate = 2.2;
+  let manual = false;                 // another scene drives the camera itself (the dive)
   const goal = new THREE.Vector3();
   function steer(dt) {
-    if (!follow && !pose && settled) return;
+    if (manual || (!follow && !pose && settled)) return;
     const k = 1 - Math.exp(-dt * rate);
     let gd, gt, gy;
-    if (follow) { follow(goal); gd = 9.5; gt = 34; gy = 0; }
+    if (follow) { follow(goal); gd = followOpt.dist; gt = followOpt.tilt; gy = followOpt.yaw ?? 0; }
     else if (pose) { goal.copy(pose.target); gd = pose.dist; gt = pose.tilt; gy = pose.yaw; }
     else { goal.copy(home.target); gd = home.dist; gt = home.tilt; gy = home.yaw; }
     rig.target.lerp(goal, k);
@@ -202,7 +204,14 @@ export function createView(canvas) {
   return {
     renderer, scene, camera, rig, aim, lamp, pin, toScreen, placeLamp,
     /** Fly the camera after a point (fn(vector) fills it) or back home (null). */
-    follow(fn) { if (!fn && !follow) return; follow = fn; settled = false; },
+    follow(fn, opt = {}) { if (!fn && !follow) return; follow = fn; followOpt = { dist: 9.5, tilt: 34, ...opt }; rate = opt.rate ?? 2.2; settled = false; },
+    /** Render another scene (the deep sea); the caller places the camera. null = back to the table. */
+    useScene(s) {
+      manual = !!s;
+      renderPass.scene = gtao.scene = s || scene;
+      document.body.classList.toggle("other-scene", !!s);
+      if (!s) aim();
+    },
     /** Stay at a fixed pose {target, dist, tilt, yaw} (null = back to the table). */
     pose(p) { pose = p; settled = false; rate = 1.4; },
     /** Start from a pose and glide home slowly (the opening shot). */

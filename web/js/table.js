@@ -14,6 +14,7 @@ import { showResult } from "./ui/result.js";
 import { ICONS } from "./ui/icons.js";
 import { pct, hours } from "./ui/fmt.js";
 import { place, cap } from "./places.js";
+import { fade } from "./anim.js";
 import { t, plural } from "./strings.js";
 
 const AUTOPILOT_PAUSE_MS = 1300;
@@ -24,7 +25,7 @@ const SPEAKER = {                       // who explains which event (CLAUDE.md 6
   refuel: "grisha", tow: "grisha",
 };
 
-export function createTable(view, map, initialState, { cabin } = {}) {
+export function createTable(view, map, initialState, { cabin, dive } = {}) {
   let state = initialState;
   let busy = false;
   let autopilot = false;
@@ -180,7 +181,21 @@ export function createTable(view, map, initialState, { cabin } = {}) {
     try {
       const before = state;
       const res = await api.act(action);
-      await map.play(res.events, before, { onEvent: speak });
+      const diveEv = dive && !autopilot && res.events.find((e) => e.type === "dive" && !e.rival);
+      if (diveEv) {
+        // sail there (the map), then the dive itself (crane, under water), then the rest of its hours
+        const tArr = diveEv.t - state.costs.dive[0];
+        const pre = res.events.filter((e) => (e.t ?? before.hours) <= tArr + 1e-6);
+        const post = res.events.filter((e) => !pre.includes(e));
+        await map.play(pre, before, { onEvent: speak });
+        await diveScene();
+        const rivalMoves = pre.filter((e) => e.rival && e.type === "move");
+        const mid = { ...before, hours: tArr, pos: diveEv.cell,
+                      rival: before.rival && { ...before.rival, pos: rivalMoves.length ? rivalMoves[rivalMoves.length - 1].cell : before.rival.pos } };
+        await map.play(post, mid, { onEvent: speak });
+      } else {
+        await map.play(res.events, before, { onEvent: speak });
+      }
       state = res.state;
       map.setState(state);
       if (!autopilot || state.status !== "playing") cinema(false);
@@ -253,6 +268,19 @@ export function createTable(view, map, initialState, { cabin } = {}) {
     hud.setActive("stand", on);
     document.body.classList.toggle("standing", on);
     view.pose(on ? cabin.standPose : null);
+  }
+
+  /** The dive (CLAUDE.md v3.1, 19): the crane lowers Nerpa, then the shot from under the surface. */
+  async function diveScene() {
+    toasts.say("grisha", t("toast_crane"), 2600);
+    await map.launchNerpa();
+    await fade(true, "blue");
+    await dive.surfaceShot(() => fade(false));
+    await fade(true, "blue");
+    dive.leave();
+    map.resetNerpa();
+    view.follow(map.shipPoint);              // the cinema camera goes on following the ship
+    await fade(false);
   }
 
   /** Cinema mode during a move (CLAUDE.md v3.1, 18): the interface slides off, black bars, the camera follows the ship. */

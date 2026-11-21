@@ -269,6 +269,14 @@ body.cine .cap, body.cine .hud-right { opacity: 0; pointer-events: none; }
 body.cine .tg { transform: translateX(340px) rotate(1.4deg); }
 body.cine .toasts { right: 50%; top: calc(8.5vh + 14px); translate: 50% 0; }
 body.cine .autopilot-banner { bottom: calc(8.5vh + 10px); }
+/* full-screen fades between scenes */
+#fade { position: fixed; inset: 0; z-index: 60; pointer-events: none; opacity: 0; transition: opacity 0.65s; background: #000; }
+#fade.on { opacity: 1; }
+#fade.blue { background: #021a26; }
+#fade.white { background: #cfe6ee; }
+/* another scene (the dive): the table's pins and HTML stay hidden */
+body.other-scene #overlay { opacity: 0; }
+
 /* standing up: only the caption, the instruments and the buttons stay */
 body.standing .actions, body.standing .dock, body.standing .tg, body.standing .inst { opacity: 0; pointer-events: none; }
 body.standing #overlay { opacity: 0; }
