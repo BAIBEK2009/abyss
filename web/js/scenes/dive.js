@@ -452,7 +452,8 @@ export function createDive(view) {
   const deep = new THREE.Scene();
   deep.background = new THREE.Color(0x010a10);
   deep.fog = new THREE.FogExp2(0x02161f, 0.082);
-  deep.add(new THREE.HemisphereLight(0x0d4257, 0x000000, 0.6));
+  const hemi = new THREE.HemisphereLight(0x0d4257, 0x000000, 0.6);
+  deep.add(hemi);
   const top = new THREE.DirectionalLight(0x3f86a8, 0);
   top.position.set(0, 40, 0);
   deep.add(top);
@@ -486,10 +487,10 @@ export function createDive(view) {
         float rr = length(w - uCam.xz) / depth;                       // tan of the angle from straight up
         float rip = 0.5 + 0.5 * hh(w * 0.7);
         float win = 1.0 - smoothstep(1.02, 1.18, rr + (rip - 0.5) * 0.12);
-        vec3 sky = mix(vec3(0.42, 0.62, 0.72), vec3(0.75, 0.88, 0.93), rip);
+        vec3 sky = mix(vec3(0.3, 0.46, 0.55), vec3(0.55, 0.7, 0.77), rip);
         vec3 mirror = vec3(0.01, 0.05, 0.075) + vec3(0.03, 0.08, 0.1) * rip;
         vec3 c = mix(mirror, sky, win);
-        c += vec3(0.9, 0.97, 1.0) * pow(rip, 8.0) * win * 0.9;          // glitter of the swell in the window
+        c += vec3(0.9, 0.97, 1.0) * pow(rip, 8.0) * win * 0.6;          // glitter of the swell in the window
         c += vec3(0.5, 0.7, 0.8) * exp(-pow((rr - 1.1) / 0.05, 2.0)) * 0.35;   // the bright rim of the window
         gl_FragColor = vec4(c, 1.0);
       }`,
@@ -519,12 +520,12 @@ export function createDive(view) {
     const shape = new THREE.Shape(HULL.map(([x, z]) => new THREE.Vector2(x, z)));
     const hg = new THREE.ExtrudeGeometry(shape, { depth: 3.4, bevelEnabled: true, bevelThickness: 0.3, bevelSize: 0.3, bevelSegments: 4, curveSegments: 12 });
     hg.rotateX(Math.PI / 2);
-    const hm = new THREE.Mesh(hg, std({ color: 0x1c2a30, roughness: 0.8, metalness: 0.2 }));
+    const hm = new THREE.Mesh(hg, std({ color: 0x8a8a82, roughness: 0.8, metalness: 0.1 }));     // a fouled, weathered bottom: grey in the blue-green light
     hm.position.y = 14.2; hullUnder.add(hm);
     const keel = new THREE.Mesh(new THREE.ExtrudeGeometry(new THREE.Shape([new THREE.Vector2(-0.15, -14), new THREE.Vector2(0.15, -14), new THREE.Vector2(0.15, 26), new THREE.Vector2(-0.15, 26)]),
       { depth: 0.5, bevelEnabled: true, bevelThickness: 0.1, bevelSize: 0.08, bevelSegments: 2 }).rotateX(Math.PI / 2), hm.material);
     keel.position.y = 14.2 - 3.6; hullUnder.add(keel);
-    const prop = new THREE.Group(); prop.position.set(0, 14.2 - 2.4, -14.2); hullUnder.add(prop);
+    const prop = new THREE.Group(); prop.position.set(0, 14.2 - 2.5, -15.7); hullUnder.add(prop);      // aft of the stern (it ends at z -15)
     const bronze = std({ color: 0x8a6a3a, metalness: 0.85, roughness: 0.35 });
     prop.add(new THREE.Mesh(new THREE.LatheGeometry([[0, -0.3], [0.22, -0.25], [0.25, 0.2], [0.1, 0.4], [0, 0.42]].map(([a, b]) => new THREE.Vector2(a, b)), 20).rotateX(Math.PI / 2), bronze));
     for (let i = 0; i < 4; i++) {
@@ -534,9 +535,9 @@ export function createDive(view) {
     }
     const rudder = new THREE.Mesh(new THREE.ExtrudeGeometry(new THREE.Shape([new THREE.Vector2(0, 0), new THREE.Vector2(1.2, 0), new THREE.Vector2(1.0, -2.0), new THREE.Vector2(0, -2.2)]),
       { depth: 0.12, bevelEnabled: true, bevelThickness: 0.04, bevelSize: 0.04, bevelSegments: 2 }).rotateY(Math.PI / 2), hm.material);
-    rudder.position.set(-0.06, 14.2 - 1.4, -15.0); hullUnder.add(rudder);
+    rudder.position.set(-0.06, 14.2 - 1.2, -16.5); hullUnder.add(rudder);
     hullUnder.userData.prop = prop;
-    hullUnder.position.set(-6.5, 0, 19);         // her stern off to one side, over the spot where Nerpa went in
+    hullUnder.position.set(-3.6, 0, 18.2);       // her stern right over the spot where Nerpa went in: the propeller in Snell's window
   }
   // a Caspian seal near the surface (only in these shots, CLAUDE.md 23.3-G)
   const seal = new THREE.Group(); surf.add(seal);
@@ -1280,6 +1281,7 @@ export function createDive(view) {
     // bubbles from the thrusters and the vents on top of the fairing
     const emitHull = (v) => {
       const props = model.props, r = Math.random();
+      if (surf.visible && r < 0.25) { hullUnder.userData.prop.getWorldPosition(v); v.x += (Math.random() - 0.5) * 1.2; v.y += (Math.random() - 0.5) * 1.2; v.z -= Math.random() * 2; return v; }   // the ship's propeller wash
       if (r < 0.7) props[Math.floor(Math.random() * props.length)].getWorldPosition(v);
       else v.set((Math.random() - 0.5) * 1.6, 2.0, -0.6 + Math.random() * 1.2).applyMatrix4(nerpa.userData.model.matrixWorld);
       return v;
@@ -1299,13 +1301,14 @@ export function createDive(view) {
     surfPlane.material.uniforms.uSurf.value = Y0 + 14; surfPlane.material.uniforms.uOrg.value.set(0, 0);
     deep.fog.color.set(0x0b3c50); deep.fog.density = 0.022; deep.background.set(0x0c4762);
     top.color.set(0x8fc4dc); top.intensity = 3.6;
+    hemi.color.set(0x3a8fa8); hemi.groundColor.set(0x2f7f90); hemi.intensity = 2.6;      // near the surface light scatters from every side
     snow.mat.uniforms.uOn.value = 0; snow.mat.uniforms.uOn2.value = 0; snow.mat.uniforms.uAmb.value = 0.55;
     sounds.under?.();
     await shot(durs[0], (k, dt, time) => {
       const e = ease(k);
       nerpa.position.set(0.3, Y0 + 12.8 - e * 10.5, 0.2); nerpa.rotation.set(0, 0.4 + k * 0.5, Math.sin(k * 7) * 0.04);
       camera.position.set(3.2, Y0 + 4.0 - k * 1.5, 5.0);
-      camera.lookAt(nerpa.position.x - 0.6, nerpa.position.y + 1.2 + (1 - k) * 2.5, nerpa.position.z);
+      camera.lookAt(nerpa.position.x - 0.6 - (1 - e) * 1.2, nerpa.position.y + 1.2 + (1 - k) * 2.5, nerpa.position.z + (1 - e) * 1.0);   // first the stern and her propeller, then Nerpa
       surfPlane.material.uniforms.uCam.value.copy(camera.position);
       hullUnder.userData.prop.rotation.z += dt * 3;
       seal.position.set(-7 + k * 13, Y0 + 12.2 + Math.sin(k * 6) * 0.15, -3 + k * 2); seal.rotation.set(0, Math.PI / 2 - 0.3, Math.sin(time * 6) * 0.15);
@@ -1317,6 +1320,7 @@ export function createDive(view) {
       setDepth(k * 12);
     });
     surf.visible = false; caustic.intensity = 0;
+    hemi.color.set(0x0d4257); hemi.groundColor.set(0x000000); hemi.intensity = 0.6;
 
     // ---- shot 4: the twilight zone — blue to black, the depth races, comb jellies; the lamps click on at ~200 m
     trail.mat.uniforms.uSurf.value = 1e6; trail.mat.uniforms.uAmb.value = 0.25;
