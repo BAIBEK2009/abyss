@@ -1101,9 +1101,14 @@ export function createDive(view) {
       if (!g.visible || D.seen.has(g)) continue;
       const ex = g.position.x - D.x, ez = g.position.z - D.z, ey = g.position.y - D.y, ed = Math.hypot(ex, ey, ez);
       if (ed < 8 && (ex * aimDir.x + ey * aimDir.y + ez * aimDir.z) / ed > Math.cos(0.5)) {
-        D.seen.add(g); if (D.hasDebris) D.debrisSeen = true; sfx.seen(); cockpit.msg(t(g.userData.key), 3400);
+        D.seen.add(g); if (D.hasDebris) D.debrisSeen = true; sfx.seen();
+        D.cap = { id: cockpit.msg(t(g.userData.key), 4000), of: g };         // the caption of a find: 4 s, or until the next one
         if (!D.anyDebris) { D.anyDebris = true; D.onEvent("first_debris"); }
       }
+    }
+    if (D.cap) {        // ... and it never hangs over something else: gone as soon as its find leaves the view
+      const g = D.cap.of, ex = g.position.x - D.x, ez = g.position.z - D.z, ey = g.position.y - D.y, ed = Math.hypot(ex, ey, ez);
+      if (ed > 11 || (ex * aimDir.x + ey * aimDir.y + ez * aimDir.z) / ed < Math.cos(0.85)) { cockpit.clearMsg(D.cap.id); D.cap = null; }
     }
     const canGrab = D.found && D.cine === null && dist < 3.3 && dot > Math.cos(0.7);
     if (canGrab) {
@@ -1202,7 +1207,7 @@ export function createDive(view) {
     const cine = mode === "dive" && D.cine !== null && D.cine !== undefined;
     if (cine) {
       D.cine += dt;                                          // real seconds
-      if (D.cine >= CINE_S) { D.cine = null; cockpit.msg(t(D.find ? "dv_seen_find" : "dv_seen_box"), 3800); }
+      if (D.cine >= CINE_S) { D.cine = null; D.cap = { id: cockpit.msg(t(D.find ? "dv_seen_find" : "dv_seen_box"), 4000), of: box }; }
     }
     dt *= cine ? 0.5 : 1;                                    // slow motion 0.5x while the beam finds the box
     T += dt;

@@ -115,10 +115,14 @@ export function createCockpit(root, handlers) {
     hide() { ck.classList.remove("on", "live", "low"); },
     live(on) { ck.classList.toggle("live", on); },
     hideHelp() { $(".ck-help").style.opacity = 0; },
+    /** A subtitle for ms; returns its id (a newer one replaces it). */
     msg(text, ms = 3200) {
       const m = $(".ck-msg"); m.textContent = text; m.classList.add("on");
       const id = ++msgId; setTimeout(() => { if (id === msgId) m.classList.remove("on"); }, ms);
+      return id;
     },
+    /** Take the subtitle down now, if it is still this one. */
+    clearMsg(id) { if (id === msgId) $(".ck-msg").classList.remove("on"); },
     set({ o2, max, depth, heading, fog, low }) {
       if (o2 !== undefined) $(".ck-o2").innerHTML = o2Dial(o2, max);
       if (depth !== undefined) $(".ck-nixie").textContent = String(Math.max(0, Math.round(depth))).padStart(4, "0");
