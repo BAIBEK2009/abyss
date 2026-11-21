@@ -211,6 +211,11 @@ export function createView(canvas) {
     useScene(s) {
       manual = !!s;
       renderPass.scene = gtao.scene = s || scene;
+      // GTAO only at the table (paper joints, under ships): objects floating in open water have the far
+      // plane behind them and come out fully 'occluded' (black)
+      gtao.enabled = !s;
+      // bloom breaks on the dark deep scene with the additive jellyfish (the frame goes black): only at the table
+      bloom.enabled = !s;
       document.body.classList.toggle("other-scene", !!s);
       if (!s) aim();
     },
