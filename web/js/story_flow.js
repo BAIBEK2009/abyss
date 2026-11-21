@@ -46,6 +46,7 @@ export function createStoryFlow(ctx) {
         await speech.idle();
         await goalCards(ctx.ui, b, t("btn_go_cabin"));
         await send("radio_heard");
+        await send("binoculars");     // until M12b: p5 already showed Poseidon on the horizon
         await goCabin();
         continue;
       }

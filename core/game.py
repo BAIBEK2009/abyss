@@ -50,7 +50,7 @@ class GameError(Exception):
 DEMO_SEED = 272
 
 # scene events the browser may report to the campaign (everything else the core sees itself)
-STORY_EVENTS = {"radio_heard", "enter_cabin", "sit_at_table", "first_dive_ready",
+STORY_EVENTS = {"radio_heard", "binoculars", "enter_cabin", "sit_at_table", "first_dive_ready",
                 "dive:start", "dive:first_debris", "dive:signal_stronger", "dive:off_course"}
 
 

@@ -1,0 +1,650 @@
+{
+ "_readme": "Все сюжетные тексты ABYSS (версия 2: Каспий, Казахстан). Движок только показывает их. speaker → characters; on → когда запускать; goal → строка цели в HUD; tasks → чек-лист акта; dive_brief → карточка перед погружением. Порядок beats внутри акта важен. Версия 3: три языка — story.json (ru), story.kk.json, story.en.json, структура одинаковая. Поле show у каждой реплики — какая анимация-виньетка идёт на экране, пока звучит текст (CLAUDE.md, раздел 23.5). Технические поля (on, type, speaker, scene, clue, show, id) не переводятся.",
+ "world": {
+  "sea": "Caspian Sea, South Caspian Basin",
+  "depth_m": 950,
+  "base": "Port of Aktau",
+  "ship": "«Tulpar» — research and rescue vessel",
+  "bathyscaphe": "«Nerpa» — deep-sea submersible (named after the Caspian seal)",
+  "flight": "Flight AQ-271, Astana — Tbilisi, 214 people on board (fictional)",
+  "rival": "«Poseidon-2» — vessel of a private foreign company",
+  "manufacturer": "«Aerostar» — fictional aircraft manufacturer"
+ },
+ "characters": {
+  "aigerim": {
+   "name": "Aigerim Seitova",
+   "role": "Aktau Maritime Rescue",
+   "channel": "radio"
+  },
+  "dana": {
+   "name": "Dana Akhmetova",
+   "role": "analyst · Bayes",
+   "portrait": "vera"
+  },
+  "erlan": {
+   "name": "Erlan Kassymov",
+   "role": "navigator · A*",
+   "portrait": "lev"
+  },
+  "murat": {
+   "name": "Murat-aga",
+   "role": "engineer · MDP",
+   "portrait": "grisha"
+  },
+  "berg": {
+   "name": "Captain Van der Berg",
+   "role": "«Poseidon-2»",
+   "channel": "radio"
+  },
+  "asel": {
+   "name": "Assel Nurlanova",
+   "role": "captain of flight AQ-271",
+   "channel": "recorder"
+  },
+  "family": {
+   "name": "Families of flight AQ-271 passengers",
+   "role": "via Maritime Rescue",
+   "channel": "radio"
+  }
+ },
+ "map_names": {
+  "Северная гряда": "Mangyshlak Sill",
+  "Близнецы": "The Twins",
+  "Скалы Чайки": "Gull Rocks",
+  "Камень Ворона": "Beket's Stone",
+  "Банка Тихая": "Quiet Bank",
+  "Южные зубья": "Southern Teeth",
+  "Западная котловина": "South Caspian Basin",
+  "База": "Base · Aktau",
+  "Северная Атлантика": "Caspian Sea"
+ },
+ "mystery": {
+  "title": "What happened to AQ-271",
+  "slots": [
+   {
+    "id": 1,
+    "title": "Not an explosion",
+    "found_by": "act1_dive_flap",
+    "photo": "flap marked AQ-271",
+    "text": "The flap is intact, no trace of fire. The plane did not explode in the air — it hit the water in one piece."
+   },
+   {
+    "id": 2,
+    "title": "A water landing",
+    "found_by": "act2_dive_tail",
+    "photo": "tail section",
+    "text": "The tail was torn off by a nearly flat impact with the water. The pilots were ditching the plane. The recorder mounts are ripped out — the boxes are nearby."
+   },
+   {
+    "id": 3,
+    "title": "Who hired «Poseidon»",
+    "found_by": "act2_intercept",
+    "photo": "intercepted telegram",
+    "text": "«Poseidon» works for «Aerostar» — the company that built this plane."
+   },
+   {
+    "id": 4,
+    "title": "False airspeed",
+    "found_by": "act3_fdr",
+    "photo": "flight data recorder",
+    "text": "The airspeed sensors iced over. The autopilot disconnected and the instruments showed the pilots the wrong speed."
+   },
+   {
+    "id": 5,
+    "title": "The last minutes",
+    "found_by": "act3_cvr",
+    "photo": "cockpit voice recorder",
+    "text": "The crew fought for the aircraft to the end and put it down on the water. The last command: passengers, brace for impact."
+   },
+   {
+    "id": 6,
+    "title": "They knew",
+    "found_by": "act3_maintenance",
+    "photo": "maintenance report",
+    "text": "A month before the flight a technician logged the sensor defect. The repair was postponed. «Aerostar» knew."
+   }
+  ]
+ },
+ "acts": [
+  {
+   "id": "prologue",
+   "card": {
+    "title": "Prologue",
+    "subtitle": "Night, 02:40. Caspian Sea, 180 km from Aktau"
+   },
+   "goal": "Listen to Maritime Rescue",
+   "tasks": [
+    "Answer the radio call on the bridge",
+    "Take the binoculars and look at the crash site",
+    "Go down to the cabin",
+    "Walk up to the chart table"
+   ],
+   "beats": [
+    {
+     "id": "p1",
+     "on": "start",
+     "scene": "deck",
+     "speaker": "aigerim",
+     "text": "«Tulpar», this is Aktau Maritime Rescue. Captain, sorry to wake you in the middle of the night.",
+     "show": "radio_closeup"
+    },
+    {
+     "id": "p2",
+     "on": "after:p1",
+     "speaker": "aigerim",
+     "text": "Two hours ago flight AQ-271, Astana — Tbilisi, disappeared over the Caspian. 214 people on board. The last signal came from your square.",
+     "show": "radar_blip_lost"
+    },
+    {
+     "id": "p3",
+     "on": "after:p2",
+     "speaker": "aigerim",
+     "text": "Rescuers are working on the surface. But for the families to learn what happened, we need the black box. It is on the seabed, almost a kilometre below you.",
+     "show": "depth_cutaway"
+    },
+    {
+     "id": "p4",
+     "on": "after:p3",
+     "speaker": "aigerim",
+     "text": "The box's beacon will run for five days. Then it goes silent and finding it becomes nearly impossible. You have the only deep-sea submersible in the region.",
+     "show": "beacon_countdown"
+    },
+    {
+     "id": "p5",
+     "on": "after:p4",
+     "speaker": "aigerim",
+     "text": "One more thing. «Poseidon-2» is heading for the square — a private foreign company. They say they want to help. I don't like it. Get there first, captain.",
+     "show": "poseidon_horizon"
+    },
+    {
+     "id": "p6",
+     "on": "after:p5",
+     "type": "goal_cards",
+     "cards": [
+      "Goal: find and raise the black box of flight AQ-271 before «Poseidon».",
+      "Time: the beacon runs for 120 hours. Every action costs hours.",
+      "Your role: you are the captain of «Tulpar». The officers calculate and advise — you decide."
+     ],
+     "show": "goal_cards"
+    },
+    {
+     "id": "p7",
+     "on": "event:enter_cabin",
+     "speaker": "dana",
+     "text": "Captain, I'm Dana, the analyst. I've laid out on the chart where the box might be. The higher the hill of tracing paper, the more likely.",
+     "show": "kalka_rise"
+    },
+    {
+     "id": "p8",
+     "on": "after:p7",
+     "speaker": "erlan",
+     "text": "Erlan, navigator. Show me where — I'll take us around the shoals and rocks.",
+     "show": "route_draw"
+    },
+    {
+     "id": "p9",
+     "on": "after:p8",
+     "speaker": "murat",
+     "text": "Murat, engineer. Thirty years on the Caspian. When I say «home», we go home — no tug from Aktau will come out in a storm.",
+     "show": "fuel_gauge"
+    },
+    {
+     "id": "p10",
+     "on": "event:sit_at_table",
+     "speaker": "dana",
+     "text": "Let's start simple: head for the highest hill and listen to the seabed with sonar. It's cheap and tells us a lot at once.",
+     "show": "highlight_peak"
+    }
+   ]
+  },
+  {
+   "id": "act1",
+   "card": {
+    "title": "Act I · The Square",
+    "subtitle": "Day one. Find where the plane went down"
+   },
+   "goal": "Find wreckage and prove it is AQ-271",
+   "tasks": [
+    "Listen to the seabed with sonar",
+    "Dive where the hill is highest",
+    "Find a piece with the flight number"
+   ],
+   "new_mechanic": "sonar and diving",
+   "dive_brief": {
+    "title": "Dive 1",
+    "task": "Find any piece of the plane with the flight number.",
+    "how": "The direction finder on the left shows where the signal comes from. Debris usually lies in a trail — follow it to the main find.",
+    "oxygen_s": 75
+   },
+   "beats": [
+    {
+     "id": "a1_1",
+     "on": "event:first_sonar_echo",
+     "speaker": "dana",
+     "text": "An echo! Metal nearby. See — the hills around it grew. Every measurement works like this: the map learns.",
+     "show": "sonar_echo_hills"
+    },
+    {
+     "id": "a1_2",
+     "on": "event:first_sonar_silence",
+     "speaker": "dana",
+     "text": "Silence. That's an answer too: it's probably empty here, and the hills moved elsewhere.",
+     "show": "sonar_silence_hills"
+    },
+    {
+     "id": "a1_3",
+     "on": "hour>=6",
+     "type": "clue",
+     "clue": "fishermen_direction",
+     "speaker": "aigerim",
+     "text": "Captain, fishermen from Kuryk saw a flash over the water last night — northeast of the signal point. Witnesses are wrong sometimes, but not always.",
+     "show": "flash_over_sea"
+    },
+    {
+     "id": "a1_4",
+     "on": "event:first_dive_ready",
+     "speaker": "murat",
+     "text": "«Nerpa» is ready. Oxygen lasts a little over a minute — then we bring her up, with a find or without.",
+     "show": "nerpa_ready"
+    },
+    {
+     "id": "a1_d1",
+     "on": "dive:start",
+     "speaker": "dana",
+     "text": "I'm listening to the beacon with you. Follow the direction finder needle.",
+     "show": "finder_highlight"
+    },
+    {
+     "id": "a1_d2",
+     "on": "dive:first_debris",
+     "speaker": "dana",
+     "text": "A piece of fuselage skin! The trail goes on — stay on it.",
+     "show": "debris_highlight"
+    },
+    {
+     "id": "a1_d3",
+     "on": "dive:signal_stronger",
+     "speaker": "dana",
+     "text": "The signal is getting stronger. You're very close.",
+     "show": "finder_strong"
+    },
+    {
+     "id": "a1_d4",
+     "on": "dive:off_course",
+     "speaker": "dana",
+     "text": "The signal is fading — you're drifting off. Turn with the needle.",
+     "show": "finder_weak"
+    },
+    {
+     "id": "a1_5",
+     "on": "event:find:act1_dive_flap",
+     "type": "mystery",
+     "slot": 1,
+     "speaker": "dana",
+     "text": "It's a flap, and it has a number — AQ-271. No trace of fire. The plane didn't explode, captain. It came down in one piece.",
+     "show": "photo_to_board"
+    },
+    {
+     "id": "a1_6",
+     "on": "event:dive_empty",
+     "speaker": "dana",
+     "text": "Empty — but we've searched part of the seabed and I've recalculated the chart. Every empty metre brings us closer to the box.",
+     "show": "coverage_recalc"
+    },
+    {
+     "id": "a1_7",
+     "on": "after:a1_5",
+     "speaker": "erlan",
+     "text": "Captain, lights on the horizon. Black-and-red hull. That's «Poseidon-2».",
+     "show": "poseidon_arrives"
+    },
+    {
+     "id": "a1_8",
+     "on": "after:a1_7",
+     "speaker": "berg",
+     "text": "«Tulpar», this is Captain Van der Berg. We are working under contract. Let's not get in each other's way — especially you in ours.",
+     "show": "radio_berg"
+    },
+    {
+     "id": "a1_end",
+     "on": "after:a1_8",
+     "type": "act_end",
+     "next": "act2",
+     "show": "chapter_card"
+    }
+   ]
+  },
+  {
+   "id": "act2",
+   "card": {
+    "title": "Act II · The Storm",
+    "subtitle": "Day two. Find the tail — that's where the boxes were mounted"
+   },
+   "goal": "Find the plane's tail before «Poseidon» gets ahead",
+   "tasks": [
+    "Steer around the storm",
+    "Don't run out of fuel",
+    "Find the plane's tail",
+    "Find out who «Poseidon» works for"
+   ],
+   "new_mechanic": "storm (A* with weighted cells), fuel for real, decoy buoy",
+   "dive_brief": {
+    "title": "Dive 2",
+    "task": "Find the tail section of the plane.",
+    "how": "After the storm the water is murky and the current pushes you sideways. Keep to the finder needle and watch your track on the sonar screen.",
+    "oxygen_s": 75
+   },
+   "beats": [
+    {
+     "id": "a2_1",
+     "on": "start",
+     "speaker": "erlan",
+     "text": "A storm is coming from the southwest. The Caspian is vicious in a storm: inside it a cell costs three times as much, and the sonar goes deaf. I'm plotting a detour — look how the course changed.",
+     "show": "storm_front"
+    },
+    {
+     "id": "a2_2",
+     "on": "event:fuel_low",
+     "speaker": "murat",
+     "text": "Captain, fuel is low. If we stall in the storm, we drift and lose a day. I'd head to Aktau to refuel. Your call.",
+     "show": "fuel_gauge_low"
+    },
+    {
+     "id": "a2_3",
+     "on": "hour>=30",
+     "type": "clue",
+     "clue": "coastguard_band",
+     "speaker": "aigerim",
+     "text": "A border patrol boat picked up a cabin seat. By the current, the tail settled in a narrow strip. Marking it on your chart.",
+     "show": "seat_drift"
+    },
+    {
+     "id": "a2_4",
+     "on": "event:rival_dives_near",
+     "speaker": "dana",
+     "text": "«Poseidon» is diving right next to us. Their computer thinks the way mine does: it trusts the echo. Drop a decoy buoy and they'll swim to it.",
+     "show": "decoy_plan"
+    },
+    {
+     "id": "a2_5",
+     "on": "event:decoy_used",
+     "speaker": "erlan",
+     "text": "It worked. «Poseidon» turned toward the buoy. We have a few hours.",
+     "show": "poseidon_turns"
+    },
+    {
+     "id": "a2_6",
+     "on": "event:find:act2_dive_tail",
+     "type": "mystery",
+     "slot": 2,
+     "speaker": "dana",
+     "text": "The tail. It was torn off by hitting the water almost flat. They were ditching the plane, captain. And the recorder mounts are ripped out: the boxes are somewhere close.",
+     "show": "photo_to_board"
+    },
+    {
+     "id": "a2_7",
+     "on": "after:a2_6",
+     "type": "mystery",
+     "slot": 3,
+     "speaker": "aigerim",
+     "text": "We intercepted a telegram from «Poseidon» to their client. It's «Aerostar» — the company that built this plane. Why would the manufacturer want the box before the investigators?",
+     "show": "telegram_type"
+    },
+    {
+     "id": "a2_end",
+     "on": "after:a2_7",
+     "type": "act_end",
+     "next": "act3",
+     "show": "chapter_card"
+    }
+   ]
+  },
+  {
+   "id": "act3",
+   "card": {
+    "title": "Act III · Two Boxes",
+    "subtitle": "Third night. The voice goes silent sooner"
+   },
+   "goal": "Raise both recorders: data and voice",
+   "tasks": [
+    "Decide what to search for first",
+    "Raise the flight data recorder",
+    "Raise the cockpit voice recorder",
+    "Inspect the tail compartment"
+   ],
+   "new_mechanic": "two targets: two tracing-paper maps, second timer 30 h",
+   "dive_brief": {
+    "title": "Canyon dive",
+    "task": "Raise a recorder.",
+    "how": "A narrow canyon, sharp debris — every hit costs oxygen. The lights sometimes flicker. The finder picks up two beacons at once: the selected one is brighter.",
+    "oxygen_s": 90
+   },
+   "beats": [
+    {
+     "id": "a3_1",
+     "on": "start",
+     "speaker": "erlan",
+     "text": "Captain, a plane like this has two boxes. The orange one is data: speed, altitude, control surfaces. The other holds the pilots' voices.",
+     "show": "two_boxes"
+    },
+    {
+     "id": "a3_2",
+     "on": "after:a3_1",
+     "speaker": "dana",
+     "text": "The voice recorder's battery is damaged. Its beacon will go silent in 30 hours, not a hundred. I've made two maps — switch the tracing paper between «Data / Voice».",
+     "show": "kalka_split"
+    },
+    {
+     "id": "a3_3",
+     "on": "after:a3_2",
+     "type": "choice",
+     "speaker": "murat",
+     "text": "What do we look for first, captain?",
+     "options": [
+      {
+       "id": "cvr_first",
+       "text": "The voice — it will go silent soon"
+      },
+      {
+       "id": "fdr_first",
+       "text": "The data — «Poseidon» is after it right now"
+      }
+     ],
+     "show": "choice"
+    },
+    {
+     "id": "a3_4",
+     "on": "event:find:act3_fdr",
+     "type": "mystery",
+     "slot": 4,
+     "speaker": "dana",
+     "text": "The data is readable. The airspeed sensors iced over, the autopilot disconnected, the instruments lied to the pilots. It wasn't their fault, captain.",
+     "show": "fdr_graph"
+    },
+    {
+     "id": "a3_5",
+     "on": "event:find:act3_maintenance",
+     "type": "mystery",
+     "slot": 6,
+     "speaker": "dana",
+     "text": "In the tail compartment — a technician's folder. «Airspeed sensor defect, postpone repair». Dated a month before the flight. They knew.",
+     "show": "maintenance_folder"
+    },
+    {
+     "id": "a3_6",
+     "on": "before:act3_last_dive",
+     "speaker": "family",
+     "text": "Captain of «Tulpar», we know you're out there. Rakhmet. Please, don't give them the recording.",
+     "show": "radio_family"
+    },
+    {
+     "id": "a3_7",
+     "on": "event:find:act3_cvr",
+     "type": "mystery",
+     "slot": 5,
+     "speaker": "asel",
+     "text": "…holding it, holding it… I don't trust the speed… We're ditching. Crew to cabin: brace for impact. Thank you for flying with us.",
+     "show": "cvr_waveform"
+    },
+    {
+     "id": "a3_8",
+     "on": "after:a3_7",
+     "speaker": "dana",
+     "text": "She held the plane until the last second. Now we know everything.",
+     "show": "dawn_silence"
+    },
+    {
+     "id": "a3_lost",
+     "on": "event:rival_got_box",
+     "speaker": "erlan",
+     "text": "«Poseidon» raised the box. We can't get it back. We work on the second one.",
+     "show": "poseidon_lifts"
+    },
+    {
+     "id": "a3_end",
+     "on": "event:both_boxes_resolved",
+     "type": "act_end",
+     "next": "act4",
+     "show": "chapter_card"
+    }
+   ]
+  },
+  {
+   "id": "act4",
+   "card": {
+    "title": "Act IV · The Truth",
+    "subtitle": "Dawn over the Caspian. Who gets the recording"
+   },
+   "goal": "Decide what happens to the recording",
+   "tasks": [
+    "Hear Van der Berg out",
+    "Hear the officers out",
+    "Make the decision"
+   ],
+   "new_mechanic": "moral choice",
+   "beats": [
+    {
+     "id": "a4_1",
+     "on": "start",
+     "scene": "deck_dawn",
+     "speaker": "berg",
+     "text": "Good morning, captain. You did the impossible, honestly. «Aerostar» will pay so much for the boxes that «Tulpar» gets her refit and your crew rests for a year.",
+     "show": "deck_dawn_berg"
+    },
+    {
+     "id": "a4_2",
+     "on": "after:a4_1",
+     "speaker": "murat",
+     "text": "The lads have families, captain. I'm just saying: it's big money. Your call.",
+     "show": "portrait_murat"
+    },
+    {
+     "id": "a4_3",
+     "on": "after:a4_2",
+     "speaker": "dana",
+     "text": "If we sell — these planes keep flying with the same sensors. I'm against it.",
+     "show": "portrait_dana"
+    },
+    {
+     "id": "a4_4",
+     "on": "after:a4_3",
+     "speaker": "erlan",
+     "text": "…",
+     "show": "portrait_erlan_silent"
+    },
+    {
+     "id": "a4_5",
+     "on": "after:a4_4",
+     "type": "choice",
+     "speaker": null,
+     "text": "Who gets the recording?",
+     "options": [
+      {
+       "id": "investigators",
+       "text": "The investigators — let it all be by the law"
+      },
+      {
+       "id": "public",
+       "text": "Publish it — to the families and the press"
+      },
+      {
+       "id": "sell",
+       "text": "Sell it to «Aerostar»"
+      }
+     ],
+     "show": "choice"
+    }
+   ]
+  }
+ ],
+ "endings": {
+  "investigators": {
+   "title": "Truth",
+   "clipping": "INVESTIGATION: CAUSE OF AQ-271 CRASH — ICED AIRSPEED SENSORS. ALL AIRCRAFT OF THIS TYPE GROUNDED FOR INSPECTION",
+   "aigerim": "The families got their answer, captain. And not one of those planes will fly until the sensors are replaced. Rakhmet."
+  },
+  "public": {
+   "title": "Exposure",
+   "clipping": "AQ-271 RECORDING RELEASED: «AEROSTAR» KNEW ABOUT THE DEFECT",
+   "aigerim": "The truth was out within a day. «Aerostar» is suing you, but it looks like they've already lost."
+  },
+  "sell": {
+   "title": "Silence",
+   "clipping": "ONE YEAR LATER: AIRSPEED SENSORS FAIL ON ANOTHER FLIGHT. CREW LANDS THE PLANE BY A MIRACLE",
+   "aigerim": "…"
+  },
+  "lost": {
+   "title": "Too late",
+   "clipping": "«AEROSTAR»: AQ-271 RECORDER DATA IS A TRADE SECRET",
+   "aigerim": "The families will be in court for years, captain. We did what we could."
+  }
+ },
+ "hud": {
+  "goal_prefix": "Goal:",
+  "chapter_card_seconds": 3.5,
+  "mystery_button": "What happened to AQ-271",
+  "new_fragment_toast": "New find on the evidence board"
+ },
+ "lang": "en",
+ "deck": {
+  "prompts": {
+   "radio": "Answer the call",
+   "binoculars": "Take the binoculars",
+   "binoculars_use": "Look south",
+   "binoculars_drop": "Put the binoculars down",
+   "stairs": "Go down to the cabin",
+   "stairs_up": "Go up to the deck",
+   "nerpa": "Launch «Nerpa»",
+   "workshop": "Murat's workshop",
+   "board": "Evidence board",
+   "table": "Chart table",
+   "porthole": "Look through the porthole",
+   "lifering": "«Tulpar» · Aktau"
+  },
+  "hints": {
+   "look": "Mouse — turn your head. W A S D — walk. Shift — run.",
+   "click_walk": "No mouse? Click on the deck and the captain walks there.",
+   "waypoint": "Walk to the ◆ marker — it always shows the next step.",
+   "interact": "Look at an object and press E.",
+   "esc": "Esc — release the cursor and open the menu."
+  },
+  "binocular_lines": [
+   {
+    "speaker": "erlan",
+    "text": "See the lights to the south? Border patrol boats. The helicopter is sweeping its searchlight — they're looking for people."
+   },
+   {
+    "speaker": "erlan",
+    "text": "That shiny patch on the water is kerosene. The plane went down somewhere here. But the current is already scattering the debris."
+   },
+   {
+    "speaker": "dana",
+    "text": "Captain, come down to the table. I'll show you where to look for the box."
+   }
+  ],
+  "between_dives": {
+   "poseidon_watch": "Through the binoculars you can see «Poseidon». Its arrow on the chart shows where it is heading.",
+   "storm_watch": "Clouds to the southwest. In a few hours the storm will be here."
+  }
+ }
+}

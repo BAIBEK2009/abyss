@@ -38,10 +38,11 @@ def test_prologue_chain_and_checklist():
     assert c.start() == []                                   # only once
     out = c.event("radio_heard")
     assert {"task": ["prologue", 0]} in out
+    assert c.event("binoculars") == [{"task": ["prologue", 1]}]
     assert beats(c.event("enter_cabin")) == ["p7", "p8", "p9"]
     out = c.event("sit_at_table")
-    assert beats(out) == ["p10"] and {"act": "act1"} in out  # all three tasks done -> act I
-    assert c.act == "act1" and c.tasks["prologue"] == [True, True, True]
+    assert beats(out) == ["p10"] and {"act": "act1"} in out  # all four tasks done -> act I
+    assert c.act == "act1" and c.tasks["prologue"] == [True, True, True, True]
 
 
 def test_act1_ends_with_poseidon_and_act2_card():
@@ -59,7 +60,7 @@ def test_game_campaign_rival_arrives_after_act1():
     g = Game(272, campaign=True, compute_par=False)
     assert g.rival is None and g.state()["campaign"]["act"] == "prologue"
     g.story_event("start")
-    g.story_event("radio_heard"); g.story_event("enter_cabin")
+    g.story_event("radio_heard"); g.story_event("binoculars"); g.story_event("enter_cabin")
     out = g.story_event("sit_at_table")
     assert {"act": "act1"} in out and g.campaign.act == "act1"
     # act I: sonar at the top of the hill, then a live dive there

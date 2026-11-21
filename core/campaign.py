@@ -23,7 +23,7 @@ STORY_PATH = Path(__file__).resolve().parent.parent / "web" / "data" / "story.js
 
 # which event ticks which task of the act's checklist (same order as "tasks" in story.json)
 TASK_EVENTS = {
-    "prologue": ["radio_heard", "enter_cabin", "sit_at_table"],
+    "prologue": ["radio_heard", "binoculars", "enter_cabin", "sit_at_table"],   # binoculars: a real scene in M12b
     "act1": ["sonar", "dive_high", "find:act1_dive_flap"],
 }
 READY_ACTS = ("prologue", "act1")

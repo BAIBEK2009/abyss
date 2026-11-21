@@ -20,7 +20,7 @@ args = ap.parse_args()
 args.out.mkdir(parents=True, exist_ok=True)
 server = make_server(0)
 g = server.game
-for ev in ("start", "radio_heard", "enter_cabin", "sit_at_table"):
+for ev in ("start", "radio_heard", "binoculars", "enter_cabin", "sit_at_table"):
     g.story_event(ev)
 g.pop_story()
 threading.Thread(target=server.serve_forever, daemon=True).start()

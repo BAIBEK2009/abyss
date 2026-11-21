@@ -37,7 +37,7 @@ server = make_server(0, seed=args.seed)
 g = server.game
 steps = [s for s in args.script.split(",") if s]
 if args.act:
-    for ev in ("start", "radio_heard", "enter_cabin", "sit_at_table"):
+    for ev in ("start", "radio_heard", "binoculars", "enter_cabin", "sit_at_table"):
         if g.campaign.act == args.act:
             break
         g.story_event(ev)
