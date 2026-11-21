@@ -13,6 +13,7 @@
 // tubes with seams and wear (CLAUDE.md 23, "forbidden from now on").
 import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
+import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { canvasTexture, rng } from "../view.js";
 import { steelPanel } from "./materials.js";
 import { createNerpa } from "./nerpa.js";
@@ -322,6 +323,11 @@ function binocularsModel() {
 export function createDeck(view, { lifeLabel = "" } = {}) {
   const scene = new THREE.Scene();
   scene.fog = new THREE.FogExp2(0x0b1626, 0.00042);
+  {   // soft reflections for the acrylic sphere, the glossy paint, steel and glass (a dim room, so the night stays night)
+    const pm = new THREE.PMREMGenerator(view.renderer);
+    scene.environment = pm.fromScene(new RoomEnvironment(), 0.04).texture;
+    scene.environmentIntensity = 0.22;
+  }
   const moonDir = new THREE.Vector3(-0.38, 0.33, 0.86).normalize();     // south-south-west, low: the moon path runs to the crash site
   scene.add(createSky(moonDir));
   const sea = createSea(moonDir);
@@ -848,7 +854,7 @@ export function createDeck(view, { lifeLabel = "" } = {}) {
     radio: { show: [radio], hit: proxy(0.8, 0.6, 0.6, -2.25, 1.25, HZ1 - 0.75), stand: [-2.1, HZ1 - 1.55], look: [-2.25, 1.2, HZ1 - 0.6] },
     binoculars: { show: [binos], hit: proxy(0.5, 0.4, 0.5, HX + 0.3, 1.15, HZ1 - 0.2), stand: [HX + 0.8, HZ1 + 0.5], look: [HX + 0.3, 1.13, HZ1 - 0.2] },
     stairs: { show: [comp], hit: proxy(1.4, 1.4, 1.9, -2.2, 0.7, 1.3), stand: [-2.2, -0.35], look: [-2.2, 0.6, 0.45] },
-    nerpa: { show: [nerpa, cradle], hit: proxy(3.0, 2.8, 3.9, 0.6, 1.5, -10.2), stand: [0.6, -7.5], look: [0.6, 1.6, -10.2] },
+    nerpa: { show: [nerpa, cradle], hit: proxy(2.9, 2.6, 4.0, 0.6, 1.4, -10.2), stand: [0.6, -7.5], look: [0.6, 1.5, -9.6] },
     workshop: { show: [cont], hit: proxy(2.6, 2.7, 6.2, -3.08, 1.3, -6.0), stand: [-1.2, -9.6], look: [-3.08, 1.3, -9.0] },
   };
 
