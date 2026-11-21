@@ -576,7 +576,7 @@ export function createDeck(view, { lifeLabel = "" } = {}) {
     const gl = new THREE.Mesh(new THREE.PlaneGeometry(0.26, 0.16), emissive(0xfff0d0, 5)); gl.position.set(sx, cross.position.y - 0.2, cross.position.z + 0.345); aframe.add(gl);
     aframe.add(at(glowSprite(0xffe8c0, 1.4, 1.2), sx, cross.position.y - 0.2, cross.position.z + 0.4));
   }
-  const nerpa = createNerpa();                        // the same model as in the descent and on the seabed (23.3-A)
+  const nerpa = createNerpa({ env: view.mainScene.environment });                        // the same model as in the descent and on the seabed (23.3-A)
   nerpa.position.set(0.6, 0.68, -10.2);                // her sphere faces the bow: the crane lifts her by the ring and swings her aft
   {   // work lights on her: one from the A-frame crossbar, one from the container roof
     const w1 = new THREE.SpotLight(0xfff4e6, 60, 14, 0.5, 0.6, 1.2); w1.position.set(0.4, 6.2, -14.6); w1.target.position.set(0.6, 1.3, -10.0); ship.add(w1, w1.target);

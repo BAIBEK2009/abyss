@@ -267,13 +267,13 @@ function ctenophore(size) {
 
 /** The real "Nerpa-2" at full size: the same model as on the deck (scenes/nerpa.js), with lit lamps.
  *  The group's origin is the middle of the sphere (the descent shot aims at it). */
-function realNerpa() {
+function realNerpa(env) {
   const g = new THREE.Group();
-  const n = createNerpa({ lights: true });
+  const n = createNerpa({ lights: true, env, glass: "transmission" });
   n.position.y = -1.05;                               // the group's origin: the middle of the vehicle
   g.add(n);
   const lamps = n.userData.lamps;
-  const cable = new THREE.Mesh(new THREE.TubeGeometry(new THREE.LineCurve3(new THREE.Vector3(0, 1.75, 0.72), new THREE.Vector3(0, 41.7, 0.72)), 1, 0.02, 6), std({ color: 0x111111, metalness: 0.5, roughness: 0.5 }));
+  const cable = new THREE.Mesh(new THREE.TubeGeometry(new THREE.LineCurve3(n.userData.eye.clone().add(new THREE.Vector3(0, -1.05, 0)), n.userData.eye.clone().add(new THREE.Vector3(0, 40, 0))), 1, 0.02, 6), std({ color: 0x111111, metalness: 0.5, roughness: 0.5 }));
   g.add(cable);                                                      // the lift cable from her ring
   // the lamps' cones of light in the water (volumetric look: additive, soft rim, drifting noise)
   const cones = lamps.map((l) => {
@@ -469,7 +469,7 @@ export function createDive(view) {
   const surf = new THREE.Group();
   surf.visible = false;
   deep.add(surf);
-  const nerpa = realNerpa();
+  const nerpa = realNerpa(view.mainScene.environment);
   nerpa.visible = false; deep.add(nerpa);
   // the surface from below (shot 3): Snell's window — inside a cone of ~48.6 deg the sky shows, bright and broken
   // by the ripples; outside it the surface is a dark mirror

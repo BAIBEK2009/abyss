@@ -8,7 +8,8 @@
 // Local axes: y up from the bottom of the skids, the sphere towards +z.
 import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
-import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
+import { mergeGeometries, mergeVertices } from "three/addons/utils/BufferGeometryUtils.js";
+import { decalGeometry } from "./decal.js";
 import { canvasTexture, rng } from "../view.js";
 import { t } from "../i18n.js";
 
@@ -68,7 +69,7 @@ const SOFT = canvasTexture(64, 64, (g) => {
  * opts.lights: real SpotLights in the front lamps (the descent and the seabed); on the deck only lit glass.
  * Returns a Group; userData: { lamps: [{glow, sl, at}], props, strobe, eye, sphere, update(dt, time, spin), meshCount, drawCalls }.
  */
-export function createNerpa({ lights = false } = {}) {
+export function createNerpa({ lights = false, env = null, glass = "blend" } = {}) {
   const root = new THREE.Group();
   const parts = new THREE.Group();          // static parts, merged by material at the end
   const inside = new THREE.Group();         // the pilot's compartment (merged separately: it is seen through the acrylic)
@@ -82,7 +83,7 @@ export function createNerpa({ lights = false } = {}) {
   };
 
   // ---------------- materials
-  const foam = glossPaint(0xffcf2e, 31, { scale: 1.4 });
+  const foam = glossPaint(0xffc414, 31, { scale: 1.4 });           // signal yellow-orange
   const orange = glossPaint(0xf0641c, 33, { scale: 2 });
   const steel = new THREE.MeshStandardMaterial({ color: 0xb4bcc2, metalness: 0.9, roughness: 0.28 });
   const dark = new THREE.MeshStandardMaterial({ color: 0x2a2f34, metalness: 0.5, roughness: 0.42 });
@@ -103,10 +104,14 @@ export function createNerpa({ lights = false } = {}) {
 
   // ---------------- the acrylic sphere: ~1.6 m, transparent, glossy; the pilot inside
   const SC = new THREE.Vector3(0, 1.15, 0.62), SR = 0.8;
-  // thin clear acrylic: blended (not transmission — that samples a blurred copy of the scene and smears the
-  // yellow fairing over the pilot); the glints come from the lamps and the environment through the clearcoat
-  const acrylic = new THREE.MeshPhysicalMaterial({ color: 0xeaf7ff, roughness: 0.03, metalness: 0, transparent: true, opacity: 0.16, depthWrite: false,
-                                                   clearcoat: 1, clearcoatRoughness: 0.02, specularIntensity: 1, envMapIntensity: 2.2, side: THREE.FrontSide });
+  // clear acrylic; its own environment map gives the glints even in the black deep (no scene environment there).
+  // Under water: real transmission (ior 1.49, a thin wall so the pilot is not smeared). On the deck (500+ draw
+  // calls) transmission would render the whole ship twice, so the glass is blended there — it looks the same.
+  const acrylic = glass === "transmission"
+    ? new THREE.MeshPhysicalMaterial({ color: 0xffffff, roughness: 0.05, metalness: 0, transmission: 1, ior: 1.49, thickness: 0.03,
+                                       clearcoat: 1, clearcoatRoughness: 0.03, specularIntensity: 1, envMap: env, envMapIntensity: 0.45 })
+    : new THREE.MeshPhysicalMaterial({ color: 0xeaf7ff, roughness: 0.05, metalness: 0, transparent: true, opacity: 0.16, depthWrite: false, ior: 1.49,
+                                       clearcoat: 1, clearcoatRoughness: 0.03, specularIntensity: 1, envMap: env, envMapIntensity: 2.2 });
   const sphere = new THREE.Mesh(new THREE.SphereGeometry(SR, 64, 40), acrylic);
   sphere.position.copy(SC); sphere.renderOrder = 2; root.add(sphere);
   add(new THREE.TorusGeometry(SR + 0.012, 0.035, 12, 72), steel, SC.x, SC.y - 0.02, SC.z, Math.PI / 2);   // the equator flange
@@ -138,39 +143,59 @@ export function createNerpa({ lights = false } = {}) {
   add(lathe([[0.012, 0], [0.012, 0.12], [0.022, 0.14], [0.02, 0.17], [0, 0.18]], 12), black, 0.12, 0.76, 0.78, 0, 0, 0, inside);
   const cabinGlow = new THREE.Mesh(new THREE.TorusGeometry(SR - 0.06, 0.012, 6, 64), new THREE.MeshBasicMaterial({ color: new THREE.Color(0x9fdcff).multiplyScalar(1.6) }));
   cabinGlow.rotation.x = Math.PI / 2; cabinGlow.position.set(SC.x, SC.y - 0.42, SC.z); root.add(cabinGlow);   // a soft light strip low inside
-  const cabinLight = new THREE.PointLight(0xbfe3ff, 1.6, 2.0, 1.4); cabinLight.position.set(0, 1.1, 0.95); root.add(cabinLight);
+  const cabinLight = new THREE.PointLight(0xffc98a, 2.6, 2.2, 1.4);      // warm: the pilot and the console read in the dark cabinLight.position.set(0, 1.1, 0.95); root.add(cabinLight);
   const screenLight = new THREE.PointLight(0x7fffd2, 0.5, 1.2, 1.5); screenLight.position.set(0, 0.95, 0.85); root.add(screenLight);
 
-  // ---------------- the fairing: one smooth yellow horseshoe wrapping the sphere from the back and the sides
+  // ---------------- the fairing: one streamlined body — seen from above a drop that narrows aft, its arms wrap the
+  // sphere's back half only (the sphere stands out in front and is seen from the side); lower and rounder aft
+  const FY = 0.64, FT = 0.3, FD = 0.7, FH = FD + 2 * FT;   // bottom, bevel, slab depth, full height
+  const SS = THREE.MathUtils.smoothstep;
+  /** y (0..FH, from the bottom of the body) after the shaping: lower and rounder aft, a crowned top. */
+  const shapeY = (x, y, z) => {
+    const zt = THREE.MathUtils.clamp((z + 1.85) / 2.6, 0, 1), hf = 0.66 + 0.34 * SS(zt, 0, 0.75), yc = FH / 2;
+    return yc + (y - yc) * hf - (1 - hf) * 0.14 * SS(y, 0, FH) + 0.07 * Math.max(0, 1 - (x / 1.1) ** 2) * SS(y, yc, FH);
+  };
+  const fairTop = (x, z) => FY - FT + shapeY(x, FH, z);
+  let fairing;
   {
-    const s = new THREE.Shape();
-    const zs = (z) => -z;                        // shape y = -world z (the extrusion is turned to stand up)
-    s.moveTo(-0.98, zs(0.98));
-    s.lineTo(-1.08, zs(0.35)); s.lineTo(-1.08, zs(-0.9));
-    s.quadraticCurveTo(-1.08, zs(-1.55), -0.55, zs(-1.58));
-    s.lineTo(0.55, zs(-1.58));
-    s.quadraticCurveTo(1.08, zs(-1.55), 1.08, zs(-0.9));
-    s.lineTo(1.08, zs(0.35)); s.lineTo(0.98, zs(0.98));
-    const R = SR + 0.08, cy = zs(SC.z);
-    const a0 = Math.atan2(zs(0.98) - cy, 0.98), a1 = Math.PI - a0;     // the right tip, round the back, to the left tip
-    s.absarc(0, cy, R, a0, a1, false);
+    const s = new THREE.Shape(), zs = (z) => -z;
+    const R = SR + 0.06, cy = zs(SC.z);
+    const tipA = -0.12;                                      // the arms end just behind the sphere's equator
+    const tx = Math.cos(tipA) * R, tz = SC.z + Math.sin(tipA) * R;
+    s.moveTo(tx + 0.02, zs(tz));
+    s.splineThru([[1.0, 0.28], [1.04, -0.35], [0.92, -1.05], [0.62, -1.62], [0.26, -1.86], [0, -1.9], [-0.26, -1.86], [-0.62, -1.62], [-0.92, -1.05], [-1.04, -0.35], [-1.0, 0.28], [-tx - 0.02, tz]]
+      .map(([x, z]) => new THREE.Vector2(x, zs(z))));
+    s.absarc(0, cy, R, Math.PI + tipA, -tipA, true);      // round the back of the sphere, left tip to the right
     s.closePath();
-    const geo = new THREE.ExtrudeGeometry(s, { depth: 0.8, bevelEnabled: true, bevelThickness: 0.24, bevelSize: 0.16, bevelSegments: 10, curveSegments: 64 });
-    geo.rotateX(-Math.PI / 2);
-    add(geo, foam, 0, 0.64, 0);
-    for (const z of [-0.95, -0.25]) add(line([-1.15, 1.69, z], [1.15, 1.69, z], 0.006), dark);          // seams across the top
-    const fb = new THREE.InstancedMesh(boltGeo, steel, 22), m4 = new THREE.Matrix4();
-    for (let i = 0; i < 22; i++) { m4.makeTranslation(-1.0 + (i % 11) * 0.2, 1.685, i < 11 ? -0.9 : -0.2); fb.setMatrixAt(i, m4); }
-    root.add(fb);
+    let geo = new THREE.ExtrudeGeometry(s, { depth: FD, bevelEnabled: true, bevelThickness: FT, bevelSize: 0.2, bevelSegments: 8, curveSegments: 48 });
+    geo.rotateX(-Math.PI / 2);                                // shape y -> -z; the extrusion -> +y
+    geo.translate(0, FT, 0);
+    const pa = geo.attributes.position;
+    for (let i = 0; i < pa.count; i++) pa.setY(i, shapeY(pa.getX(i), pa.getY(i), pa.getZ(i)) - FT);
+    geo.deleteAttribute("uv"); geo.deleteAttribute("normal");
+    geo = mergeVertices(geo, 1e-4); geo.computeVertexNormals();
+    // planar UVs (top view) so the paint's seams run straight across the body
+    const uvs = new Float32Array(geo.attributes.position.count * 2);
+    for (let i = 0; i < geo.attributes.position.count; i++) { uvs[i * 2] = geo.attributes.position.getX(i) * 0.5; uvs[i * 2 + 1] = geo.attributes.position.getZ(i) * 0.5 + geo.attributes.position.getY(i) * 0.25; }
+    geo.setAttribute("uv", new THREE.BufferAttribute(uvs, 2));
+    fairing = add(geo, foam, 0, FY, 0); fairing.updateMatrixWorld();
+  }
+  // grab rails along the top, lifting eyes on the shoulders
+  for (const sx of [-1, 1]) {
+    const pts = [0.15, -0.3, -0.75, -1.2].map((z) => [sx * 0.72, fairTop(0.72, z) + 0.09, z]);
+    add(tube(pts, 0.016, 24, 8), steel);
+    for (const [, y, z] of pts) add(line([sx * 0.72, y, z], [sx * 0.72, y - 0.12, z], 0.012), steel);
+    add(new THREE.TorusGeometry(0.05, 0.014, 8, 20), steel, sx * 0.9, fairTop(0.9, -1.25) + 0.03, -1.25, 0, Math.PI / 2);
   }
   // ---------------- the hatch tower on the fairing's back, the lift ring, the antenna, the sonar dome
-  add(rbox(0.72, 0.36, 0.78, 0.16), orange, 0, 1.88, -0.78);
-  add(lathe([[0, 0], [0.27, 0], [0.28, 0.04], [0.25, 0.08], [0.18, 0.1], [0, 0.11]], 32), steel, 0, 2.06, -0.78);
-  add(rbox(0.1, 0.06, 0.12, 0.02), steel, 0.22, 2.12, -0.78);
-  add(lathe([[0.03, 0], [0.03, 0.1], [0, 0.1]], 12), steel, 0, 2.15, -0.78);
-  add(new THREE.TorusGeometry(0.1, 0.028, 10, 28), steel, 0, 2.32, -0.78);             // the lift ring (the crane hooks here)
-  add(new THREE.SphereGeometry(0.1, 20, 12, 0, Math.PI * 2, 0, Math.PI / 2), black, 0, 2.06, -0.38);
-  add(lathe([[0.012, 0], [0.008, 0.6], [0, 0.61]], 8), steel, 0.28, 2.06, -1.12);
+  const TY = fairTop(0, -0.78) - 0.02;
+  add(rbox(0.72, 0.36, 0.78, 0.16), orange, 0, TY + 0.14, -0.78);
+  add(lathe([[0, 0], [0.27, 0], [0.28, 0.04], [0.25, 0.08], [0.18, 0.1], [0, 0.11]], 32), steel, 0, TY + 0.32, -0.78);
+  add(rbox(0.1, 0.06, 0.12, 0.02), steel, 0.22, TY + 0.38, -0.78);
+  add(lathe([[0.03, 0], [0.03, 0.1], [0, 0.1]], 12), steel, 0, TY + 0.41, -0.78);
+  add(new THREE.TorusGeometry(0.1, 0.028, 10, 28), steel, 0, TY + 0.58, -0.78);             // the lift ring (the crane hooks here)
+  add(new THREE.SphereGeometry(0.1, 20, 12, 0, Math.PI * 2, 0, Math.PI / 2), black, 0, fairTop(0, -0.3) - 0.02, -0.3);
+  add(lathe([[0.012, 0], [0.008, 0.6], [0, 0.61]], 8), steel, 0.28, TY + 0.3, -1.12);
   // ---------------- under it: the frame, the skids, battery pods, drop weights
   for (const sx of [-1, 1]) {
     add(tube([[sx * 0.78, 0.07, -1.5], [sx * 0.78, 0.05, -1.1], [sx * 0.78, 0.05, 1.1], [sx * 0.74, 0.14, 1.5], [sx * 0.62, 0.34, 1.68]], 0.05, 32), steel);
@@ -243,10 +268,49 @@ export function createNerpa({ lights = false } = {}) {
     g.beginPath(); g.moveTo(cx - 56, h * 0.78); g.quadraticCurveTo(cx, h * 0.6, cx + 56, h * 0.78); g.quadraticCurveTo(cx, h * 0.69, cx - 56, h * 0.78); g.fill();
     for (let y = 8; y < h - 6; y += 18) { g.fillRect(16, y, 11, 9); g.fillRect(29, y + 4, 6, 6); }
   });
-  const FX = 1.08 + 0.16 + 0.004;           // the flank of the fairing (outline + bevel)
+  const decalOn = (mat, x, y, z, w, h, sx) => {
+    const g = decalGeometry(fairing, new THREE.Vector3(x, y, z), new THREE.Euler(0, sx * Math.PI / 2, 0), new THREE.Vector3(w, h, 0.6));
+    add(g, mat);
+  };
+  const plate = (w, h, draw) => decal(w, h, draw);
+  // a hatch panel with its screws, a vent grille, warning stickers, the hull number
+  const hatchM = plate(256, 256, (g, w, h) => {
+    g.clearRect(0, 0, w, h);
+    g.strokeStyle = "rgba(60,40,10,.75)"; g.lineWidth = 5; g.beginPath(); g.roundRect(14, 14, w - 28, h - 28, 26); g.stroke();
+    g.fillStyle = "rgba(90,90,90,.9)"; for (const [x, y] of [[34, 34], [w - 34, 34], [34, h - 34], [w - 34, h - 34], [w / 2, 30], [w / 2, h - 30]]) { g.beginPath(); g.arc(x, y, 7, 0, 7); g.fill(); }
+    g.fillStyle = "rgba(40,40,40,.85)"; g.beginPath(); g.roundRect(w / 2 - 40, h / 2 - 12, 80, 24, 10); g.fill();
+  });
+  const ventM = plate(256, 128, (g, w, h) => {
+    g.clearRect(0, 0, w, h);
+    g.fillStyle = "rgba(25,25,25,.9)"; g.beginPath(); g.roundRect(8, 8, w - 16, h - 16, 20); g.fill();
+    g.fillStyle = "rgba(170,170,170,.9)"; for (let x = 26; x < w - 20; x += 18) g.fillRect(x, 20, 7, h - 40);
+  });
+  const warnM = plate(256, 128, (g, w, h) => {
+    g.fillStyle = "#f6d21a"; g.fillRect(0, 0, w, h);
+    g.save(); g.beginPath(); g.rect(0, 0, w, 26); g.rect(0, h - 26, w, 26); g.clip();
+    g.fillStyle = "#151515"; for (let x = -40; x < w + 40; x += 34) { g.beginPath(); g.moveTo(x, 0); g.lineTo(x + 17, 0); g.lineTo(x + 17 - 26, h); g.lineTo(x - 26, h); g.fill(); }
+    g.restore();
+    g.fillStyle = "#151515"; g.font = "800 30px Onest, sans-serif"; g.textAlign = "center"; g.textBaseline = "middle";
+    g.fillText("THRUSTER", w / 2, h / 2 - 2); g.font = "700 15px Onest, sans-serif"; g.fillText("KEEP CLEAR", w / 2, h / 2 + 22);
+  });
+  const liftM = plate(256, 96, (g, w, h) => {
+    g.fillStyle = "#1a1a1a"; g.fillRect(0, 0, w, h); g.fillStyle = "#f6d21a"; g.font = "800 36px Onest, sans-serif"; g.textAlign = "center"; g.textBaseline = "middle"; g.fillText("NO STEP", w / 2, h / 2 + 2);
+  });
+  const numM = plate(384, 96, (g, w, h) => {
+    g.clearRect(0, 0, w, h); g.fillStyle = "#121416"; g.font = "700 64px PT Mono, monospace"; g.textAlign = "center"; g.textBaseline = "middle"; g.fillText("TLP-02", w / 2, h / 2 + 4);
+  });
   for (const sx of [-1, 1]) {
-    add(new THREE.PlaneGeometry(1.25, 0.24), nameM, sx * FX, 1.12, -0.32, 0, sx * Math.PI / 2);
-    add(new THREE.PlaneGeometry(0.34, 0.17), flagM, sx * FX, 0.84, -0.32, 0, sx * Math.PI / 2);
+    // the name: about a quarter of the hull's length, the flag beside it
+    decalOn(nameM, sx * 1.2, 1.07, -0.5, 0.95, 0.19, sx);
+    decalOn(flagM, sx * 1.2, 1.08, sx > 0 ? 0.18 : 0.18, 0.3, 0.15, sx);
+    decalOn(numM, sx * 1.2, 0.86, -0.42, 0.44, 0.11, sx);
+    decalOn(hatchM, sx * 1.2, 0.98, -1.25, 0.34, 0.34, sx);
+    decalOn(ventM, sx * 1.2, 0.84, -1.05, 0.3, 0.13, sx);
+    decalOn(warnM, sx * 1.2, 1.2, -1.42, 0.22, 0.11, sx);
+  }
+  { // "NO STEP" on the top, read from the side
+    const g = decalGeometry(fairing, new THREE.Vector3(0.5, 2.2, 0.0), new THREE.Euler(-Math.PI / 2, 0, 0), new THREE.Vector3(0.3, 0.11, 1.6));
+    add(g, liftM);
   }
 
   // ---------------- moving parts: the ducted thrusters on the rear corners, the strobe, the lamps
@@ -264,10 +328,11 @@ export function createNerpa({ lights = false } = {}) {
     for (let k = 0; k < 2; k++) { const s = new THREE.Mesh(rbox(0.38, 0.012, 0.012, 0.005, 1), steel); s.position.z = -0.12; s.rotation.z = (k * Math.PI) / 2; g.add(s); }
     count += 9; props.push(prop);
   }
-  thruster(-1.0, 1.05, -1.72, "z"); thruster(1.0, 1.05, -1.72, "z");      // main propulsion, the rear corners
-  thruster(-0.88, 1.88, -1.28, "y"); thruster(0.88, 1.88, -1.28, "y");    // vertical, on top of the rear corners
+  thruster(-0.78, 0.98, -1.66, "z"); thruster(0.78, 0.98, -1.66, "z");      // main propulsion on short struts aft
+  for (const sx of [-1, 1]) add(tube([[sx * 0.4, 0.98, -1.55], [sx * 0.58, 0.98, -1.62]], 0.035, 4, 10), dark);
+  thruster(-0.62, fairTop(0.62, -1.42) + 0.1, -1.42, "y"); thruster(0.62, fairTop(0.62, -1.42) + 0.1, -1.42, "y");    // vertical, on top aft
   const strobe = new THREE.Mesh(new THREE.SphereGeometry(0.035, 10, 8), new THREE.MeshBasicMaterial({ color: new THREE.Color(0xeaf6ff).multiplyScalar(5) }));
-  strobe.position.set(-0.28, 2.1, -1.12); root.add(strobe);
+  strobe.position.set(-0.28, fairTop(0.28, -1.12) + 0.12, -1.12); root.add(strobe);
   const strobeGlow = new THREE.Sprite(new THREE.SpriteMaterial({ map: SOFT, color: 0xeaf6ff, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
   strobeGlow.scale.setScalar(0.5); strobeGlow.position.copy(strobe.position); root.add(strobeGlow);
   // a lamp seen from the front: a small hot core and a faint wide halo (sprites: no bloom under water);
@@ -334,7 +399,7 @@ export function createNerpa({ lights = false } = {}) {
   let strobeT = 0;
   root.userData = {
     lamps, lampGlare, props, strobe, sphere, meshCount: count, drawCalls: parts.children.length + inside.children.length,
-    eye: new THREE.Vector3(0, 2.34, -0.78),
+    eye: new THREE.Vector3(0, TY + 0.58, -0.78),
     /** Turn the propellers (spin 0..1) and blink the strobe. */
     update(dt, time, spin = 0.15) {
       for (const p of props) p.rotation.z += dt * (2 + spin * 40);
