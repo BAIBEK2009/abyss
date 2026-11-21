@@ -74,5 +74,11 @@ export const sfx = {
   chord: () => [220, 277, 330, 440].forEach((f) => tone(f, f, 2.2, "triangle", 0.06)),
   seen: () => { tone(440, 440, 0.5, "sine", 0.06); tone(660, 660, 0.6, "sine", 0.05, 0.12); },
   clack: () => { tone(190, 90, 0.09, "square", 0.12); nz(0.07, 2600, "highpass", 0.09); },
+  // M9a: the story (the full table sound set comes in M11)
+  tick: () => { nz(0.16, 3200, "bandpass", 0.06, 0, 3); nz(0.12, 2400, "bandpass", 0.05, 0.12, 3); tone(880, 1320, 0.18, "triangle", 0.05, 0.2); },
+  type: () => nz(0.025, 3800, "highpass", 0.035),
+  radio: () => { nz(0.35, 1800, "bandpass", 0.06, 0, 0.7); tone(1400, 1400, 0.06, "sine", 0.05, 0.36); },
+  door: () => { tone(120, 70, 0.5, "sawtooth", 0.03); nz(0.4, 400, "lowpass", 0.18, 0.25); },
+  chapter: () => [147, 220, 294].forEach((f, i) => tone(f, f, 2.4, "triangle", 0.05, i * 0.05)),
   thud: () => { tone(70, 35, 0.5, "sine", 0.3); nz(0.6, 220, "lowpass", 0.2); },
 };

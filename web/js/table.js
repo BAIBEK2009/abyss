@@ -10,6 +10,9 @@ import { createToasts } from "./ui/toasts.js";
 import { createRadio } from "./ui/radio.js";
 import { createCoach } from "./ui/coach.js";
 import { createIntro } from "./ui/intro.js";
+import { createGoal } from "./ui/goal.js";
+import { createChapter } from "./ui/chapter.js";
+import { createSpeech } from "./ui/speech.js";
 import { showResult } from "./ui/result.js";
 import { ICONS } from "./ui/icons.js";
 import { pct, hours } from "./ui/fmt.js";
@@ -72,10 +75,16 @@ export function createTable(view, map, initialState, { cabin, dive } = {}) {
     { title: t("coach5_t"), text: t("coach5"), rect: rectOf(".inst") },
   ]);
   const intro = createIntro(ui, { onClose: (first) => { if (first) setTimeout(() => coach.startIfFirstTime(), 300); } });
+  // the story (CLAUDE.md 22.2): the goal and checklist on every screen, chapter cards, story lines
+  const goal = createGoal(document.body, { onWho: () => intro.show() });
+  goal.whoLabel = t("btn_who");
+  const chapter = createChapter(document.body);
+  const speech = createSpeech(document.body);
   const banner = document.getElementById("autopilot-banner");
   banner.textContent = t("autopilot_on");
 
   function render() {
+    goal.update(state.campaign);
     hud.update(state);
     rival.update(state);
     officers.update(state, busy || autopilot);
@@ -304,6 +313,6 @@ export function createTable(view, map, initialState, { cabin, dive } = {}) {
   return {
     get state() { return state; },
     get busy() { return busy; },
-    run, acceptClues,
+    run, acceptClues, goal, chapter, speech,
   };
 }
