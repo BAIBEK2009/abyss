@@ -80,6 +80,10 @@ with sync_playwright() as pw:
         L = math.hypot(tx, tz) or 1
         cx, cz = tx - tx / L * dist, tz - tz / L * dist
         page.evaluate(f"window.__abyss.diveLook({cx}, {cz}, {math.atan2(-(tx - cx), -(tz - cz))}, {down})")
+    if where.get("rocks"):
+        rx, rz, rs = where["rocks"][0]
+        face([rx, 0, rz], 1.6 + rs * 1.8, 0.6); page.wait_for_timeout(1500)
+        page.screenshot(path=str(args.out / "bed_rock_close.png"))
     if where["debris"]:
         face(where["debris"][-1], 3.4, 0.45); page.wait_for_timeout(1500)
         page.screenshot(path=str(args.out / "debris_close.png"))

@@ -14,6 +14,7 @@ import { createNerpa } from "./nerpa.js";
 import { HULL } from "./deck.js";
 import { mergeVertices } from "three/addons/utils/BufferGeometryUtils.js";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
+import { SimplexNoise } from "three/addons/math/SimplexNoise.js";
 import { sfx } from "../audio.js";
 import { createCockpit } from "../ui/cockpit.js";
 
@@ -602,9 +603,43 @@ export function createDive(view) {
   // ONE silt shader for everything on the bottom (23.3-G): where the world normal looks up (y > ~0.6) the surface
   // fades into silt with a patchy noise, matte and non-metallic; under water every colour is a little muted
   // (the red falls off with distance in the water pass, view.js). Works for instanced meshes too.
-  const siltShader = (mat, hex = 0x756d5f, amount = 0.85) => {
+  const siltShader = (mat, hex = 0x756d5f, amount = 0.85, tri = null) => {
+    if (tri) { mat.map = tri.map; mat.normalMap = tri.normalMap; mat.roughnessMap = tri.roughnessMap; }   // (defines USE_MAP etc.; sampled triplanar below)
     mat.onBeforeCompile = (sh) => {
       sh.uniforms.uSilt = { value: new THREE.Color(hex) }; sh.uniforms.uSiltK = { value: amount };
+      if (tri) {
+        sh.uniforms.uTriScale = { value: tri.scale };
+        sh.vertexShader = sh.vertexShader.replace("#include <common>", "#include <common>\nvarying vec3 vTriN;")
+          .replace("#include <beginnormal_vertex>", `#include <beginnormal_vertex>
+            #ifdef USE_INSTANCING
+              vTriN = normalize(mat3(modelMatrix) * mat3(instanceMatrix) * objectNormal);
+            #else
+              vTriN = normalize(mat3(modelMatrix) * objectNormal);
+            #endif`);
+        sh.fragmentShader = sh.fragmentShader.replace("#include <common>", `#include <common>
+            varying vec3 vTriN; uniform float uTriScale;
+            vec3 triW() { vec3 w = pow(abs(normalize(vTriN)), vec3(4.0)); return w / (w.x + w.y + w.z); }`)
+          .replace("#include <map_fragment>", `{
+              vec3 w = triW(); vec3 p = vSiltW * uTriScale;
+              vec4 tc = texture2D(map, p.zy) * w.x + texture2D(map, p.xz) * w.y + texture2D(map, p.xy) * w.z;
+              diffuseColor *= tc;
+            }`)
+          .replace("#include <roughnessmap_fragment>", `float roughnessFactor = roughness;
+            { vec3 w = triW(); vec3 p = vSiltW * uTriScale;
+              roughnessFactor *= (texture2D(roughnessMap, p.zy) * w.x + texture2D(roughnessMap, p.xz) * w.y + texture2D(roughnessMap, p.xy) * w.z).g; }`)
+          .replace("#include <normal_fragment_maps>", `{
+              vec3 w = triW(); vec3 p = vSiltW * uTriScale; vec3 N = normalize(vTriN);
+              vec3 tx = texture2D(normalMap, p.zy).xyz * 2.0 - 1.0, ty = texture2D(normalMap, p.xz).xyz * 2.0 - 1.0, tz = texture2D(normalMap, p.xy).xyz * 2.0 - 1.0;
+              // whiteout blend per axis, in world space
+              vec3 nx = vec3(0.0, tx.yx * normalScale.yx) + vec3(N.x, 0.0, 0.0);
+              vec3 ny = vec3(ty.x * normalScale.x, 0.0, ty.y * normalScale.y) + vec3(0.0, N.y, 0.0);
+              vec3 nz = vec3(tz.xy * normalScale, 0.0) + vec3(0.0, 0.0, N.z);
+              vec3 wn = normalize(nx.zyx * vec3(sign(N.x), 1.0, 1.0) * w.x + ny * w.y + nz * w.z + N * 0.5);
+              normal = normalize((viewMatrix * vec4(wn, 0.0)).xyz);
+            }
+            #include <normal_fragment_maps_disabled>`)
+          .replace("#include <normal_fragment_maps_disabled>", "");
+      }
       sh.vertexShader = sh.vertexShader.replace("#include <common>", "#include <common>\nvarying vec3 vSiltW;")
         .replace("#include <project_vertex>", `#include <project_vertex>
           vec4 siltW = vec4(transformed, 1.0);
@@ -629,10 +664,11 @@ export function createDive(view) {
             metalnessFactor = mix(metalnessFactor, 0.0, k);
           }`);
     };
-    mat.customProgramCacheKey = () => "silt";
+    mat.customProgramCacheKey = () => (tri ? "silt-tri" : "silt");
     return mat;
   };
   const siltOnTop = siltShader;
+  const bigRocks = [];
   {
     const g = new THREE.PlaneGeometry(64, 64, 300, 300).rotateX(-Math.PI / 2);
     const pa = g.attributes.position;
@@ -643,42 +679,76 @@ export function createDive(view) {
     const bed = new THREE.Mesh(g, std({ map: tex("coast_sand_02_diff_1k.jpg", true), normalMap: tex("coast_sand_02_nor_gl_1k.jpg"), roughnessMap: tex("coast_sand_02_rough_1k.jpg"),
                                         normalScale: new THREE.Vector2(1.2, 1.2), color: 0x9a9384, roughness: 1 }));      // tinted to grey-brown silt
     bed.receiveShadow = true; bedGroup.add(bed);
-    // rocks: icosahedra roughened with noise, flattened a little, half buried; 6 shapes, ~200 instances
-    const rockM = siltOnTop(std({ color: 0x4b4a44, roughness: 0.95 }));
-    const variants = [];
+    // rocks (23.3-G): 6 shapes from a detail-4 icosahedron, displaced 25-40 % by 3D fbm plus ridged noise (sharp
+    // edges), the base flattened; the CC0 "Rock Face" texture (Poly Haven) mapped triplanar, silt on the tops.
+    // Sizes follow a power law — a lot of gravel, few boulders; all sunk 20-40 % into the silt and darker than it.
+    const rtex = (f, srgb) => { const t2 = loader.load(`assets/rock/${f}`); t2.wrapS = t2.wrapT = THREE.RepeatWrapping; t2.anisotropy = 8; if (srgb) t2.colorSpace = THREE.SRGBColorSpace; return t2; };
+    const rockM = siltShader(std({ color: 0xa8a296, roughness: 1, normalScale: new THREE.Vector2(1.6, 1.6) }), 0x756d5f, 0.9,
+      { map: rtex("rock_face_diff_1k.jpg", true), normalMap: rtex("rock_face_nor_gl_1k.jpg"), roughnessMap: rtex("rock_face_rough_1k.jpg"), scale: 0.9 });
+    const simplex = new SimplexNoise({ random: (() => { let x = 7; return () => ((x = (x * 16807) % 2147483647) / 2147483647); })() });
+    const fbm3 = (x, y, z) => simplex.noise3d(x, y, z) * 0.5 + simplex.noise3d(x * 2.1, y * 2.1, z * 2.1) * 0.25 + simplex.noise3d(x * 4.3, y * 4.3, z * 4.3) * 0.125;
+    const ridged = (x, y, z) => { let r = 0, a = 0.5, f = 1; for (let o = 0; o < 3; o++) { r += a * (1 - Math.abs(simplex.noise3d(x * f, y * f, z * f))) ** 2; a *= 0.5; f *= 2.2; } return r; };
+    const variants = [], PER = 72;
+    bigRocks.length = 0;
     for (let v = 0; v < 6; v++) {
       let rg = new THREE.IcosahedronGeometry(1, 4); rg.deleteAttribute("normal"); rg.deleteAttribute("uv"); rg = mergeVertices(rg);   // welded: smooth, not faceted
-      const rp = rg.attributes.position, tmp = new THREE.Vector3();
+      const rp = rg.attributes.position, tmp = new THREE.Vector3(), o = v * 7.3, amt = 0.25 + (v % 3) * 0.075;
       for (let i = 0; i < rp.count; i++) {
         tmp.fromBufferAttribute(rp, i);
-        const n = 0.72 + 0.4 * fbm(tmp.x * 1.4 + v * 3, tmp.y * 1.6 + tmp.z * 1.3) + 0.08 * vnoise(tmp.x * 6 + v, tmp.z * 6 + tmp.y * 3);
-        tmp.multiplyScalar(n); tmp.y *= 0.62; rp.setXYZ(i, tmp.x, tmp.y, tmp.z);
+        const n = fbm3(tmp.x * 1.1 + o, tmp.y * 1.1, tmp.z * 1.1 - o) * 1.6 + (ridged(tmp.x * 1.7 - o, tmp.y * 1.7, tmp.z * 1.7 + o) - 0.45) * 1.5;
+        tmp.multiplyScalar(1 + amt * n);
+        tmp.y *= 0.55 + (v % 2) * 0.2;
+        if (tmp.y < -0.15) tmp.y = -0.15 + (tmp.y + 0.15) * 0.25;                  // a flattened base
+        rp.setXYZ(i, tmp.x, tmp.y, tmp.z);
       }
       rg.computeVertexNormals();
-      variants.push(new THREE.InstancedMesh(rg, rockM, 36));
+      variants.push(new THREE.InstancedMesh(rg, rockM, PER));
     }
     const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3(), pos = new THREE.Vector3();
     variants.forEach((im, v) => {
       for (let i = 0; i < im.count; i++) {
-        const a = hash(i + v * 50, 11) * 6.28, d = 2.5 + Math.pow(hash(i + v * 50, 12), 0.8) * 28, x = Math.cos(a) * d, z = Math.sin(a) * d;
-        const size = 0.12 + Math.pow(hash(i + v * 50, 13), 3) * 1.1;
+        const a = hash(i + v * 90, 11) * 6.28, d = 2.2 + Math.pow(hash(i + v * 90, 12), 0.8) * 28;
+        const cl = hash(i, v + 30) < 0.5 ? 1.3 * hash(i, v + 31) : 0;                // gravel lies in loose clusters
+        const x = Math.cos(a) * d + cl * Math.cos(i), z = Math.sin(a) * d + cl * Math.sin(i);
+        const size = 0.035 + Math.pow(hash(i + v * 90, 13), 4.5) * 1.25;              // power law: mostly pebbles
         q.setFromEuler(new THREE.Euler((hash(i, v + 14) - 0.5) * 0.5, hash(i, v + 15) * 6.28, (hash(i, v + 16) - 0.5) * 0.5));
         sc.set(size * (0.8 + hash(i, v + 17) * 0.5), size, size * (0.8 + hash(i, v + 18) * 0.5));
-        pos.set(x, bedH(x, z) - size * 0.25, z);
+        pos.set(x, bedH(x, z) - size * (0.2 + hash(i, v + 19) * 0.2) * 0.7, z);    // sunk 20-40 % of its height
         im.setMatrixAt(i, m4.compose(pos, q, sc));
+        if (size > 0.55 && d < 14) bigRocks.push([x, z, size]);
       }
       im.castShadow = im.receiveShadow = true; bedGroup.add(im);
     });
-    // cockle shells (Cerastoderma, common on the Caspian bed): ribbed half-shells in patches
-    const ribTex = canvasTexture(128, 64, (c, w, h) => { c.fillStyle = "#a89f8c"; c.fillRect(0, 0, w, h); for (let x = 0; x < w; x += 8) { c.fillStyle = "rgba(70,60,48,.5)"; c.fillRect(x, 0, 3, h); } });
-    const shellGeo = new THREE.SphereGeometry(0.03, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2); shellGeo.scale(1, 0.55, 0.9);
-    const shells = new THREE.InstancedMesh(shellGeo, std({ map: ribTex, roughness: 0.8 }), 420);
+    // cockle shells (Cerastoderma glaucum, common on the Caspian bed): small ribbed valves, 2-4 cm, in clusters;
+    // the radial ribs are a normal map, colours vary from cream to brown and grey
+    const RS = 128;
+    const ribH = (u) => 0.5 + 0.5 * Math.cos(u * Math.PI * 2 * 22);
+    const ribNormal = (() => {
+      const c = document.createElement("canvas"); c.width = c.height = RS; const g = c.getContext("2d"), img = g.createImageData(RS, RS);
+      for (let y = 0; y < RS; y++) for (let x = 0; x < RS; x++) {
+        const dx = (ribH((x + 1) / RS) - ribH((x - 1) / RS)) * 3.2, growth = Math.sin(y * 0.9) * 0.15, l = Math.hypot(dx, growth, 1), k = (y * RS + x) * 4;
+        img.data[k] = (-dx / l * 0.5 + 0.5) * 255; img.data[k + 1] = (growth / l * 0.5 + 0.5) * 255; img.data[k + 2] = (1 / l * 0.5 + 0.5) * 255; img.data[k + 3] = 255;
+      }
+      g.putImageData(img, 0, 0);
+      const tx = new THREE.CanvasTexture(c); tx.wrapS = THREE.RepeatWrapping; return tx;
+    })();
+    const ribTex = canvasTexture(RS, 64, (c, w, h) => { c.fillStyle = "#d9d0bd"; c.fillRect(0, 0, w, h);
+      for (let y = 0; y < h; y += 6) { c.fillStyle = `rgba(110,90,66,${0.12 + 0.18 * Math.random()})`; c.fillRect(0, y, w, 2); }       // growth bands
+      for (let x = 0; x < w; x += w / 22) { c.fillStyle = "rgba(255,250,235,.25)"; c.fillRect(x, 0, 1.5, h); } });
+    const shellGeo = new THREE.SphereGeometry(1, 22, 10, 0, Math.PI * 2, 0, Math.PI / 2);
+    { const sp = shellGeo.attributes.position; for (let i = 0; i < sp.count; i++) { const y = sp.getY(i); sp.setZ(i, sp.getZ(i) * (1 - 0.18 * y) - 0.15 * y * y); } }   // the umbo leans back: a cockle, not a dome
+    shellGeo.scale(0.022, 0.012, 0.02); shellGeo.computeVertexNormals();
+    const shells = new THREE.InstancedMesh(shellGeo, std({ map: ribTex, normalMap: ribNormal, normalScale: new THREE.Vector2(1.6, 1.6), roughness: 0.7, side: THREE.DoubleSide }), 900);
+    const shellCols = [0xf0e6d2, 0xd8c3a0, 0xb79b78, 0x9c9488, 0xe8dcc4].map((h) => new THREE.Color(h));
     for (let i = 0; i < shells.count; i++) {
-      const patch = Math.floor(hash(i, 81) * 9), pa2 = hash(patch, 82) * 6.28, pd = 3 + hash(patch, 83) * 18;
-      const x = Math.cos(pa2) * pd + (hash(i, 84) - 0.5) * 2.4, z = Math.sin(pa2) * pd + (hash(i, 85) - 0.5) * 2.4;
-      q.setFromEuler(new THREE.Euler((hash(i, 86) - 0.5) * 0.6, hash(i, 87) * 6.28, hash(i, 88) < 0.3 ? Math.PI : 0));
-      const ss = 0.5 + hash(i, 89) * 0.6;
-      shells.setMatrixAt(i, m4.compose(pos.set(x, bedH(x, z) + 0.005, z), q, sc.set(ss, ss, ss)));
+      const patch = Math.floor(hash(i, 81) * 26), pa2 = hash(patch, 82) * 6.28, pd = 2.5 + hash(patch, 83) * 22;
+      const rr = Math.pow(hash(i, 84), 1.6) * 0.7, ra = hash(i, 85) * 6.28;
+      const x = Math.cos(pa2) * pd + Math.cos(ra) * rr, z = Math.sin(pa2) * pd + Math.sin(ra) * rr;
+      const up = hash(i, 88) < 0.35;                                       // some lie open side up
+      q.setFromEuler(new THREE.Euler((hash(i, 86) - 0.5) * 0.7 + (up ? Math.PI : 0), hash(i, 87) * 6.28, (hash(i, 90) - 0.5) * 0.5));
+      const ss = 0.7 + hash(i, 89) * 0.8;
+      shells.setMatrixAt(i, m4.compose(pos.set(x, bedH(x, z) + (up ? 0.011 * ss : 0.002), z), q, sc.set(ss, ss, ss)));
+      shells.setColorAt(i, shellCols[i % shellCols.length]);
     }
     shells.receiveShadow = true; bedGroup.add(shells);
   }
@@ -1269,6 +1339,6 @@ export function createDive(view) {
   }
   /** Test hook: where the dive's main find and the debris lie. */
   const debugWhere = () => ({ box: box.visible ? box.position.toArray() : null, debris: debris.filter((g) => g.visible).map((g) => g.position.toArray()),
-                             keys: debris.filter((g) => g.visible).map((g) => g.userData.key) });
+                             keys: debris.filter((g) => g.visible).map((g) => g.userData.key), rocks: bigRocks.slice().sort((a, b) => b[2] - a[2]).slice(0, 4) });
   return { deep, cinematic, search, leave, debugFaceBox, debugLook, debugWhere, stepPuffs };
 }
