@@ -13,6 +13,7 @@ Evidence sources:
     camera      L = CAMERA[d][outcome], d = Manhattan distance from the dive cell
     radio clue  L from core/clues.py (a soft, 75 %-reliable hint)
 """
+from __future__ import annotations
 from core import world
 
 

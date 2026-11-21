@@ -11,6 +11,7 @@
 
 Both are applied with Bayes' rule (core/bayes.py) — they move the hills but never erase cells.
 """
+from __future__ import annotations
 import math
 
 from core import world

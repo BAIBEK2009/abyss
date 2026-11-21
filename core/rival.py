@@ -9,6 +9,7 @@ Time model: a queue of tasks with absolute start/end hours on the mission clock.
 `advance_to(t)` completes every task that ends by t and returns timestamped events.
 `forecast(hours)` looks ahead WITHOUT randomness (for the banner and the action tags).
 """
+from __future__ import annotations
 from core import agent, bayes, world
 
 

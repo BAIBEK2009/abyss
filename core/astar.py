@@ -9,6 +9,7 @@
 
 A* always expands the open node with the smallest f; it stops when the goal is expanded.
 """
+from __future__ import annotations
 import heapq
 from dataclasses import dataclass
 

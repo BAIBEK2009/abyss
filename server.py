@@ -18,6 +18,7 @@ it asks this server for state, sends the captain's decisions here and animates t
 
 Errors: HTTP 400 {"error": "<message key>", "params": {...}}.
 """
+from __future__ import annotations
 import json
 import threading
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer

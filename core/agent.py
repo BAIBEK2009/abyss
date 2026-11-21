@@ -10,6 +10,7 @@ otherwise Vera's target, Lev's route, Vera's tool. The rival "Poseidon-2" uses t
 Tool rule (an ASSUMPTION, tuned by tools/balance.py): dive if P(cell) >= 0.20 or the 3x3 sum
 around it >= 0.50, otherwise listen with the sonar first (cheaper).
 """
+from __future__ import annotations
 import statistics
 
 from core import bayes, mdp, world

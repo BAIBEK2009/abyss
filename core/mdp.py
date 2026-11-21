@@ -14,6 +14,7 @@ One Bellman step / expected value per action:
     Q(s, a) = R(s, a) + gamma * sum_s' P(s' | s, a) * V(s')
 The agent picks the action with the larger Q.
 """
+from __future__ import annotations
 from dataclasses import dataclass
 
 HIGH, LOW, LOST = "HIGH", "LOW", "LOST"

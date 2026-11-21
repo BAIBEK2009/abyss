@@ -5,6 +5,7 @@
             output: P(F4)=0.0595, best G4: 0.1203 -> 0.1550
             why   : no echo around F4, so belief moves to other cells
 """
+from __future__ import annotations
 from core import world
 
 PAD = " " * 8

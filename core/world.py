@@ -5,6 +5,7 @@ row 1 is far from the captain). "A10" is (0, 9). Pure Python — no network, no 
 
 Every number in this file is a design ASSUMPTION; the README lists them all.
 """
+from __future__ import annotations
 import math
 
 SIZE = 10

@@ -20,6 +20,7 @@ then calls dive_end(found, coverage, debris_seen). Not found: Vera recalculates 
 seabed seen, P' = P (1 - 0.97 c) / (1 - P 0.97 c). The autopilot, par and balance use the camera
 model (live=False), which is the same search with c = 1.
 """
+from __future__ import annotations
 import random
 from dataclasses import dataclass
 

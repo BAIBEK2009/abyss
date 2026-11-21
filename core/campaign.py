@@ -16,6 +16,7 @@ ends when all its tasks are done and no beat of it is still waiting in a chain.
 
 M9a plays the prologue and act I; later acts get their beats in M10 (READY_ACTS).
 """
+from __future__ import annotations
 import json
 from pathlib import Path
 
