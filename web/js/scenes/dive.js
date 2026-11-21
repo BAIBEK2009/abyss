@@ -12,6 +12,7 @@ import { anim, ease, sleep } from "../anim.js";
 import { t } from "../i18n.js";
 import { createNerpa } from "./nerpa.js";
 import { HULL } from "./deck.js";
+import { mergeVertices } from "three/addons/utils/BufferGeometryUtils.js";
 import { sfx } from "../audio.js";
 import { createCockpit } from "../ui/cockpit.js";
 
@@ -23,7 +24,8 @@ function vnoise(x, y) {
 }
 const fbm = (x, y) => vnoise(x, y) * 0.55 + vnoise(x * 2.1, y * 2.1) * 0.3 + vnoise(x * 4.3, y * 4.3) * 0.15;
 /** Seabed height around the dive spot (gentle dunes and ripples). */
-export const bedH = (x, z) => (fbm(x * 0.07 + 3.1, z * 0.07 + 1.7) - 0.5) * 3.4 + Math.sin(x * 0.9 + z * 0.35) * 0.06 + Math.sin(x * 0.37 - z * 0.83) * 0.05;
+export const bedH = (x, z) => (fbm(x * 0.07 + 3.1, z * 0.07 + 1.7) - 0.5) * 3.4 + Math.sin(x * 0.9 + z * 0.35) * 0.06 + Math.sin(x * 0.37 - z * 0.83) * 0.05
+  + 0.03 * Math.sin(x * 6.4 + z * 2.1 + 0.8 * Math.sin(z * 0.45 + x * 0.12));          // sand ripples, curved crests ~0.9 m apart
 const BED_M = 950, O2_MAX = 60, SEARCH_R = 17, TETHER = 24, CINE_S = 2;
 
 const std = (o) => new THREE.MeshStandardMaterial(o);
@@ -177,112 +179,33 @@ const soft2 = (rgb) => canvasTexture(64, 64, (g) => {
   g.fillStyle = gr; g.fillRect(0, 0, 64, 64);
 });
 
-/** A deep-sea jellyfish: red bell that pulses, waving tentacles, a blue bioluminescent "wheel" when lit up. */
-function jelly(r, col) {
-  const g = new THREE.Group();
-  const bell = new THREE.Mesh(new THREE.SphereGeometry(r, 44, 22, 0, Math.PI * 2, 0, Math.PI * 0.56), new THREE.ShaderMaterial({
-    transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending,
-    uniforms: { uT: { value: 0 }, uPh: { value: Math.random() * 6 }, uR: { value: r }, uCol: { value: new THREE.Color(col).multiplyScalar(3.2) }, uGlow: { value: 0 }, uLP: { value: new THREE.Vector3() } },
-    vertexShader: /* glsl */`
-      uniform float uT; uniform float uPh; uniform float uR; varying vec3 vN; varying vec3 vV; varying vec3 vL; varying vec3 vW;
-      void main() {
-        vec3 p = position; float h = 1.0 - clamp(p.y / uR, 0.0, 1.0); float pulse = sin(uT * 1.7 + uPh);
-        p.xz *= 1.0 + 0.14 * pulse * h * h; p.y *= 1.0 - 0.1 * pulse; vL = p;
-        vec4 w = modelMatrix * vec4(p, 1.0); vW = w.xyz; vec4 mv = viewMatrix * w;
-        vV = normalize(-mv.xyz); vN = normalize(normalMatrix * normal); gl_Position = projectionMatrix * mv;
-      }`,
-    fragmentShader: /* glsl */`
-      uniform vec3 uCol; uniform float uGlow; uniform vec3 uLP; uniform float uT; uniform float uR; varying vec3 vN; varying vec3 vV; varying vec3 vL; varying vec3 vW;
-      void main() {
-        float fr = pow(1.0 - abs(dot(vN, vV)), 2.0); float dl = length(vW - uLP); float lit = 1.7 / (1.0 + dl * dl * 0.03);
-        float rings = 0.65 + 0.35 * sin(vL.y / uR * 28.0); vec3 c = uCol * ((0.12 + fr * 1.15) * lit * rings + 0.18 + fr * 0.25);   // + a faint glow of its own
-        float ang = atan(vL.z, vL.x);
-        float wheel = pow(0.5 + 0.5 * sin(ang * 8.0 - uT * 9.0), 6.0) * smoothstep(0.0, 0.35, 1.0 - vL.y / uR);
-        c += vec3(0.22, 0.62, 1.0) * uGlow * (wheel * 1.7 + fr * 0.45) * 3.0;
-        float a = clamp((0.07 + fr * 0.6) * (lit * 0.9 + uGlow + 0.35), 0.0, 1.0);
-        c = clamp(c, 0.0, 3.0);                                   // bright but bounded: no NaN/Inf into the bloom
-        if (c.r != c.r || a != a) discard;
-        gl_FragColor = vec4(c, a);
-      }`,
-  }));
-  g.add(bell);
-  const bright = new THREE.Color(col).multiplyScalar(2.6);         // linear light: deep reds need a boost
-  const gm = new THREE.MeshBasicMaterial({ color: bright, transparent: true, opacity: 0.4, blending: THREE.AdditiveBlending, depthWrite: false });
-  for (let i = 0; i < 4; i++) {
-    const tr = new THREE.Mesh(new THREE.TorusGeometry(r * 0.3, r * 0.06, 6, 16, Math.PI * 0.7), gm);
-    tr.rotation.x = Math.PI / 2; tr.rotation.z = (i * Math.PI) / 2; tr.position.y = r * 0.35; g.add(tr);
-  }
-  const tents = [];
-  for (let i = 0; i < 18; i++) {
-    const pos = new Float32Array(15 * 3), geo = new THREE.BufferGeometry();
-    geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
-    const ln = new THREE.Line(geo, new THREE.LineBasicMaterial({ color: bright, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, depthWrite: false }));
-    ln.frustumCulled = false; g.add(ln);
-    tents.push({ pos, geo, a: (i / 18) * Math.PI * 2, L: r * (2.2 + Math.random() * 2.8) });
-  }
-  const arms = [];
-  for (let i = 0; i < 4; i++) {
-    const a = (i / 4) * Math.PI * 2;
-    const c = new THREE.CatmullRomCurve3([new THREE.Vector3(0, 0, 0), new THREE.Vector3(Math.cos(a) * r * 0.15, -r * 0.8, Math.sin(a) * r * 0.15), new THREE.Vector3(Math.cos(a) * r * 0.3, -r * 1.8, Math.sin(a) * r * 0.3)]);
-    const m = new THREE.Mesh(new THREE.TubeGeometry(c, 16, r * 0.05, 6), new THREE.MeshBasicMaterial({ color: bright, transparent: true, opacity: 0.3, blending: THREE.AdditiveBlending, depthWrite: false }));
-    g.add(m); arms.push(m);
-  }
-  g.userData = { bell, tents, arms, r, ph: Math.random() * 6, y0: 2.4, glow: 0 };
-  return g;
-}
-
-/** Everything that lives down there; update(dt, T, D, thrusting) every frame of the dive. */
+/** Everything that lives down there (the South Caspian at ~950 m: sparse — sprats, a sturgeon, comb jellies;
+ *  no corals, no tropical jellyfish); update(dt, T, D, thrusting) every frame of the dive. */
 function createLife(deep, lampPos) {
   const jellies = [];
-  for (let i = 0; i < 7; i++) {
-    const j = jelly(0.2 + hash(i, 25) * 0.32, i % 3 === 2 ? 0xa04ae0 : 0xff2a44);   // bright: deep reds are near black in linear light
-    const a = hash(i, 21) * 6.28, d = 4 + hash(i, 22) * 15;
-    j.position.set(Math.cos(a) * d, 0, Math.sin(a) * d); j.userData.y0 = 1.0 + hash(i, 23) * 2.2;          // low enough to drift through the view
-    deep.add(j); jellies.push(j);
+  for (let i = 0; i < 6; i++) {           // mnemiopsis drifting a metre or two above the silt
+    const c = ctenophore(0.12 + hash(i, 25) * 0.08);
+    const a = hash(i, 21) * 6.28, d = 3 + hash(i, 22) * 14;
+    c.position.set(Math.cos(a) * d, 0, Math.sin(a) * d); c.userData.y0 = 0.8 + hash(i, 23) * 2.0; c.userData.ph = hash(i, 24) * 6;
+    deep.add(c); jellies.push(c);
   }
-  const crawlers = [];
+  // a sturgeon gliding slowly near the bottom: long body, pointed snout, rows of bony scutes, a shark-like tail
+  const sturgeon = new THREE.Group();
   {
-    const star = std({ color: 0xd9cbb5, roughness: 0.8 });
-    const cuc = new THREE.MeshStandardMaterial({ color: 0xe3a7af, roughness: 0.35, transparent: true, opacity: 0.9, emissive: 0x2a0a10 });
-    const glassy = new THREE.MeshStandardMaterial({ color: 0xe9eef0, roughness: 0.5, transparent: true, opacity: 0.55, side: THREE.DoubleSide });
-    const dark = std({ color: 0x3a3f44, roughness: 0.6, metalness: 0.2 });
-    for (let i = 0; i < 34; i++) {                        // brittle stars: five thin wavy arms
-      const g = new THREE.Group();
-      g.add(new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.05, 0.018, 10), star));
-      for (let k = 0; k < 5; k++) {
-        const a = (k / 5) * Math.PI * 2 + hash(i, k) * 0.3, bend = (hash(k, i) - 0.5) * 1.6, pts = [];
-        for (let q = 0; q <= 6; q++) { const f = q / 6, aa = a + bend * f * f; pts.push(new THREE.Vector3(Math.cos(aa) * (0.04 + f * 0.3), 0, Math.sin(aa) * (0.04 + f * 0.3))); }
-        g.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 10, 0.009, 4), star));
-      }
-      const a = hash(i, 31) * 6.28, d = 1.5 + hash(i, 32) * 22, x = Math.cos(a) * d, z = Math.sin(a) * d;
-      g.position.set(x, bedH(x, z) + 0.012, z); g.rotation.y = hash(i, 33) * 6; deep.add(g);
-    }
-    for (let i = 0; i < 12; i++) {                        // sea cucumbers that slowly crawl
-      const g = new THREE.Group(), body = new THREE.Mesh(new THREE.SphereGeometry(1, 18, 12), cuc);
-      body.scale.set(0.07, 0.055, 0.19); body.castShadow = true; g.add(body);
-      for (let k = 0; k < 6; k++) { const l = new THREE.Mesh(new THREE.ConeGeometry(0.012, 0.05, 5), cuc); l.position.set((k % 2 ? 1 : -1) * 0.05, -0.045, -0.12 + Math.floor(k / 2) * 0.12); l.rotation.x = Math.PI; g.add(l); }
-      for (let k = 0; k < 4; k++) { const pp = new THREE.Mesh(new THREE.CylinderGeometry(0.005, 0.009, 0.08, 5), cuc); pp.position.set((k % 2 ? 1 : -1) * 0.025, 0.07, -0.1 + Math.floor(k / 2) * 0.05); pp.rotation.x = -0.4; g.add(pp); }
-      const a = hash(i, 41) * 6.28, d = 2 + hash(i, 42) * 20; g.position.set(Math.cos(a) * d, 0, Math.sin(a) * d);
-      g.rotation.y = hash(i, 43) * 6; g.userData.sp = 0.02 + hash(i, 44) * 0.03; deep.add(g); crawlers.push(g);
-    }
-    for (let i = 0; i < 7; i++) {                         // glass sponges
-      const pts = [];
-      for (let q = 0; q <= 8; q++) { const f = q / 8; pts.push(new THREE.Vector2(0.06 + Math.sin(f * 2.6) * 0.12 + f * 0.05, f * 0.9)); }
-      const g = new THREE.Group();
-      g.add(new THREE.Mesh(new THREE.LatheGeometry(pts, 18), glassy), new THREE.Mesh(new THREE.LatheGeometry(pts, 18), new THREE.MeshBasicMaterial({ color: 0xffffff, wireframe: true, transparent: true, opacity: 0.22 })));
-      const a = hash(i, 51) * 6.28, d = 3 + hash(i, 52) * 18, x = Math.cos(a) * d, z = Math.sin(a) * d;
-      g.position.set(x, bedH(x, z) - 0.02, z); g.rotation.z = (hash(i, 53) - 0.5) * 0.3; deep.add(g);
-    }
-    for (let i = 0; i < 5; i++) {                         // tripod fish standing on three long fins
-      const g = new THREE.Group(), body = new THREE.Mesh(new THREE.ConeGeometry(0.035, 0.32, 8), dark);
-      body.rotation.x = -Math.PI / 2; body.position.y = 0.32; g.add(body);
-      for (const [dx, dz] of [[-0.03, 0.06], [0.03, 0.06], [0, -0.12]]) {
-        const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.003, 0.004, 0.34, 4), dark);
-        leg.position.set(dx, 0.16, dz); leg.rotation.x = dz > 0 ? -0.2 : 0.3; g.add(leg);
-      }
-      const a = hash(i, 61) * 6.28, d = 3 + hash(i, 62) * 18, x = Math.cos(a) * d, z = Math.sin(a) * d;
-      g.position.set(x, bedH(x, z), z); g.rotation.y = hash(i, 63) * 6; deep.add(g);
-    }
+    const back = std({ color: 0x4a4f44, roughness: 0.55, metalness: 0.15 }), belly = std({ color: 0xb8b2a2, roughness: 0.6 });
+    const body = new THREE.Mesh(new THREE.LatheGeometry([[0, -0.85], [0.03, -0.8], [0.06, -0.65], [0.1, -0.35], [0.12, 0], [0.11, 0.3], [0.08, 0.55], [0.04, 0.72], [0, 0.8]].map(([a, b]) => new THREE.Vector2(a, b)), 20), back);
+    body.rotation.x = Math.PI / 2; body.scale.set(1, 1, 0.8); sturgeon.add(body);
+    const under = new THREE.Mesh(new THREE.LatheGeometry([[0, -0.6], [0.08, -0.3], [0.1, 0], [0.09, 0.3], [0, 0.5]].map(([a, b]) => new THREE.Vector2(a, b)), 16), belly);
+    under.rotation.x = Math.PI / 2; under.scale.set(0.95, 1, 0.6); under.position.y = -0.03; sturgeon.add(under);
+    for (let k = 0; k < 9; k++) { const sc = new THREE.Mesh(new THREE.ConeGeometry(0.012, 0.03, 4), belly); sc.position.set(0, 0.105 - Math.abs(k - 4) * 0.004, -0.5 + k * 0.11); sturgeon.add(sc); }
+    const tailShape = new THREE.Shape([new THREE.Vector2(0, 0), new THREE.Vector2(0.06, -0.32), new THREE.Vector2(0.02, -0.28), new THREE.Vector2(-0.12, -0.18)]);
+    const tail = new THREE.Mesh(new THREE.ExtrudeGeometry(tailShape, { depth: 0.01, bevelEnabled: false }).rotateY(Math.PI / 2), back);
+    tail.position.set(0, 0.02, -0.78); tail.rotation.x = -0.4; sturgeon.add(tail);
+    for (const sx of [-1, 1]) { const fin = new THREE.Mesh(new THREE.SphereGeometry(0.07, 10, 6), back); fin.scale.set(1, 0.12, 0.6); fin.position.set(sx * 0.12, -0.05, 0.42); fin.rotation.z = sx * 0.4; sturgeon.add(fin); }
+    for (const sx of [-0.02, 0.02]) { const bar = new THREE.Mesh(new THREE.ConeGeometry(0.004, 0.05, 4), belly); bar.position.set(sx, -0.05, 0.68); bar.rotation.x = Math.PI; sturgeon.add(bar); }   // the barbels
+    sturgeon.scale.setScalar(1.25);
+    sturgeon.userData = { a: 0, tail };
+    deep.add(sturgeon);
   }
   // silt clouds from the thrusters, plankton that sparks when the vehicle moves, a school of fish
   const siltTex = soft2("140,132,112"), silt = [];
@@ -298,8 +221,8 @@ function createLife(deep, lampPos) {
   plankton.frustumCulled = false; deep.add(plankton);
   const school = { c: new THREE.Vector3(7, 0, -5), a: 0, fish: [] };
   {
-    const fm = std({ color: 0xc9d4da, metalness: 0.85, roughness: 0.3 }), fg = new THREE.ConeGeometry(0.045, 0.22, 6); fg.rotateX(-Math.PI / 2);
-    for (let i = 0; i < 24; i++) {
+    const fm = std({ color: 0xdce6ec, metalness: 0.95, roughness: 0.18 }), fg = new THREE.ConeGeometry(0.022, 0.12, 6); fg.rotateX(-Math.PI / 2);   // Caspian sprats (kilka)
+    for (let i = 0; i < 46; i++) {
       const f = new THREE.Mesh(fg, fm);
       f.userData = { o: new THREE.Vector3((Math.random() - 0.5) * 2.4, (Math.random() - 0.5) * 1.2, (Math.random() - 0.5) * 2.4), ph: Math.random() * 6 };
       deep.add(f); school.fish.push(f);
@@ -308,30 +231,19 @@ function createLife(deep, lampPos) {
   const v = new THREE.Vector3();
   return {
     update(dt, T, D, thrusting) {
-      for (const j of jellies) {
-        const u = j.userData, un = u.bell.material.uniforms;
-        un.uT.value = T; un.uLP.value.copy(lampPos());
-        const near = Math.hypot(j.position.x - D.x, j.position.z - D.z) < 7;
-        u.glow += ((near ? 1 : 0) - u.glow) * Math.min(1, dt * 1.4); un.uGlow.value = u.glow;
-        const pulse = Math.sin(T * 1.7 + un.uPh.value);
-        j.position.y = bedH(j.position.x, j.position.z) + u.y0 + Math.sin(T * 0.35 + u.ph) * 0.5;
-        for (const tt of u.tents) {
-          const rr = u.r * 0.95 * (1 + 0.1 * pulse);
-          for (let s = 0; s < 15; s++) {
-            const f = s / 14, sw = Math.sin(T * 1.3 + f * 5 + tt.a * 3) * 0.25 * f * u.r;
-            tt.pos[s * 3] = Math.cos(tt.a) * rr * (1 - f * 0.3) + sw;
-            tt.pos[s * 3 + 1] = -u.r * 0.19 - f * tt.L;
-            tt.pos[s * 3 + 2] = Math.sin(tt.a) * rr * (1 - f * 0.3) + Math.cos(T * 1.1 + f * 4 + tt.a) * 0.2 * f * u.r;
-          }
-          tt.geo.attributes.position.needsUpdate = true;
-        }
-        u.arms.forEach((m, i) => { m.rotation.y = Math.sin(T * 0.5 + i) * 0.3; m.rotation.x = Math.sin(T * 0.7 + i) * 0.12; });
-        j.rotation.y += dt * 0.05;
+      for (const c of jellies) {
+        const u = c.userData;
+        c.position.y = bedH(c.position.x, c.position.z) + u.y0 + Math.sin(T * 0.35 + u.ph) * 0.4;
+        c.rotation.y += dt * 0.15; c.rotation.z = Math.sin(T * 0.5 + u.ph) * 0.2;
+        const near = Math.hypot(c.position.x - D.x, c.position.z - D.z);
+        u.mat.uniforms.uT.value = T + u.ph; u.mat.uniforms.uLit.value = clamp(1.4 - near / 6, 0.12, 1);
       }
-      for (const c of crawlers) {
-        c.position.x -= Math.sin(c.rotation.y) * c.userData.sp * dt; c.position.z -= Math.cos(c.rotation.y) * c.userData.sp * dt;
-        c.rotation.y += Math.sin(T * 0.1 + c.userData.sp * 100) * dt * 0.05;
-        c.position.y = bedH(c.position.x, c.position.z) + 0.05;
+      {
+        const sd = sturgeon.userData; sd.a += dt * 0.035;
+        const x = Math.cos(sd.a) * 12, z = Math.sin(sd.a) * 9 - 3;
+        sturgeon.position.set(x, bedH(x, z) + 0.55, z);
+        sturgeon.rotation.y = -sd.a + Math.PI;            // heading along the circle
+        sd.tail.rotation.y = Math.sin(T * 2.2) * 0.35;
       }
       if (thrusting && T > siltNext) {
         siltNext = T + 0.09;
@@ -518,48 +430,83 @@ export function createDive(view) {
     surf.add(m); shafts.push(m);
   }
 
-  // ---- the seabed of the South Caspian Basin, ~950 m (CLAUDE.md 22.1)
+  // ---- the seabed of the South Caspian Basin, ~950 m (CLAUDE.md 22.1, 23.3-G): grey-brown silt over sand with
+  // ripples (a 300 x 300 heightfield; CC0 textures "Coast Sand 02" from Poly Haven in web/assets/seabed), ~200 rocks
+  // with silt settled on their tops, scattered cockle shells, a mud volcano breathing a column of gas bubbles
   const bedGroup = new THREE.Group();
   deep.add(bedGroup);
+  const siltOnTop = (mat, siltHex = 0x8a8170) => {        // silt on the upward faces: world normal up -> silt colour
+    mat.onBeforeCompile = (sh) => {
+      sh.uniforms.uSilt = { value: new THREE.Color(siltHex) };
+      sh.vertexShader = sh.vertexShader.replace("#include <common>", "#include <common>\nvarying vec3 vWN;")
+        .replace("#include <beginnormal_vertex>", "#include <beginnormal_vertex>\nvWN = normalize(mat3(modelMatrix) * objectNormal);");
+      sh.fragmentShader = sh.fragmentShader.replace("#include <common>", "#include <common>\nvarying vec3 vWN; uniform vec3 uSilt;")
+        .replace("#include <color_fragment>", "#include <color_fragment>\n diffuseColor.rgb = mix(diffuseColor.rgb, uSilt, smoothstep(0.55, 0.85, vWN.y));");
+    };
+    return mat;
+  };
   {
-    const g = new THREE.PlaneGeometry(90, 90, 230, 230).rotateX(-Math.PI / 2);
+    const g = new THREE.PlaneGeometry(64, 64, 300, 300).rotateX(-Math.PI / 2);
     const pa = g.attributes.position;
     for (let i = 0; i < pa.count; i++) pa.setY(i, bedH(pa.getX(i), pa.getZ(i)));
     g.computeVertexNormals();
-    const sand = canvasTexture(512, 512, (c, w) => {
-      c.fillStyle = "#80796a"; c.fillRect(0, 0, w, w);
-      for (let i = 0; i < 9000; i++) { c.fillStyle = `rgba(${hash(i, 1) < 0.5 ? "30,28,22" : "210,205,185"},${hash(i, 2) * 0.13})`; c.fillRect(hash(i, 3) * w, hash(i, 4) * w, 2, 2); }
-      c.strokeStyle = "rgba(40,36,28,.18)"; c.lineWidth = 3;
-      for (let y = 0; y < w; y += 18) { c.beginPath(); for (let x = 0; x <= w; x += 8) c.lineTo(x, y + Math.sin(x * 0.05 + y) * 4); c.stroke(); }
-    });
-    sand.wrapS = sand.wrapT = THREE.RepeatWrapping; sand.repeat.set(22, 22);
-    // micro-relief of the sand: ripples as a normal map
-    const N = 256, nc = document.createElement("canvas"); nc.width = nc.height = N;
-    const ng = nc.getContext("2d"), img = ng.createImageData(N, N), H = new Float32Array(N * N);
-    const waves = [];
-    for (let i = 0; i < 16; i++) waves.push([1 + Math.floor(hash(i, 5) * 8), Math.floor(hash(i, 6) * 9) - 4, hash(i, 7) * 6.28, 0.3 + hash(i, 8)]);
-    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
-      let h = 0;
-      for (const [fx, fy, ph, a] of waves) h += (a * Math.sin((6.2832 * (fx * x + fy * y)) / N + ph)) / (fx + Math.abs(fy));
-      H[y * N + x] = h + (hash(x, y) - 0.5) * 0.5;
-    }
-    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
-      const hx = H[y * N + ((x + 1) % N)] - H[y * N + ((x + N - 1) % N)], hy = H[((y + 1) % N) * N + x] - H[((y + N - 1) % N) * N + x];
-      const nx = -hx * 1.4, ny = -hy * 1.4, l = Math.hypot(nx, ny, 1), k = (y * N + x) * 4;
-      img.data[k] = (nx / l * 0.5 + 0.5) * 255; img.data[k + 1] = (ny / l * 0.5 + 0.5) * 255; img.data[k + 2] = (1 / l * 0.5 + 0.5) * 255; img.data[k + 3] = 255;
-    }
-    ng.putImageData(img, 0, 0);
-    const sandN = new THREE.CanvasTexture(nc); sandN.wrapS = sandN.wrapT = THREE.RepeatWrapping; sandN.repeat.set(30, 30);
-    const bed = new THREE.Mesh(g, std({ map: sand, normalMap: sandN, normalScale: new THREE.Vector2(1.1, 1.1), color: 0xaaa38c, roughness: 1 }));
+    const loader = new THREE.TextureLoader();
+    const tex = (f, srgb) => { const t2 = loader.load(`assets/seabed/${f}`); t2.wrapS = t2.wrapT = THREE.RepeatWrapping; t2.repeat.set(16, 16); t2.anisotropy = 8; if (srgb) t2.colorSpace = THREE.SRGBColorSpace; return t2; };
+    const bed = new THREE.Mesh(g, std({ map: tex("coast_sand_02_diff_1k.jpg", true), normalMap: tex("coast_sand_02_nor_gl_1k.jpg"), roughnessMap: tex("coast_sand_02_rough_1k.jpg"),
+                                        normalScale: new THREE.Vector2(1.2, 1.2), color: 0x9a9384, roughness: 1 }));      // tinted to grey-brown silt
     bed.receiveShadow = true; bedGroup.add(bed);
-    const rockM = std({ color: 0x3e433e, roughness: 1, flatShading: true });
-    for (let i = 0; i < 70; i++) {
-      const a = hash(i, 11) * 6.28, d = 3 + hash(i, 12) * 34, x = Math.cos(a) * d, z = Math.sin(a) * d;
-      const m = new THREE.Mesh(new THREE.DodecahedronGeometry(0.25 + hash(i, 13) * 1.1, 1), rockM);
-      m.position.set(x, bedH(x, z) - 0.15, z); m.scale.y = 0.4 + hash(i, 14) * 0.5; m.rotation.y = hash(i, 15) * 6;
-      m.castShadow = m.receiveShadow = true; bedGroup.add(m);
+    // rocks: icosahedra roughened with noise, flattened a little, half buried; 6 shapes, ~200 instances
+    const rockM = siltOnTop(std({ color: 0x4b4a44, roughness: 0.95 }));
+    const variants = [];
+    for (let v = 0; v < 6; v++) {
+      let rg = new THREE.IcosahedronGeometry(1, 4); rg.deleteAttribute("normal"); rg.deleteAttribute("uv"); rg = mergeVertices(rg);   // welded: smooth, not faceted
+      const rp = rg.attributes.position, tmp = new THREE.Vector3();
+      for (let i = 0; i < rp.count; i++) {
+        tmp.fromBufferAttribute(rp, i);
+        const n = 0.72 + 0.4 * fbm(tmp.x * 1.4 + v * 3, tmp.y * 1.6 + tmp.z * 1.3) + 0.08 * vnoise(tmp.x * 6 + v, tmp.z * 6 + tmp.y * 3);
+        tmp.multiplyScalar(n); tmp.y *= 0.62; rp.setXYZ(i, tmp.x, tmp.y, tmp.z);
+      }
+      rg.computeVertexNormals();
+      variants.push(new THREE.InstancedMesh(rg, rockM, 36));
     }
+    const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3(), pos = new THREE.Vector3();
+    variants.forEach((im, v) => {
+      for (let i = 0; i < im.count; i++) {
+        const a = hash(i + v * 50, 11) * 6.28, d = 2.5 + Math.pow(hash(i + v * 50, 12), 0.8) * 28, x = Math.cos(a) * d, z = Math.sin(a) * d;
+        const size = 0.12 + Math.pow(hash(i + v * 50, 13), 3) * 1.1;
+        q.setFromEuler(new THREE.Euler((hash(i, v + 14) - 0.5) * 0.5, hash(i, v + 15) * 6.28, (hash(i, v + 16) - 0.5) * 0.5));
+        sc.set(size * (0.8 + hash(i, v + 17) * 0.5), size, size * (0.8 + hash(i, v + 18) * 0.5));
+        pos.set(x, bedH(x, z) - size * 0.25, z);
+        im.setMatrixAt(i, m4.compose(pos, q, sc));
+      }
+      im.castShadow = im.receiveShadow = true; bedGroup.add(im);
+    });
+    // cockle shells (Cerastoderma, common on the Caspian bed): ribbed half-shells in patches
+    const ribTex = canvasTexture(128, 64, (c, w, h) => { c.fillStyle = "#a89f8c"; c.fillRect(0, 0, w, h); for (let x = 0; x < w; x += 8) { c.fillStyle = "rgba(70,60,48,.5)"; c.fillRect(x, 0, 3, h); } });
+    const shellGeo = new THREE.SphereGeometry(0.03, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2); shellGeo.scale(1, 0.55, 0.9);
+    const shells = new THREE.InstancedMesh(shellGeo, std({ map: ribTex, roughness: 0.8 }), 420);
+    for (let i = 0; i < shells.count; i++) {
+      const patch = Math.floor(hash(i, 81) * 9), pa2 = hash(patch, 82) * 6.28, pd = 3 + hash(patch, 83) * 18;
+      const x = Math.cos(pa2) * pd + (hash(i, 84) - 0.5) * 2.4, z = Math.sin(pa2) * pd + (hash(i, 85) - 0.5) * 2.4;
+      q.setFromEuler(new THREE.Euler((hash(i, 86) - 0.5) * 0.6, hash(i, 87) * 6.28, hash(i, 88) < 0.3 ? Math.PI : 0));
+      const ss = 0.5 + hash(i, 89) * 0.6;
+      shells.setMatrixAt(i, m4.compose(pos.set(x, bedH(x, z) + 0.005, z), q, sc.set(ss, ss, ss)));
+    }
+    shells.receiveShadow = true; bedGroup.add(shells);
   }
+  // the mud volcano: a low cone of grey mud with a crater, gas bubbles rising from it in a column
+  const MV = new THREE.Vector3(9.5, 0, -8.5);
+  const bubbleCol = (() => {
+    const mud = siltOnTop(std({ color: 0x5a554a, roughness: 1 }), 0x7a7262);
+    const cone = new THREE.Mesh(new THREE.LatheGeometry([[0, 1.05], [0.3, 1.1], [0.55, 1.55], [0.75, 1.62], [1.0, 1.45], [1.8, 0.95], [2.8, 0.45], [4.0, 0.08], [4.6, -0.3]].map(([a, b]) => new THREE.Vector2(a, b)), 64), mud);   // a cone with a crater
+    MV.y = bedH(MV.x, MV.z); cone.position.copy(MV); cone.receiveShadow = true; bedGroup.add(cone);
+    const N = 90, bp = new Float32Array(N * 3), bs = new Float32Array(N);
+    for (let i = 0; i < N; i++) { bp.set([MV.x + (Math.random() - 0.5) * 0.3, MV.y + 1.1 + Math.random() * 14, MV.z + (Math.random() - 0.5) * 0.3], i * 3); bs[i] = 0.6 + Math.random(); }
+    const bg = new THREE.BufferGeometry(); bg.setAttribute("position", new THREE.BufferAttribute(bp, 3));
+    const pts = new THREE.Points(bg, new THREE.PointsMaterial({ map: soft, color: new THREE.Color(0xdff2f8).multiplyScalar(1.6), size: 0.2, transparent: true, opacity: 0.9, depthWrite: false, blending: THREE.AdditiveBlending }));
+    pts.frustumCulled = false; bedGroup.add(pts);
+    return { bp, bs, bg, N };
+  })();
   // the searchlight of Nerpa and its visible cone of light in the water
   const spot = new THREE.SpotLight(0xe2f4ff, 0, 30, 0.42, 0.5, 1.2);
   spot.castShadow = true; spot.shadow.mapSize.set(1024, 1024); spot.shadow.bias = -0.0005;
@@ -889,6 +836,11 @@ export function createDive(view) {
     snow.update(dt, time, camera.position, rise);
     surfPlane.material.uniforms.uT.value = time;
     beamUniforms.uT.value = time;
+    for (let i = 0; i < bubbleCol.N; i++) {
+      const k = i * 3; bubbleCol.bp[k + 1] += dt * 0.8 * bubbleCol.bs[i]; bubbleCol.bp[k] += Math.sin(time * 2 + i) * dt * 0.05;
+      if (bubbleCol.bp[k + 1] > MV.y + 15) { bubbleCol.bp[k + 1] = MV.y + 1.1; bubbleCol.bp[k] = MV.x + (Math.random() - 0.5) * 0.3; }
+    }
+    bubbleCol.bg.attributes.position.needsUpdate = true;
     if (mode === "dive") stepPuffs(dt);
   });
   let active = false;
@@ -1054,5 +1006,13 @@ export function createDive(view) {
     return true;
   }
 
-  return { deep, cinematic, search, leave, debugFaceBox, stepPuffs };
+  /** Test hook (screenshots): put Nerpa at x, z looking along yaw; my = how far down the light and the eyes look. */
+  function debugLook(x, z, yaw, lookDown = 0.35) {
+    if (mode !== "dive") return false;
+    D.x = x; D.z = z; D.yaw = yaw; D.vx = D.vz = 0; mx = 0; my = lookDown; D.y = bedH(x, z) + 1.8;
+    return true;
+  }
+  /** Test hook: where the dive's main find and the debris lie. */
+  const debugWhere = () => ({ box: box.visible ? box.position.toArray() : null, debris: debris.filter((g) => g.visible).map((g) => g.position.toArray()) });
+  return { deep, cinematic, search, leave, debugFaceBox, debugLook, debugWhere, stepPuffs };
 }

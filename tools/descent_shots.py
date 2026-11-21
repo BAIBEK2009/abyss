@@ -20,14 +20,16 @@ ap.add_argument("out", type=Path)
 ap.add_argument("--lang", default="ru")
 ap.add_argument("--every", type=float, default=0.5)
 ap.add_argument("--seconds", type=float, default=21)
+ap.add_argument("--free", action="store_true", help="free search (no story): dive straight onto the box, for the debris and box close-ups")
 args = ap.parse_args()
 args.out.mkdir(parents=True, exist_ok=True)
 
-server = make_server(0)
+server = make_server(0, campaign=not args.free)
 g = server.game
-for ev in ("start", "radio_heard", "binoculars", "enter_cabin", "sit_at_table"):
-    g.story_event(ev)
-g.pop_story()
+if not args.free:
+    for ev in ("start", "radio_heard", "binoculars", "enter_cabin", "sit_at_table"):
+        g.story_event(ev)
+    g.pop_story()
 threading.Thread(target=server.serve_forever, daemon=True).start()
 url = f"http://127.0.0.1:{server.server_address[1]}/?lang={args.lang}&nointro=1"
 errors = []
@@ -41,16 +43,20 @@ with sync_playwright() as pw:
     page.goto(url)
     page.wait_for_selector("body[data-ready='1']", timeout=30000)
     page.wait_for_timeout(1500)
-    page.evaluate("window.__abyss.walk.enterDeckNow({x: 0.6, z: -6.0, yaw: Math.PI})")
-    page.wait_for_timeout(800)
-    page.evaluate("window.__abyss.walk.goTo('nerpa')")
-    for _ in range(160):
+    if args.free:      # straight onto the box (the free search has no brief): the debris and the recorder are there
+        page.evaluate(f"() => {{ void window.__abyss.table.run({{type: 'go', target: {list(g.box)}, tool: 'dive'}}); }}")   # do not wait for the dive to end
+    else:
+        page.evaluate("window.__abyss.walk.enterDeckNow({x: 0.6, z: -6.0, yaw: Math.PI})")
+        page.wait_for_timeout(800)
+        page.evaluate("window.__abyss.walk.goTo('nerpa')")
+    for _ in range(0 if args.free else 160):
         if page.evaluate("!!document.querySelector('[data-id=dive-start]')"):
             break
         if page.evaluate("!!document.querySelector('.speech:not([hidden])')"):
             page.keyboard.press("Enter")
         page.wait_for_timeout(300)
-    page.click("[data-id=dive-start]")
+    if not args.free:
+        page.click("[data-id=dive-start]")
     n = int(args.seconds / args.every)
     for i in range(n):
         page.wait_for_timeout(int(args.every * 1000))
@@ -58,6 +64,22 @@ with sync_playwright() as pw:
     page.wait_for_selector("[data-id=surface]", state="visible", timeout=30000)
     page.wait_for_timeout(2500)
     page.screenshot(path=str(args.out / "bottom.png"))
+    # fixed views on the seabed (CLAUDE.md 23.3-E): rocks, the mud volcano, a piece of debris, the find
+    page.evaluate("window.__abyss.diveLook(-6, 6, 2.4, 0.15)"); page.wait_for_timeout(1500)
+    page.screenshot(path=str(args.out / "bed_rocks.png"))
+    page.evaluate("window.__abyss.diveLook(5.2, -4.2, -0.785, 0.05)"); page.wait_for_timeout(1500)
+    page.screenshot(path=str(args.out / "bed_volcano.png"))
+    where = page.evaluate("window.__abyss.diveWhere()")
+    def face(p, dist, down):
+        import math
+        x, z = p[0], p[2]
+        page.evaluate(f"window.__abyss.diveLook({x + dist}, {z + dist * 0.3}, {math.atan2(dist, dist * 0.3)}, {down})")
+    if where["debris"]:
+        face(where["debris"][0], 2.6, 0.75); page.wait_for_timeout(1500)
+        page.screenshot(path=str(args.out / "debris_close.png"))
+    if where["box"]:
+        face(where["box"], 2.2, 0.8); page.wait_for_timeout(1500)
+        page.screenshot(path=str(args.out / "find_close.png"))
     b.close()
 server.shutdown()
 print("frames:", n, "| errors:", errors or "none")
