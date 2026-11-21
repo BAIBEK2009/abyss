@@ -3,7 +3,7 @@
 "Who is who" + tutorial on first visit -> hover a cell -> choose it -> officers' drawer -> press an action tag (cinema mode) -> radio clue
 window -> accept advice -> autopilot to the end -> results card. Fails on any JS error.
 
-    python tools/map_smoke.py OUT_DIR
+    python tools/map_smoke.py OUT_DIR [kk|ru|en]
 """
 import sys
 import threading
@@ -19,7 +19,8 @@ out = Path(sys.argv[1])
 out.mkdir(parents=True, exist_ok=True)
 server = make_server(0, campaign=False)
 threading.Thread(target=server.serve_forever, daemon=True).start()
-url = f"http://127.0.0.1:{server.server_address[1]}/?lang=ru"
+LANG = sys.argv[2] if len(sys.argv) > 2 else "ru"
+url = f"http://127.0.0.1:{server.server_address[1]}/?lang={LANG}"
 errors = []
 
 
@@ -86,7 +87,7 @@ with sync_playwright() as pw:
     st = page.evaluate("window.__abyss.state()")
     print("after advice: hours", st["hours"], "pos", st["pos"], "probes", [(p["kind"], p["result"]) for p in st["probes"]])
 
-    page.click(".hud-btn:has-text('Автопилот')")
+    page.click(".hud-btn[data-id=autopilot]")
     page.wait_for_selector(".result", timeout=180000)
     page.wait_for_timeout(800)
     st = page.evaluate("window.__abyss.state()")
