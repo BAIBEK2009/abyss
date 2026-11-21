@@ -686,3 +686,53 @@ body.prologue .hud-right, body.prologue .actions, body.prologue .dock, body.prol
 .pk .kc { width: auto; min-width: 44px; padding: 0 10px; white-space: nowrap; font-size: 20px; }
 /* a two-line action tag (kk): the action, then the place in small type */
 .tag-title .tag-where { display: block; margin-top: 3px; font: 600 12.5px/1.25 var(--print); color: #6d5a3a; }
+
+/* ---- M12b: on foot (CLAUDE.md 23.2): the dot, "[E] ...", the waypoint, hints, the binoculars */
+body.walking #ui, body.walking #overlay, body.walking .autopilot-banner { opacity: 0; pointer-events: none; }
+body.walking .letterbox { height: 0; }
+.fp-dot, .fp-prompt, .fp-mark, .fp-hint { display: none; }
+body.fp .fp-dot { display: block; position: fixed; left: 50%; top: 50%; z-index: 30; width: 6px; height: 6px; margin: -3px 0 0 -3px; border-radius: 50%;
+  background: #f3e6c4; box-shadow: 0 0 0 1px #0008, 0 0 6px #000a; pointer-events: none; transition: transform 0.15s, background 0.15s; }
+body.fp .fp-dot.on { transform: scale(1.7); background: #ffd27a; }
+body.binoculars .fp-dot { display: none; }
+body.fp .fp-prompt:not([hidden]) { display: inline-flex; position: fixed; left: 50%; top: calc(50% + 34px); translate: -50% 0; z-index: 30; align-items: center; gap: 10px;
+  padding: 7px 16px 7px 7px; border-radius: 26px; border: 1px solid #ffd27a88; background: rgba(14, 12, 9, 0.78); color: #f6ead0;
+  font: 600 16px var(--print); cursor: pointer; white-space: nowrap; box-shadow: 0 6px 18px #0008; }
+.fp-prompt kbd { display: grid; place-items: center; min-width: 28px; height: 28px; border-radius: 6px; background: linear-gradient(#f0d48e, #c69a4c);
+  color: #2a1c0a; font: 700 15px var(--print); box-shadow: 0 2px 0 #6b4a1c; }
+body.fp .fp-mark:not([hidden]) { display: flex; flex-direction: column; align-items: center; position: fixed; left: 0; top: 0; z-index: 29; pointer-events: none;
+  margin: -26px 0 0 -30px; width: 60px; }
+.fp-dia { width: 18px; height: 18px; rotate: 45deg; background: #ffcf5a; border: 2px solid #3a2608; box-shadow: 0 0 14px #ffcf5acc; animation: fp-pulse 1.6s ease-in-out infinite; }
+.fp-dist { margin-top: 6px; padding: 1px 7px; border-radius: 9px; background: rgba(12, 10, 8, 0.72); color: #ffe6a8; font: 700 13px var(--print); white-space: nowrap; }
+.fp-arrow { display: none; position: absolute; left: 30px; top: 9px; width: 0; height: 0; transform-origin: 0 0; }
+.fp-mark.edge .fp-arrow { display: block; }
+.fp-mark.edge .fp-arrow::after { content: ""; position: absolute; left: 22px; top: -9px; border-left: 16px solid #ffcf5a; border-top: 9px solid transparent; border-bottom: 9px solid transparent;
+  filter: drop-shadow(0 0 4px #000); }
+@keyframes fp-pulse { 50% { transform: scale(1.25); } }
+body.fp .fp-hint:not([hidden]) { display: block; position: fixed; left: 50%; top: 9vh; translate: -50% 0; z-index: 31; max-width: min(620px, 92vw);
+  padding: 10px 18px; border-radius: 6px; background: rgba(14, 12, 9, 0.8); border: 1px solid #c3944766; color: #f3e6c4;
+  font: 600 15.5px/1.35 var(--print); text-align: center; pointer-events: none; }
+.fp-hint.in { animation: fp-hint 5.6s ease both; }
+@keyframes fp-hint { 0% { opacity: 0; translate: -50% -8px; } 8%, 88% { opacity: 1; translate: -50% 0; } 100% { opacity: 0; } }
+/* the binoculars: two overlapping circles, the rest black */
+.bino { position: fixed; inset: 0; z-index: 28; pointer-events: none; }
+.bino[hidden] { display: none; }
+.bino-mask { position: absolute; inset: 0;
+  background: radial-gradient(circle at calc(50% - 21vmin) 50%, transparent 33vmin, rgba(0,0,0,.6) 35vmin, transparent 35.3vmin),
+              radial-gradient(circle at calc(50% + 21vmin) 50%, transparent 33vmin, rgba(0,0,0,.6) 35vmin, transparent 35.3vmin);
+  -webkit-mask: radial-gradient(circle at calc(50% - 21vmin) 50%, #000 34vmin, transparent 34.4vmin), radial-gradient(circle at calc(50% + 21vmin) 50%, #000 34vmin, transparent 34.4vmin);
+  -webkit-mask-composite: source-over; }
+.bino::before { content: ""; position: absolute; inset: 0; background: #000;
+  -webkit-mask: radial-gradient(circle at calc(50% - 21vmin) 50%, transparent 34vmin, #000 34.4vmin), radial-gradient(circle at calc(50% + 21vmin) 50%, transparent 34vmin, #000 34.4vmin);
+  -webkit-mask-composite: source-in; mask-composite: intersect; }
+.bino-ret { position: absolute; left: 50%; top: 50%; width: 40vmin; height: 1px; translate: -50% 0; background: linear-gradient(90deg, transparent, #9fd0b088 20%, #9fd0b088 80%, transparent); }
+.bino-ret::after { content: ""; position: absolute; left: 50%; top: -6vmin; height: 12vmin; width: 1px; background: linear-gradient(transparent, #9fd0b088 25%, #9fd0b088 75%, transparent); }
+.bino-top, .bino-bottom { position: absolute; left: 50%; translate: -50% 0; color: #e8dcc0; font: 600 15px var(--print); text-shadow: 0 1px 3px #000; white-space: nowrap; }
+.bino-top { top: 5vh; font: 400 22px var(--title); color: #ffe2a0; }
+.bino-bottom { bottom: 5vh; }
+.bino-bottom kbd { padding: 1px 6px; border-radius: 4px; background: #e8c987; color: #2a1c0a; font: 700 12px var(--print); }
+.bino-zoom { position: absolute; right: 3vw; bottom: 12vh; display: flex; flex-direction: column; gap: 8px; pointer-events: auto; }
+.bino-zoom button { width: 46px; height: 46px; border-radius: 50%; border: 1px solid #c3944788; background: rgba(14,12,9,.75); color: #f3e6c4; font: 700 22px var(--print); cursor: pointer; }
+body.binoculars .speech.sp-at-deck { bottom: 12vh; }
+body.binoculars .fp-mark:not(.edge) { margin-top: -78px; }       /* above the target, not over it */
+body.binoculars .speech { z-index: 40; }

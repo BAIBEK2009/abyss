@@ -273,5 +273,7 @@
  "ch_seen": "Poseidon seen 13:50",
  "ch_current": "current 1.5 kn",
  "ch_signal": "last signal 02:14",
- "ch_fuel": "refuel"
+ "ch_fuel": "refuel",
+ "fp_metres": "{m} m",
+ "bino_zoom": "Mouse wheel — zoom"
 }
