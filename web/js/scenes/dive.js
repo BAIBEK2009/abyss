@@ -93,25 +93,31 @@ export function marineSnow(count = 2800) {
   };
 }
 
-/** A volumetric beam: additive, soft at the rim, fading with distance, with slowly drifting particles of murk. */
+/** A volumetric beam (23.3-V): additive, no depth write; fades along its length (pow), soft at the rim
+ *  (the angle to the camera), brighter looking down its axis, with 3D noise of murk drifting through it.
+ *  axis: the beam's direction in the cone's local space (apex -> base). */
 const beamUniforms = { uT: { value: 0 } };
-function beamMat(k = 1) {
+function beamMat(k = 1, axis = new THREE.Vector3(0, -1, 0)) {
   return new THREE.ShaderMaterial({
     transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, fog: false,
-    uniforms: { uT: beamUniforms.uT, uK: { value: k } },
-    vertexShader: `varying vec2 vUv; varying vec3 vN; varying vec3 vV; varying vec3 vL;
-      void main() { vUv = uv; vL = position; vec4 mv = modelViewMatrix * vec4(position, 1.0); vV = normalize(-mv.xyz); vN = normalize(normalMatrix * normal); gl_Position = projectionMatrix * mv; }`,
-    fragmentShader: `uniform float uT; uniform float uK; varying vec2 vUv; varying vec3 vN; varying vec3 vV; varying vec3 vL;
+    uniforms: { uT: beamUniforms.uT, uK: { value: k }, uAxis: { value: axis.clone().normalize() } },
+    vertexShader: `uniform vec3 uAxis; varying vec2 vUv; varying vec3 vN; varying vec3 vV; varying vec3 vW; varying vec3 vA;
+      void main() { vUv = uv; vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; vec4 mv = viewMatrix * w;
+        vV = normalize(-mv.xyz); vN = normalize(normalMatrix * normal); vA = normalize(normalMatrix * uAxis); gl_Position = projectionMatrix * mv; }`,
+    fragmentShader: `uniform float uT; uniform float uK; varying vec2 vUv; varying vec3 vN; varying vec3 vV; varying vec3 vW; varying vec3 vA;
       float h(vec3 p) { return fract(sin(dot(p, vec3(12.9898, 78.233, 37.719))) * 43758.5453); }
       float n3(vec3 p) { vec3 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
         return mix(mix(mix(h(i), h(i + vec3(1,0,0)), f.x), mix(h(i + vec3(0,1,0)), h(i + vec3(1,1,0)), f.x), f.y),
                    mix(mix(h(i + vec3(0,0,1)), h(i + vec3(1,0,1)), f.x), mix(h(i + vec3(0,1,1)), h(i + vec3(1,1,1)), f.x), f.y), f.z); }
       void main() {
-        float edge = pow(abs(dot(vN, vV)), 1.7);
-        float along = clamp(vUv.y, 0.0, 1.0);                       // 1 at the lamp, 0 at the far end
-        float murk = 0.65 + 0.7 * n3(vL * 1.3 + vec3(0.0, uT * 0.25, uT * 0.1));
-        float a = 0.09 * uK * pow(along, 1.4) * edge * murk;
-        gl_FragColor = vec4(0.72, 0.9, 1.0, a);
+        float along = clamp(vUv.y, 0.0, 1.0);                                   // 1 at the lamp, 0 at the far end
+        float fall = pow(along, 2.2) * smoothstep(1.0, 0.96, along);            // inverse-square-ish, no hard tip
+        float edge = pow(abs(dot(vN, vV)), 1.6);                                 // soft rim: thin at grazing angles
+        float axial = 1.0 + 1.6 * pow(abs(dot(vA, vV)), 6.0);                   // looking down the beam: it glares
+        vec3 q = vW * 0.9 + vec3(uT * 0.05, uT * 0.11, -uT * 0.04);
+        float murk = 0.45 + 0.75 * n3(q) + 0.35 * n3(q * 2.7 + 5.0) - 0.2;      // drifting silt in the water
+        float a = 0.085 * uK * fall * edge * axial * murk;
+        gl_FragColor = vec4(vec3(0.74, 0.9, 1.0) * a, 1.0);
       }`,
   });
 }
@@ -162,8 +168,8 @@ function realNerpa() {
   bubbles.frustumCulled = false; g.add(bubbles);
   // the lamps' cones of light in the water (volumetric look: additive, soft rim, drifting noise)
   const cones = lamps.map((l) => {
-    const L = 9, geo = new THREE.ConeGeometry(Math.tan(0.4) * L, L, 48, 1, true).translate(0, -L / 2, 0);
-    const m = new THREE.Mesh(geo, beamMat(0.55));
+    const L = 13, geo = new THREE.ConeGeometry(Math.tan(0.4) * L, L, 48, 8, true).translate(0, -L / 2, 0);
+    const m = new THREE.Mesh(geo, beamMat(0.8));
     m.position.copy(l.at);
     const dir = new THREE.Vector3(l.at.x * 0.4, -2.5, l.at.z + 8).sub(l.at).normalize();
     m.quaternion.setFromUnitVectors(new THREE.Vector3(0, -1, 0), dir);
@@ -340,6 +346,9 @@ export function createDive(view) {
   const top = new THREE.DirectionalLight(0x3f86a8, 0);
   top.position.set(0, 40, 0);
   deep.add(top);
+  // the descent film is "shot" from a companion camera with its own small light: a soft fill on Nerpa's flank
+  const fill = new THREE.PointLight(0xbfdcff, 0, 14, 2);
+  deep.add(fill);
   const snow = marineSnow();
   snow.mat.uniforms.uPR.value = view.renderer.getPixelRatio();
   deep.add(snow.points);
@@ -556,7 +565,7 @@ export function createDive(view) {
   deep.add(spot, spot.target);
   const CH = 11, coneGeo = new THREE.ConeGeometry(Math.tan(0.42) * CH, CH, 40, 1, true);
   coneGeo.translate(0, -CH / 2, 0); coneGeo.rotateX(-Math.PI / 2);
-  const cone = new THREE.Mesh(coneGeo, beamMat(1.25));               // volumetric, with drifting murk (23.3-V)
+  const cone = new THREE.Mesh(coneGeo, beamMat(1.25, new THREE.Vector3(0, 0, 1)));               // volumetric, with drifting murk (23.3-V)
   cone.visible = false;
   deep.add(cone);
 
@@ -997,7 +1006,9 @@ export function createDive(view) {
     camera.rotation.order = "XYZ"; camera.fov = 52; camera.updateProjectionMatrix();
     nerpa.visible = true; depthBox.hidden = false;
     const model = nerpa.userData.model.userData;
-    const lampsOn = (on) => { nerpa.userData.lamps.forEach((l) => { l.glow.material.opacity = on ? 0.9 : 0; l.sl.intensity = on ? 32 : 0; }); nerpa.userData.cones.forEach((c) => { c.visible = on; }); };
+    let lampOn = 0;
+    const lampsOn = (on) => { lampOn = on ? 1 : 0; glare(); nerpa.userData.cones.forEach((c) => { c.visible = on; }); };
+    const glare = () => model.lampGlare(lampOn, camera.position);
     lampsOn(false);
     const shot = (dur, fn) => new Promise((res) => {
       const t0 = performance.now(); let last = t0;
@@ -1056,9 +1067,11 @@ export function createDive(view) {
       snow.mat.uniforms.uAmb.value = 0.24 * (1 - k) + 0.04;
       const ny = H - k * 30;
       nerpa.position.set(0, ny, 0); nerpa.rotation.set(0, 0.9 + k * 0.4, Math.sin(time * 0.9) * 0.03);
-      const orbit = 0.9 + k * 0.5;
-      camera.position.set(Math.sin(orbit) * 4.6, ny - 0.9, Math.cos(orbit) * 4.6);
-      camera.lookAt(0, ny + 0.2, 0);
+      // three-quarters from the front: the beams cross the frame instead of shining into the lens
+      const ry = 0.9 + k * 0.4, orbit = ry + 1.05 - k * 0.25;
+      camera.position.set(Math.sin(orbit) * 5.8, ny - 0.1, Math.cos(orbit) * 5.8);
+      camera.lookAt(Math.sin(ry) * 0.7, ny - 0.35, Math.cos(ry) * 0.7);
+      fill.position.copy(camera.position).add(new THREE.Vector3(0, 1.2, 0)); fill.intensity = lit ? 11 : 3;
       if (!lit && depth >= 200) { lit = true; lampsOn(true); snow.mat.uniforms.uOn.value = 1; sounds.lights?.(); }
       if (lit) snowToLamp();
       combs.forEach((c, i) => {
@@ -1071,7 +1084,7 @@ export function createDive(view) {
         c.userData.mat.uniforms.uT.value = time + c.userData.ph; c.userData.mat.uniforms.uLit.value = lit ? 1 : 0.15;
       });
       if (Math.random() < 0.01) sounds.creak?.();
-      model.update(dt, time, 0.3);
+      model.update(dt, time, 0.3); glare();
     });
     combs.forEach((c) => { c.visible = false; });
 
@@ -1088,12 +1101,14 @@ export function createDive(view) {
       nerpa.position.set(0, ny + (landed ? Math.sin((k - 0.8) * 30) * 0.03 * (1 - k) : 0), 0); nerpa.rotation.set(0, 1.25, 0);
       camera.position.set(3.6, bed + 0.75, 4.4);
       camera.lookAt(0, ny - 0.2, 0);
+      fill.position.set(3.6, bed + 2.2, 4.4); fill.intensity = 5;
       snowToLamp();
       if (!landed && kk >= 1) { landed = true; puffBurst(0, 0); sounds.thud?.(); }
       stepPuffs(dt);
-      model.update(dt, time, landed ? 0.05 : 0.2);
+      model.update(dt, time, landed ? 0.05 : 0.2); glare();
     });
     if (!landed) { nerpa.position.set(0, bed + 1.05, 0); puffBurst(0, 0); }
+    fill.intensity = 0;
     depthBox.hidden = true;
   }
 
@@ -1122,6 +1137,7 @@ export function createDive(view) {
     return true;
   }
   /** Test hook: where the dive's main find and the debris lie. */
-  const debugWhere = () => ({ box: box.visible ? box.position.toArray() : null, debris: debris.filter((g) => g.visible).map((g) => g.position.toArray()) });
+  const debugWhere = () => ({ box: box.visible ? box.position.toArray() : null, debris: debris.filter((g) => g.visible).map((g) => g.position.toArray()),
+                             keys: debris.filter((g) => g.visible).map((g) => g.userData.key) });
   return { deep, cinematic, search, leave, debugFaceBox, debugLook, debugWhere, stepPuffs };
 }

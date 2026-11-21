@@ -58,12 +58,15 @@ with sync_playwright() as pw:
     if not args.free:
         page.click("[data-id=dive-start]")
     n = int(args.seconds / args.every)
+    perf = []
     for i in range(n):
         page.wait_for_timeout(int(args.every * 1000))
         page.screenshot(path=str(args.out / f"descent_{i:02d}.png"))
+        perf.append((f"descent_{i:02d}", page.evaluate("window.__abyss.perf()")))
     page.wait_for_selector("[data-id=surface]", state="visible", timeout=30000)
     page.wait_for_timeout(2500)
     page.screenshot(path=str(args.out / "bottom.png"))
+    perf.append(("bottom", page.evaluate("window.__abyss.perf()")))
     # fixed views on the seabed (CLAUDE.md 23.3-E): rocks, the mud volcano, a piece of debris, the find
     page.evaluate("window.__abyss.diveLook(-6, 6, 2.4, 0.15)"); page.wait_for_timeout(1500)
     page.screenshot(path=str(args.out / "bed_rocks.png"))
@@ -80,11 +83,18 @@ with sync_playwright() as pw:
     if where["debris"]:
         face(where["debris"][-1], 3.4, 0.45); page.wait_for_timeout(1500)
         page.screenshot(path=str(args.out / "debris_close.png"))
+        if "dv_seats" in where.get("keys", []):
+            face(where["debris"][where["keys"].index("dv_seats")], 2.6, 0.4); page.wait_for_timeout(1500)
+            page.screenshot(path=str(args.out / "seats_close.png"))
+            perf.append(("seats", page.evaluate("window.__abyss.perf()")))
     if where["box"]:
         page.evaluate("window.__abyss.diveLook(0, 0, 0, 0.3)")
         page.evaluate("window.__abyss.faceBox()"); page.wait_for_timeout(1800)
         page.screenshot(path=str(args.out / "find_close.png"))
+        perf.append(("find", page.evaluate("window.__abyss.perf()")))
     b.close()
 server.shutdown()
+for name, p in perf:
+    print(f"  {name}: {p['ms']} ms, {p['calls']} calls, {p['tris']} tris")
 print("frames:", n, "| errors:", errors or "none")
 sys.exit(1 if errors else 0)

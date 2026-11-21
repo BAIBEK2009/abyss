@@ -239,8 +239,12 @@ export function createView(canvas) {
 
   const frameHooks = [];
   const clock = new THREE.Clock();
-  let frames = 0;
-  function frame() {
+  let frames = 0, frameMs = 16.7, lastNow = 0, calls = 0;
+  renderer.info.autoReset = false;            // count draw calls over the whole frame (all passes)
+  function frame(now) {
+    if (lastNow) frameMs += (now - lastNow - frameMs) * 0.05;
+    lastNow = now;
+    renderer.info.reset();
     const dt = Math.min(0.05, clock.getDelta());
     const time = clock.elapsedTime;
     const sway = { x: Math.sin(time * 0.55) * 0.12, z: Math.sin(time * 0.37) * 0.08 };   // a gentle swing
@@ -249,6 +253,7 @@ export function createView(canvas) {
     steer(dt);
     film.uniforms.uTime.value = time;
     composer.render();
+    calls = renderer.info.render.calls;
     for (const p of pins) {
       const s = toScreen(p.anchor);
       p.holder.style.visibility = s.visible ? "visible" : "hidden";
@@ -309,6 +314,8 @@ export function createView(canvas) {
     /** Outline these objects (empty = none). */
     outline(objs) { outline.selectedObjects = objs; outline.enabled = objs.length > 0; },
     get mainScene() { return scene; },
+    /** Smoothed frame time (ms) and draw calls of the last frame (dev tools). */
+    perf: () => ({ ms: +frameMs.toFixed(2), calls, tris: renderer.info.render.triangles }),
     onFrame: (fn) => frameHooks.push(fn),
     onResize: (fn) => resizeHooks.push(fn),
     start() { resize(); requestAnimationFrame(frame); },

@@ -270,13 +270,48 @@ export function createNerpa({ lights = false } = {}) {
   strobe.position.set(-0.28, 2.1, -1.12); root.add(strobe);
   const strobeGlow = new THREE.Sprite(new THREE.SpriteMaterial({ map: SOFT, color: 0xeaf6ff, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
   strobeGlow.scale.setScalar(0.5); strobeGlow.position.copy(strobe.position); root.add(strobeGlow);
-  const lamps = lampAt.map((p) => {
-    const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: SOFT, color: new THREE.Color(0xdff2ff).multiplyScalar(2.2), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0 }));
-    glow.scale.setScalar(0.42); glow.position.copy(p); root.add(glow);
-    let sl = { intensity: 0 };
-    if (lights) { sl = new THREE.SpotLight(0xdff2ff, 0, 22, 0.45, 0.5, 1.3); sl.position.copy(p); sl.target.position.set(p.x * 0.4, -2.5, p.z + 8); root.add(sl, sl.target); }
-    return { glow, sl, at: p };
+  // a lamp seen from the front: a small hot core and a faint wide halo (sprites: no bloom under water);
+  // both fade when the lamp turns away from the camera, as real LED heads do
+  const CORE = canvasTexture(64, 64, (g) => {
+    const gr = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+    gr.addColorStop(0, "rgba(255,255,255,1)"); gr.addColorStop(0.18, "rgba(255,255,255,.9)"); gr.addColorStop(0.32, "rgba(255,255,255,.2)"); gr.addColorStop(1, "rgba(255,255,255,0)");
+    g.fillStyle = gr; g.fillRect(0, 0, 64, 64);
   });
+  const HALO = canvasTexture(128, 128, (g) => {
+    const gr = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+    gr.addColorStop(0, "rgba(255,255,255,.55)"); gr.addColorStop(0.15, "rgba(255,255,255,.22)"); gr.addColorStop(0.45, "rgba(255,255,255,.06)"); gr.addColorStop(1, "rgba(255,255,255,0)");
+    g.fillStyle = gr; g.fillRect(0, 0, 128, 128);
+  });
+  const lampDirL = new THREE.Vector3(0, -0.3, 1).normalize();       // the heads look ahead and a little down
+  const lamps = lampAt.map((p) => {
+    const sprite = (map, hex, sc) => {
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map, color: new THREE.Color(hex), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0, fog: false }));
+      sp.scale.setScalar(sc); sp.position.copy(p).addScaledVector(lampDirL, 0.02); root.add(sp); return sp;
+    };
+    const glow = sprite(CORE, 0xf4fbff, 0.16), halo = sprite(HALO, 0xbfe2ff, 1.3);
+    halo.renderOrder = glow.renderOrder = 3;
+    let sl = { intensity: 0 };
+    if (lights) {
+      sl = new THREE.SpotLight(0xe4f3ff, 0, 34, 0.42, 0.6, 2);
+      sl.position.copy(p); sl.target.position.set(p.x * 0.4, -2.5, p.z + 8); root.add(sl, sl.target);
+    }
+    return { glow, halo, sl, at: p, on: 0 };
+  });
+  const _lw = new THREE.Vector3(), _ld = new THREE.Vector3(), _q = new THREE.Quaternion();
+  /** Lamps on (0..1) with the glare seen from camPos: brightest looking into them, a pin-prick from the side. */
+  function lampGlare(on, camPos, power = 1) {
+    root.updateMatrixWorld(); root.getWorldQuaternion(_q);
+    _ld.copy(lampDirL).applyQuaternion(_q);
+    for (const l of lamps) {
+      l.on = on;
+      l.glow.getWorldPosition(_lw);
+      const f = camPos ? Math.max(0, _ld.dot(_lw.sub(camPos).negate().normalize())) : 1;     // 1 = looking straight in
+      l.glow.material.opacity = on * (0.35 + 0.65 * f);
+      l.halo.material.opacity = on * (0.04 + 0.5 * Math.pow(f, 3));
+      l.halo.scale.setScalar(0.9 + 1.2 * Math.pow(f, 4));
+      l.sl.intensity = on * 260 * power;
+    }
+  }
 
   // ---------------- merge the static parts by material
   function mergeGroup(group) {
@@ -298,7 +333,7 @@ export function createNerpa({ lights = false } = {}) {
 
   let strobeT = 0;
   root.userData = {
-    lamps, props, strobe, sphere, meshCount: count, drawCalls: parts.children.length + inside.children.length,
+    lamps, lampGlare, props, strobe, sphere, meshCount: count, drawCalls: parts.children.length + inside.children.length,
     eye: new THREE.Vector3(0, 2.34, -0.78),
     /** Turn the propellers (spin 0..1) and blink the strobe. */
     update(dt, time, spin = 0.15) {
