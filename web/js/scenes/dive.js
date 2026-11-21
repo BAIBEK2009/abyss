@@ -27,7 +27,7 @@ const fbm = (x, y) => vnoise(x, y) * 0.55 + vnoise(x * 2.1, y * 2.1) * 0.3 + vno
 /** Seabed height around the dive spot (gentle dunes and ripples). */
 export const bedH = (x, z) => (fbm(x * 0.07 + 3.1, z * 0.07 + 1.7) - 0.5) * 3.4 + Math.sin(x * 0.9 + z * 0.35) * 0.06 + Math.sin(x * 0.37 - z * 0.83) * 0.05
   + 0.03 * Math.sin(x * 6.4 + z * 2.1 + 0.8 * Math.sin(z * 0.45 + x * 0.12));          // sand ripples, curved crests ~0.9 m apart
-const SPOT_I = 230;          // the cockpit searchlight (decay 2: physically falling off)
+const SPOT_I = 150;          // the cockpit searchlight (decay 2: physically falling off)
 const BED_M = 950, O2_MAX = 60, SEARCH_R = 17, TETHER = 24, CINE_S = 2;
 
 const std = (o) => new THREE.MeshStandardMaterial(o);
@@ -599,16 +599,40 @@ export function createDive(view) {
   // with silt settled on their tops, scattered cockle shells, a mud volcano breathing a column of gas bubbles
   const bedGroup = new THREE.Group();
   deep.add(bedGroup);
-  const siltOnTop = (mat, siltHex = 0x8a8170) => {        // silt on the upward faces: world normal up -> silt colour
+  // ONE silt shader for everything on the bottom (23.3-G): where the world normal looks up (y > ~0.6) the surface
+  // fades into silt with a patchy noise, matte and non-metallic; under water every colour is a little muted
+  // (the red falls off with distance in the water pass, view.js). Works for instanced meshes too.
+  const siltShader = (mat, hex = 0x756d5f, amount = 0.85) => {
     mat.onBeforeCompile = (sh) => {
-      sh.uniforms.uSilt = { value: new THREE.Color(siltHex) };
-      sh.vertexShader = sh.vertexShader.replace("#include <common>", "#include <common>\nvarying vec3 vWN;")
-        .replace("#include <beginnormal_vertex>", "#include <beginnormal_vertex>\nvWN = normalize(mat3(modelMatrix) * objectNormal);");
-      sh.fragmentShader = sh.fragmentShader.replace("#include <common>", "#include <common>\nvarying vec3 vWN; uniform vec3 uSilt;")
-        .replace("#include <color_fragment>", "#include <color_fragment>\n diffuseColor.rgb = mix(diffuseColor.rgb, uSilt, smoothstep(0.55, 0.85, vWN.y));");
+      sh.uniforms.uSilt = { value: new THREE.Color(hex) }; sh.uniforms.uSiltK = { value: amount };
+      sh.vertexShader = sh.vertexShader.replace("#include <common>", "#include <common>\nvarying vec3 vSiltW;")
+        .replace("#include <project_vertex>", `#include <project_vertex>
+          vec4 siltW = vec4(transformed, 1.0);
+          #ifdef USE_INSTANCING
+            siltW = instanceMatrix * siltW;
+          #endif
+          vSiltW = (modelMatrix * siltW).xyz;`);
+      sh.fragmentShader = sh.fragmentShader.replace("#include <common>", `#include <common>
+          varying vec3 vSiltW; uniform vec3 uSilt; uniform float uSiltK;
+          float sH(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+          float sN(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+            return mix(mix(sH(i), sH(i + vec2(1, 0)), f.x), mix(sH(i + vec2(0, 1)), sH(i + vec2(1, 1)), f.x), f.y); }`)
+        .replace("#include <normal_fragment_maps>", `#include <normal_fragment_maps>
+          {
+            vec3 wn = inverseTransformDirection(nonPerturbedNormal, viewMatrix);
+            float n = sN(vSiltW.xz * 5.0) * 0.6 + sN(vSiltW.xz * 21.0 + 3.0) * 0.4;
+            float k = smoothstep(0.42 + 0.3 * n, 0.85 + 0.1 * n, wn.y) * uSiltK;
+            diffuseColor.rgb = mix(diffuseColor.rgb, uSilt * (0.82 + 0.36 * n), k);
+            float lum = dot(diffuseColor.rgb, vec3(0.299, 0.587, 0.114));
+            diffuseColor.rgb = mix(diffuseColor.rgb, vec3(lum), 0.14);
+            roughnessFactor = mix(roughnessFactor, 1.0, k);
+            metalnessFactor = mix(metalnessFactor, 0.0, k);
+          }`);
     };
+    mat.customProgramCacheKey = () => "silt";
     return mat;
   };
+  const siltOnTop = siltShader;
   {
     const g = new THREE.PlaneGeometry(64, 64, 300, 300).rotateX(-Math.PI / 2);
     const pa = g.attributes.position;
@@ -681,16 +705,7 @@ export function createDive(view) {
   deep.add(cone);
 
   // silt settles on the upward faces of everything on the bottom
-  const siltMat = (m, hex = 0x8a8170) => {
-    m.onBeforeCompile = (sh) => {
-      sh.uniforms.uSilt = { value: new THREE.Color(hex) };
-      sh.vertexShader = sh.vertexShader.replace("#include <common>", "#include <common>\nvarying vec3 vWN;")
-        .replace("#include <beginnormal_vertex>", "#include <beginnormal_vertex>\nvWN = normalize(mat3(modelMatrix) * objectNormal);");
-      sh.fragmentShader = sh.fragmentShader.replace("#include <common>", "#include <common>\nvarying vec3 vWN; uniform vec3 uSilt;")
-        .replace("#include <color_fragment>", "#include <color_fragment>\n diffuseColor.rgb = mix(diffuseColor.rgb, uSilt, 0.65 * smoothstep(0.6, 0.92, vWN.y));");
-    };
-    return m;
-  };
+  const siltMat = (m, hex = 0x756d5f) => siltShader(m, hex, 0.65);
   // the flight recorder, as real ones: orange, white reflective bands, "FLIGHT RECORDER — DO NOT OPEN", the
   // underwater locator beacon (a cylinder with a blinking light) on the front, a handle, the mounting tray
   const recorder = new THREE.Group();
