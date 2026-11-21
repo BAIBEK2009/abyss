@@ -531,7 +531,7 @@ body.diving .ck-help { top: calc(var(--goal-h) + 16px); }
 .speech.auto .sp-next { display: none; }
 .speech.sp-at-table { right: 22px; bottom: 196px; }
 .speech.sp-at-deck { left: 50%; bottom: 7vh; translate: -50% 0; width: min(640px, 92vw); }
-.speech.sp-at-cockpit { left: 50%; bottom: 12px; translate: -50% 0; width: min(600px, 70vw); grid-template-columns: 48px 1fr; padding: 9px 14px 8px 10px;
+.speech.sp-at-cockpit { left: 50%; bottom: 102px; translate: -50% 0; width: min(600px, 70vw); grid-template-columns: 48px 1fr; padding: 9px 14px 8px 10px;
   background: rgba(8, 16, 20, 0.9); color: #e6f0f2; border: 1px solid #4a5156; border-radius: 8px; }
 .speech.sp-at-cockpit .sp-face .medal { width: 48px; height: 58px; }
 .speech.sp-at-cockpit .sp-radio { width: 44px; height: 44px; }
@@ -557,3 +557,50 @@ body.cine .speech.sp-at-table { right: 50%; translate: 50% 0; bottom: calc(8.5vh
   .goal { width: calc(100vw - 32px); left: 16px; }
   .speech.sp-at-table { left: 16px; right: 16px; width: auto; bottom: 170px; }
 }
+
+/* the dive briefing */
+.brief-back { position: fixed; inset: 0; z-index: 32; display: grid; place-items: center; padding: 16px; background: rgba(4, 10, 14, 0.55); }
+.brief { width: min(520px, 94vw); padding: 20px 24px 18px; background: linear-gradient(170deg, #f4ead2, #e6d8b6); color: var(--ink); box-shadow: 0 30px 70px #000;
+  transform: rotate(-0.5deg); animation: result-in 0.45s ease-out; }
+.brief h2 { margin: 0 0 10px; font: 700 30px/1.1 var(--serif); }
+.br-row { display: grid; grid-template-columns: 28px 1fr; gap: 12px; margin: 10px 0; }
+.br-row .icon { width: 26px; height: 26px; color: #8e2f1f; margin-top: 2px; }
+.br-row b { font: 700 12px Manrope, sans-serif; letter-spacing: 0.06em; text-transform: uppercase; color: #8e2f1f; }
+.br-row p { margin: 2px 0 0; font: 500 15px/1.4 Manrope, sans-serif; }
+.br-go { display: inline-flex; align-items: center; gap: 10px; margin-top: 8px; min-height: 50px; padding: 10px 22px; cursor: pointer;
+  background: linear-gradient(180deg, #efd08c, #c69a4c 55%, #a27434); border: 1px solid #5e4319; color: #2a1c0a; font: 700 17px Manrope, sans-serif; border-radius: 3px; }
+.br-go .icon { width: 22px; height: 22px; }
+
+/* the prologue: a night at sea behind the radio briefing (the deck in first person comes in M9c) */
+.night { position: fixed; inset: 0; z-index: 4; overflow: hidden; transition: opacity 0.8s;
+  background: radial-gradient(ellipse at 72% 22%, #26324a 0, #0b1220 38%, #04070d 70%); }
+.night.out { opacity: 0; }
+.night::before { content: ""; position: absolute; inset: 0 0 42% 0;
+  background-image: radial-gradient(1px 1px at 12% 18%, #fff9, transparent), radial-gradient(1px 1px at 28% 8%, #fff8, transparent),
+    radial-gradient(1.5px 1.5px at 44% 26%, #fffa, transparent), radial-gradient(1px 1px at 61% 12%, #fff7, transparent),
+    radial-gradient(1px 1px at 83% 34%, #fff8, transparent), radial-gradient(1.5px 1.5px at 92% 9%, #fff9, transparent),
+    radial-gradient(1px 1px at 7% 40%, #fff6, transparent), radial-gradient(1px 1px at 36% 44%, #fff6, transparent),
+    radial-gradient(1px 1px at 55% 38%, #fff7, transparent), radial-gradient(1px 1px at 76% 20%, #fff8, transparent); }
+.night .moon { position: absolute; left: 72%; top: 16%; width: 54px; height: 54px; border-radius: 50%; background: #f4f1e6;
+  box-shadow: 0 0 40px 14px rgba(220, 230, 255, 0.25), 0 0 140px 50px rgba(160, 180, 230, 0.12); }
+.night .sea { position: absolute; left: 0; right: 0; bottom: 0; height: 42%; background: linear-gradient(#0e1c30, #03060b); }
+.night .path { position: absolute; left: calc(72% - 90px); width: 234px; bottom: 0; height: 42%;
+  background: repeating-linear-gradient(180deg, rgba(210, 225, 255, 0.0) 0 7px, rgba(210, 225, 255, 0.22) 7px 9px);
+  -webkit-mask: linear-gradient(90deg, transparent, #000 40%, #000 60%, transparent); mask: linear-gradient(90deg, transparent, #000 40%, #000 60%, transparent);
+  animation: night-waves 5s linear infinite; }
+@keyframes night-waves { to { background-position: 0 36px; } }
+.night .mast { position: absolute; left: 18%; bottom: 30%; width: 10px; height: 10px; border-radius: 50%; background: #ff4a3a;
+  box-shadow: 0 0 18px 6px rgba(255, 70, 50, 0.6); animation: mast 1.6s steps(1) infinite; }
+@keyframes mast { 50% { opacity: 0.15; } }
+body.prologue .hud-right, body.prologue .actions, body.prologue .dock, body.prologue .tg, body.prologue .inst, body.prologue #overlay { opacity: 0; pointer-events: none; }
+
+/* the golden pin over the chart table in the cabin */
+.cabin-pin { position: fixed; left: 0; top: 0; z-index: 24; translate: -50% -100%; display: flex; flex-direction: column; align-items: center; gap: 6px; cursor: pointer;
+  background: none; border: 0; padding: 0; }
+.cabin-pin .pl { padding: 7px 14px 8px; background: linear-gradient(170deg, #f4ead2, #e6d8b6); color: var(--ink); box-shadow: 0 10px 24px #000b; text-align: center; border-radius: 2px; }
+.cabin-pin b { display: block; font: 700 19px var(--serif); }
+.cabin-pin small { font: 600 12px Manrope, sans-serif; color: #6d6858; }
+.cabin-pin .dot { width: 18px; height: 18px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #fff3c8, #e8b04a 55%, #8a5d12);
+  box-shadow: 0 0 0 0 rgba(232, 176, 74, 0.8); animation: pin-pulse 1.6s ease-out infinite; }
+@keyframes pin-pulse { to { box-shadow: 0 0 0 22px rgba(232, 176, 74, 0); } }
+.cabin-pin:hover .pl { filter: brightness(1.05); }

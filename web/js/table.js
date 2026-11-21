@@ -13,6 +13,7 @@ import { createIntro } from "./ui/intro.js";
 import { createGoal } from "./ui/goal.js";
 import { createChapter } from "./ui/chapter.js";
 import { createSpeech } from "./ui/speech.js";
+import { createStoryFlow } from "./story_flow.js";
 import { showResult } from "./ui/result.js";
 import { ICONS } from "./ui/icons.js";
 import { pct, hours } from "./ui/fmt.js";
@@ -80,11 +81,17 @@ export function createTable(view, map, initialState, { cabin, dive } = {}) {
   goal.whoLabel = t("btn_who");
   const chapter = createChapter(document.body);
   const speech = createSpeech(document.body);
+  const flow = createStoryFlow({
+    view, cabin, ui, speech, chapter, toasts, intro, goal,
+    getState: () => state, setState: (st) => { state = st; map.setState(st); }, render: () => render(),
+    stand: (on) => stand(on, true), auto: () => autopilot,
+  });
   const banner = document.getElementById("autopilot-banner");
   banner.textContent = t("autopilot_on");
 
   function render() {
     goal.update(state.campaign);
+    if (state.dive) return;              // under water: the table waits (no previews while the dive is open)
     hud.update(state);
     rival.update(state);
     officers.update(state, busy || autopilot);
@@ -145,7 +152,7 @@ export function createTable(view, map, initialState, { cabin, dive } = {}) {
     tip.show(big, [t("tip_course", { cells: plural(pv.cells, "cell"), h: hours(pv.hours), f: pv.fuel }), extra]);
   }
   async function onClickCell(cell) {
-    if (busy || autopilot || !cell || state.status !== "playing") return;
+    if (busy || autopilot || !cell || state.status !== "playing" || state.campaign?.act === "prologue") return;
     if (isReef(cell)) { toasts.say("lev", t("toast_reef")); return; }
     if (same(cell, target) || same(cell, state.pos)) { setTarget(null); return; }   // second click clears
     setTarget(cell);
@@ -166,8 +173,11 @@ export function createTable(view, map, initialState, { cabin, dive } = {}) {
   canvas.addEventListener("click", (e) => onClickCell(map.cellAt(e.clientX, e.clientY)));
 
   // ------------------------------------------------------------------ actions
+  let storyThisTurn = false;            // the story speaks this turn: Dana's v3 notes on the same result stay quiet
+  const STORY_QUIET = new Set(["sonar_echo", "sonar_silence", "dive_empty", "dive_seen", "dive_debris"]);
   function speak(e) {
     if (e.type !== "msg" || !SPEAKER[e.key]) return;
+    if (storyThisTurn && STORY_QUIET.has(e.key)) return;
     const params = { ...e };
     for (const k of ["p0", "p1"]) if (typeof params[k] === "number") params[k] = hours(params[k]);   // 0.4 -> "0,4"
     if (typeof e.cell === "string") {            // the core names cells "E5": turn it into a place
@@ -192,6 +202,7 @@ export function createTable(view, map, initialState, { cabin, dive } = {}) {
       const before = state;
       const live = !!dive && !autopilot && action.tool === "dive";
       const res = await api.act(action, live);
+      storyThisTurn = (res.story || []).some((i) => i.beat);
       const diveEv = live && res.state.dive && res.events.find((e) => e.type === "dive" && e.live);
       if (diveEv) {
         // sail there (the map), the dive itself (crane, under water, the search), then the rest of its hours
@@ -199,18 +210,29 @@ export function createTable(view, map, initialState, { cabin, dive } = {}) {
         const pre = res.events.filter((e) => (e.t ?? before.hours) <= tArr + 1e-6);
         const post = res.events.filter((e) => !pre.includes(e));
         await map.play(pre, before, { onEvent: speak });
-        const found = await diveScene(diveEv.scene);
-        const end = await api.diveEnd(found.found, found.coverage, found.debrisSeen);
+        await flow.play(res.story);
+        const brief = await flow.beforeDive();
+        const found = await diveScene({ ...diveEv.scene, o2: brief?.oxygen_s, task: diveEv.scene.find ? brief?.task : null,
+                                        onEvent: (n) => flow.diveEvent(n) });
+        flow.afterDive();
+        const end = await api.diveEnd(found.found && !found.find, found.coverage, found.debrisSeen, found.find);
+        storyThisTurn = (end.story || []).some((i) => i.beat);
         const rivalMoves = pre.filter((e) => e.rival && e.type === "move");
         const mid = { ...before, hours: tArr, pos: diveEv.cell,
                       rival: before.rival && { ...before.rival, pos: rivalMoves.length ? rivalMoves[rivalMoves.length - 1].cell : before.rival.pos } };
         await map.play([...post, ...end.events], mid, { onEvent: speak });
+        flow.hold(end.story);
         state = end.state;
+        map.setState(state);
+        await flow.play(end.story);
       } else {
         await map.play(res.events, before, { onEvent: speak });
+        flow.hold(res.story);
         state = res.state;
+        map.setState(state);
+        render();
+        await flow.play(res.story);
       }
-      map.setState(state);
       if (!autopilot || state.status !== "playing") cinema(false);
       if (state.status === "playing") await handleClues();
     } catch (err) {
@@ -227,12 +249,14 @@ export function createTable(view, map, initialState, { cabin, dive } = {}) {
   async function handleClues() {
     for (const c of state.clues) {
       if (c.kind === "coast") map.showBand(c.axis, c.start, c.start + 2);    // the strip is marked on the chart
-      const accept = autopilot ? true : await radio.ask(c);
+      const accept = autopilot ? true : await radio.ask(c, flow.clueLine(c));
       map.showBand(null);
       const res = await api.clue(c.id, accept);
       state = res.state;
       res.events.forEach(speak);
       await map.setState(state, { animate: true });
+      render();
+      await flow.play(res.story);
     }
   }
   async function acceptClues() { await handleClues(); render(); }
@@ -275,8 +299,9 @@ export function createTable(view, map, initialState, { cabin, dive } = {}) {
 
   /** Get up from the table and look at the cabin; the second press sits back down. */
   let standing = false;
-  function stand(on = !standing) {
+  function stand(on = !standing, fromStory = false) {
     if (on && (busy || !cabin)) return;
+    if (!fromStory && state.campaign?.act === "prologue") return;
     standing = on;
     hud.setActive("stand", on);
     document.body.classList.toggle("standing", on);
@@ -292,7 +317,7 @@ export function createTable(view, map, initialState, { cabin, dive } = {}) {
     await fade(true, "blue");
     const result = await dive.search(scene, () => fade(false), (found) => fade(true, found ? "white" : "blue"));
     dive.leave();
-    map.resetNerpa(result.found);
+    map.resetNerpa(result.found && !result.find);
     view.follow(map.shipPoint);              // the cinema camera goes on following the ship
     await fade(false);
     return result;
@@ -309,10 +334,11 @@ export function createTable(view, map, initialState, { cabin, dive } = {}) {
 
   render();
   if (state.status !== "playing") finish();
+  else if (state.campaign) flow.startIfNeeded();         // the tutorial is the story itself (17.3)
   else setTimeout(() => { if (!intro.showIfFirstTime()) coach.startIfFirstTime(); }, 3200);   // after the opening shot
   return {
     get state() { return state; },
     get busy() { return busy; },
-    run, acceptClues, goal, chapter, speech,
+    run, acceptClues, goal, chapter, speech, flow,
   };
 }

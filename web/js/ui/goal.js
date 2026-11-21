@@ -20,7 +20,7 @@ export function createGoal(root = document.body, { onWho } = {}) {
   }
   root.append(box);
   const text = box.querySelector(".goal-text"), list = box.querySelector(".goal-tasks");
-  let shownAct = null, done = [];
+  let shownAct = null, done = [], held = false;
 
   const measure = () => document.documentElement.style.setProperty("--goal-h", `${box.offsetHeight + 14}px`);
   new ResizeObserver(measure).observe(box);
@@ -46,7 +46,11 @@ export function createGoal(root = document.body, { onWho } = {}) {
       box.hidden = !campaign;
       document.body.classList.toggle("has-goal", !!campaign);
       if (!campaign) return;
-      if (campaign.act !== shownAct) return build(campaign.act, campaign.tasks);
+      if (campaign.act !== shownAct) {
+        // the act changed: until its chapter card the old checklist stays, all ticked
+        if (held && shownAct) return this.update({ act: shownAct, tasks: done.map(() => true) });
+        return build(campaign.act, campaign.tasks);
+      }
       campaign.tasks.forEach((v, i) => {
         if (v && !done[i]) {
           const li = list.children[i];
@@ -57,6 +61,9 @@ export function createGoal(root = document.body, { onWho } = {}) {
       });
       done = [...campaign.tasks];
     },
+    /** Keep the current act on screen until release() (the story plays the chapter card first). */
+    hold() { held = true; },
+    release(campaign) { held = false; if (campaign) this.update(campaign); },
     set whoLabel(s) { const b = box.querySelector(".goal-who"); if (b) b.textContent = s; },
   };
 }

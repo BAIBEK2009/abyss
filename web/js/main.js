@@ -50,7 +50,8 @@ async function start() {
   const table = createTable(view, map, state, { cabin, dive });
   view.start();
   // the opening shot: the whole cabin first, then the camera glides down to the chart table
-  if (!new URLSearchParams(location.search).has("nointro")) {
+  const prologue = state.campaign?.act === "prologue";     // the story moves the camera itself
+  if (!prologue && !new URLSearchParams(location.search).has("nointro")) {
     document.body.classList.add("standing");            // the interface waits until the camera is at the table
     view.flyFrom(cabin.standPose, 0.75);
     setTimeout(() => document.body.classList.remove("standing"), 2600);

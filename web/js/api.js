@@ -16,6 +16,7 @@ export const api = {
   newGame: (seed) => call("/api/new", seed === undefined ? {} : { seed }),
   preview: (action) => call("/api/preview", { action }),
   act: (action, live = false) => call("/api/act", { action, live }),
-  diveEnd: (found, coverage, debris) => call("/api/dive", { found, coverage, debris }),
+  diveEnd: (found, coverage, debris, find = null) => call("/api/dive", { found, coverage, debris, find }),
+  story: (event) => call("/api/story", { event }),
   clue: (id, accept) => call("/api/clue", { id, accept }),
 };

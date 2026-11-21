@@ -5,7 +5,8 @@ const RU = {
   sp_next: "дальше — щелчок", btn_go_cabin: "Спуститься в каюту", btn_dive_start: "Начать погружение",
   brief_task: "Задача", brief_how: "Как искать", brief_o2: "Кислород", brief_o2_value: "{s} секунд",
   pin_table: "Штурманский стол", pin_table_sub: "Карта поиска. Начните отсюда",
-  find_flap: "Закрылок с номером AQ-271", mystery_toast: "Новая находка на доске улик",
+  find_flap: "Закрылок с номером AQ-271",
+  dv_seen_find: "Закрылок, на нём номер рейса. Подплывите ближе.", dv_got_find: "Находка в манипуляторе. Всплываем.", mystery_toast: "Новая находка на доске улик",
   // ---- M8: the dive
   ck_depth: "ГЛУБИНА, М", ck_pinger: "ПИНГЕР МАЯЧКА", ck_pinger_hint: "писк громче — ящик ближе; слышно, с какой он стороны",
   ck_sonar: "СОНАР · ПРОБЕЛ", ck_surface: "Всплыть", ck_plate: "«НЕРПА-2» · ГЛУБОКОВОДНЫЙ АППАРАТ",
@@ -252,7 +253,8 @@ const EN = {
   sp_next: "click to continue", btn_go_cabin: "Go down to the cabin", btn_dive_start: "Start the dive",
   brief_task: "Task", brief_how: "How to search", brief_o2: "Oxygen", brief_o2_value: "{s} seconds",
   pin_table: "Chart table", pin_table_sub: "The search chart. Start here",
-  find_flap: "A flap with the number AQ-271", mystery_toast: "A new find on the evidence board",
+  find_flap: "A flap with the number AQ-271",
+  dv_seen_find: "A flap with the flight number on it. Get closer.", dv_got_find: "The find is in the manipulator. Surfacing.", mystery_toast: "A new find on the evidence board",
   // ---- M8: the dive
   ck_depth: "DEPTH, M", ck_pinger: "BEACON PINGER", ck_pinger_hint: "louder — the box is closer; you hear which side it is on",
   ck_sonar: "SONAR · SPACE", ck_surface: "Surface", ck_plate: "NERPA-2 · DEEP-SEA VEHICLE",

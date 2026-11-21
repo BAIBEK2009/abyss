@@ -24,15 +24,15 @@ export function createRadio(root) {
   const text = box.querySelector(".radio-text");
   let typing = null;
 
-  /** Show one clue; resolves true (accept) / false (reject). */
-  function ask(clue) {
+  /** Show one clue; resolves true (accept) / false (reject). line = {text, src} from story.json (the campaign). */
+  function ask(clue, line = null) {
     return new Promise((resolve) => {
       box.querySelector(".radio-title").textContent = t("radio_title");
-      box.querySelector(".radio-src").textContent = t(clue.kind === "fish" ? "src_fish" : "src_coast");
+      box.querySelector(".radio-src").textContent = line?.src ?? t(clue.kind === "fish" ? "src_fish" : "src_coast");
       const p = Math.round(clue.reliability * 100);
       box.querySelector(".rel-label").textContent = t("reliability", { p });
       box.querySelector(".rel-fill").style.width = `${p}%`;
-      const full = clueText(clue);
+      const full = line?.text ?? clueText(clue);
       text.textContent = "";
       text.title = t("show_all");
       let i = 0;

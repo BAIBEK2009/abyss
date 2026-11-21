@@ -448,7 +448,8 @@ export function createDive(view) {
   deep.add(cone);
 
   // the flight recorder: orange casing with a label and a blinking beacon
-  const box = new THREE.Group();
+  const recorder = new THREE.Group();
+  let box = recorder;                   // the dive's main find: the recorder, or a story find (act I: the flap)
   {
     const label = canvasTexture(512, 256, (c, w, h) => {
       c.fillStyle = "#e8692b"; c.fillRect(0, 0, w, h);
@@ -458,16 +459,34 @@ export function createDive(view) {
     });
     const side = std({ color: 0xe8692b, roughness: 0.45, metalness: 0.2 });
     const body = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.38, 0.46), [side, side, side, side, std({ map: label, roughness: 0.45 }), side]);
-    body.castShadow = true; box.add(body);
+    body.castShadow = true; recorder.add(body);
     const ulb = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.32, 16), std({ color: 0x8e9296, metalness: 0.9, roughness: 0.3 }));
-    ulb.rotation.z = Math.PI / 2; ulb.position.set(0.46, -0.08, 0); box.add(ulb);
+    ulb.rotation.z = Math.PI / 2; ulb.position.set(0.46, -0.08, 0); recorder.add(ulb);
     const led = new THREE.Mesh(new THREE.SphereGeometry(0.03, 8, 6), new THREE.MeshBasicMaterial({ color: new THREE.Color(0xff3020).multiplyScalar(5) }));
-    led.position.set(0.63, -0.08, 0); box.add(led);
-    const ll = new THREE.PointLight(0xff3020, 0, 3.5, 2); ll.position.copy(led.position); box.add(ll);
-    box.userData = { led, ll };
+    led.position.set(0.63, -0.08, 0); recorder.add(led);
+    const ll = new THREE.PointLight(0xff3020, 0, 3.5, 2); ll.position.copy(led.position); recorder.add(ll);
+    recorder.userData = { led, ll };
   }
-  box.visible = false;
-  deep.add(box);
+  recorder.visible = false;
+  deep.add(recorder);
+  // act I's find (CLAUDE.md 17.4, story.json act1_dive_flap): a whole flap with the flight number, no scorch marks
+  const flapFind = new THREE.Group();
+  {
+    const plate = canvasTexture(512, 256, (c, w, h) => {
+      c.fillStyle = "#c4c9cd"; c.fillRect(0, 0, w, h);
+      for (let i = 0; i < 9; i++) { c.fillStyle = "rgba(90,100,108,.35)"; c.fillRect(0, i * h / 9, w, 2); }
+      c.fillStyle = "#b8432f"; c.fillRect(0, h - 46, w, 22);
+      c.fillStyle = "#1d2228"; c.font = "800 92px Manrope, sans-serif"; c.textAlign = "center"; c.fillText("AQ-271", w / 2, 132);
+    });
+    const alu = std({ color: 0xc4c9cd, roughness: 0.38, metalness: 0.7 });
+    const top = std({ map: plate, roughness: 0.4, metalness: 0.55 });
+    const slab = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.07, 0.95), [alu, alu, top, alu, alu, alu]);
+    slab.castShadow = true; flapFind.add(slab);
+    const c = new THREE.CatmullRomCurve3([new THREE.Vector3(-0.9, 0, 0.2), new THREE.Vector3(-1.6, 0.25, 0.7), new THREE.Vector3(-2.5, 0, 0.3)]);
+    flapFind.add(new THREE.Mesh(new THREE.TubeGeometry(c, 20, 0.03, 6), std({ color: 0x222222, roughness: 0.6 })));
+  }
+  flapFind.visible = false;
+  deep.add(flapFind);
   // the manipulator arm, a child of the camera during the search (it reaches out to grab)
   const claw = new THREE.Group();
   {
@@ -535,9 +554,13 @@ export function createDive(view) {
   const aimDir = new THREE.Vector3();
 
   function setup(sceneInfo) {
-    D = { x: 0, z: 0, y: 0, yaw: 0, vx: 0, vz: 0, turn: 0, o2: O2_MAX, found: false, grabT: 0, cov: new Set(), pingCD: 0,
+    const O2 = sceneInfo.o2 ?? O2_MAX;
+    D = { x: 0, z: 0, y: 0, yaw: 0, vx: 0, vz: 0, turn: 0, o2: O2, max: O2, found: false, grabT: 0, cov: new Set(), pingCD: 0,
           pingerT: 0.6, seen: new Set(), creakT: 4, heartT: 0, tether: 0, shake: 0, desc: 0, t0: 0, tick: 0,
-          hasBox: !!sceneInfo.box, hasDebris: !!sceneInfo.debris, debrisSeen: false, cine: null };
+          hasBox: !!sceneInfo.box || !!sceneInfo.find, find: sceneInfo.find || null, hasDebris: !!sceneInfo.debris,
+          debrisSeen: false, anyDebris: false, cine: null, task: sceneInfo.task || null, onEvent: sceneInfo.onEvent || (() => {}) };
+    box = D.find ? flapFind : recorder;
+    recorder.visible = flapFind.visible = false;
     for (const k in keys) keys[k] = false;
     const a = (Math.random() - 0.5) * 2.0, d = 11 + Math.random() * 5;
     const bx = -Math.sin(a) * d, bz = -Math.cos(a) * d;
@@ -555,7 +578,7 @@ export function createDive(view) {
       g.position.set(px, bedH(px, pz) - 0.02, pz);
       g.rotation.set((Math.random() - 0.5) * 0.3, Math.random() * 6, (Math.random() - 0.5) * 0.3);
     });
-    cockpit.set({ o2: D.o2, max: O2_MAX, fog: 0, low: false, depth: 0 });
+    cockpit.set({ o2: D.o2, max: D.max, fog: 0, low: false, depth: 0 });
   }
 
   function sonarPing() {
@@ -589,8 +612,9 @@ export function createDive(view) {
     });
     D.shake = 0; D.desc = 0;
     sfx.creak(); sfx.thud();
-    cockpit.msg(t("dv_bottom"), 3600);
+    cockpit.msg(D.task ?? t("dv_bottom"), 3600);              // a story dive: its task from the briefing
     mode = "dive"; D.t0 = T; cockpit.live(true);
+    D.onEvent("start");
     setTimeout(() => cockpit.hideHelp(), 9000);
   }
 
@@ -613,7 +637,7 @@ export function createDive(view) {
     D.o2 -= dt; D.pingCD -= dt;
     if ((D.tick += dt) > 0.25) {
       D.tick = 0;
-      cockpit.set({ o2: D.o2, max: O2_MAX, fog: clamp((16 - D.o2) / 16, 0, 0.85), depth: BED_M - bedH(D.x, D.z) * 9, low: D.o2 < 12 });
+      cockpit.set({ o2: D.o2, max: D.max, fog: clamp((16 - D.o2) / 16, 0, 0.85), depth: BED_M - bedH(D.x, D.z) * 9, low: D.o2 < 12 });
     }
     if (D.o2 < 12 && (D.heartT -= dt) <= 0) { D.heartT = 0.85; sfx.heart(); }
     if ((D.creakT -= dt) <= 0) { D.creakT = 6 + Math.random() * 7; sfx.creak(); }
@@ -628,6 +652,7 @@ export function createDive(view) {
       const ex = g.position.x - D.x, ez = g.position.z - D.z, ey = g.position.y - D.y, ed = Math.hypot(ex, ey, ez);
       if (ed < 8 && (ex * aimDir.x + ey * aimDir.y + ez * aimDir.z) / ed > Math.cos(0.5)) {
         D.seen.add(g); if (D.hasDebris) D.debrisSeen = true; sfx.seen(); cockpit.msg(t(g.userData.key), 3400);
+        if (!D.anyDebris) { D.anyDebris = true; D.onEvent("first_debris"); }
       }
     }
     const canGrab = D.found && D.cine === null && dist < 3.3 && dot > Math.cos(0.7);
@@ -678,7 +703,7 @@ export function createDive(view) {
     snow.mat.uniforms.uLP.value.copy(spot.position); snow.mat.uniforms.uLD.value.copy(aimDir);
     const flare = D.cine !== null && D.cine !== undefined && D.cine > CINE_S * 0.5;      // the beacon LED flashes during the find
     const on = flare ? Math.sin(T * 14) > 0 : Math.sin(T * 6) > 0.6;
-    box.userData.led.visible = on; box.userData.ll.intensity = on ? (flare ? 12 : 4) : 0;
+    if (box.userData.led) { box.userData.led.visible = on; box.userData.ll.intensity = on ? (flare ? 12 : 4) : 0; }
   }
 
   function end(found) {
@@ -711,7 +736,7 @@ export function createDive(view) {
     await anim(1.0, (k) => { claw.position.lerpVectors(p0, p1, ease(k)); claw.userData.fL.rotation.y = 0.5 * k; claw.userData.fR.rotation.y = -0.5 * k; });
     camera.attach(box);
     await anim(0.4, (k) => { claw.userData.fL.rotation.y = 0.5 - 0.45 * k; claw.userData.fR.rotation.y = -0.5 + 0.45 * k; });
-    sfx.found(); cockpit.msg(t("dv_got_box"), 3000);
+    sfx.found(); cockpit.msg(t(D.find ? "dv_got_find" : "dv_got_box"), 3000);
     const c0 = claw.position.clone(), b0 = box.position.clone(), c1 = new THREE.Vector3(0.25, -0.42, -1.1);
     anim(1.2, (k) => { claw.position.lerpVectors(c0, c1, ease(k)); box.position.copy(b0).add(c1.clone().sub(c0).multiplyScalar(ease(k))); });
     await sleep(900);
@@ -725,7 +750,7 @@ export function createDive(view) {
     const cine = mode === "dive" && D.cine !== null && D.cine !== undefined;
     if (cine) {
       D.cine += dt;                                          // real seconds
-      if (D.cine >= CINE_S) { D.cine = null; cockpit.msg(t("dv_seen_box"), 3800); }
+      if (D.cine >= CINE_S) { D.cine = null; cockpit.msg(t(D.find ? "dv_seen_find" : "dv_seen_box"), 3800); }
     }
     dt *= cine ? 0.5 : 1;                                    // slow motion 0.5x while the beam finds the box
     T += dt;
@@ -766,11 +791,12 @@ export function createDive(view) {
     await fadeOut(res.found);
     view.setWater(false);
     if (box.parent !== deep) deep.attach(box);
+    box.visible = false;
     camera.remove(claw); deep.remove(camera);
     cockpit.hide(); document.body.classList.remove("diving");
     sfx.underwater(false);
     mode = "off";
-    return { found: res.found, coverage: D.cov.size / COVN, debrisSeen: D.debrisSeen, seconds: T - D.t0, o2Left: Math.max(0, D.o2) };
+    return { found: res.found, find: res.found ? D.find : null, coverage: D.cov.size / COVN, debrisSeen: D.debrisSeen, seconds: T - D.t0, o2Left: Math.max(0, D.o2) };
   }
 
   /** Part 1: the real Nerpa sinks past the camera; resolves when the screen is dark again. */
