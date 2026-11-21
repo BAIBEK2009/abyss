@@ -102,6 +102,7 @@ def scenario(pw, out: Path, lang: str, headed: bool) -> list[str]:
         raise
     wait(500); shot("dive_brief")
     page.click("[data-id=dive-start]")
+    wait(6500); shot("dive_descent")                      # Nerpa sinking past the camera (scenes/nerpa.js)
     page.wait_for_selector("[data-id=surface]", state="visible", timeout=60000)
     wait(9000); shot("dive_cockpit")
     page.click("[data-id=surface]")

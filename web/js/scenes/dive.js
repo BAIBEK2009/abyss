@@ -10,6 +10,7 @@ import * as THREE from "three";
 import { canvasTexture } from "../view.js";
 import { anim, ease, sleep } from "../anim.js";
 import { t } from "../i18n.js";
+import { createNerpa } from "./nerpa.js";
 import { sfx } from "../audio.js";
 import { createCockpit } from "../ui/cockpit.js";
 
@@ -85,51 +86,23 @@ export function marineSnow(count = 2800) {
   };
 }
 
-/** The real "Nerpa-2" at full size. */
+/** The real "Nerpa-2" at full size: the same model as on the deck (scenes/nerpa.js), with lit lamps.
+ *  The group's origin is the middle of the sphere (the descent shot aims at it). */
 function realNerpa() {
   const g = new THREE.Group();
-  const yel = std({ color: 0xf2b632, roughness: 0.4, metalness: 0.25 });
-  const steel = std({ color: 0x9aa2a8, metalness: 0.85, roughness: 0.35 });
-  const glassM = std({ color: 0x0c2a33, roughness: 0.05, metalness: 0.6, emissive: 0x0a3a44 });
-  g.add(new THREE.Mesh(new THREE.SphereGeometry(1.1, 40, 28), yel));
-  const port = new THREE.Mesh(new THREE.SphereGeometry(0.42, 24, 16), glassM);
-  port.position.set(0, 0.05, -0.95); port.scale.z = 0.5; g.add(port);
-  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.42, 0.05, 10, 30), steel);
-  ring.position.set(0, 0.05, -1.02); g.add(ring);
-  for (const sx of [-1, 1]) {
-    const tank = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.28, 2.6, 20), std({ color: 0xe8e2d4, roughness: 0.5 }));
-    tank.rotation.x = Math.PI / 2; tank.position.set(sx * 1.2, -0.75, 0); g.add(tank);
-  }
-  for (const [x, z] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
-    const leg = new THREE.Mesh(new THREE.BoxGeometry(0.08, 1.6, 0.08), steel); leg.position.set(x * 1.05, -0.6, z * 0.9); g.add(leg);
-  }
-  const skid = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.08, 2.2), steel); skid.position.y = -1.4; g.add(skid);
-  const top = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.45, 0.4, 20), yel); top.position.y = 1.15; g.add(top);
-  const nm = canvasTexture(256, 64, (c, w, h) => {
-    c.fillStyle = "#f2b632"; c.fillRect(0, 0, w, h);
-    c.fillStyle = "#1b1b1b"; c.font = "700 40px Onest, sans-serif"; c.textAlign = "center"; c.fillText(t("nerpa_plate"), w / 2, 46);
-  });
-  const plate = new THREE.Mesh(new THREE.PlaneGeometry(0.8, 0.2), std({ map: nm, roughness: 0.5 }));
-  plate.position.set(0.62, 0.5, -0.86); plate.rotation.y = 0.6; g.add(plate);
-  const lamps = [];
-  for (const sx of [-1, 1]) {
-    const l = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.12, 0.22, 14), steel);
-    l.rotation.x = Math.PI / 2; l.position.set(sx * 0.7, -0.35, -1.05); g.add(l);
-    const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: soft, color: new THREE.Color(0xdff2ff).multiplyScalar(4), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0 }));
-    glow.scale.setScalar(1.3); glow.position.set(sx * 0.7, -0.35, -1.2); g.add(glow);
-    const sl = new THREE.SpotLight(0xdff2ff, 0, 18, 0.45, 0.5, 1.3);
-    sl.position.copy(glow.position); sl.target.position.set(sx * 0.7, -3, -8); g.add(sl, sl.target);
-    lamps.push({ glow, sl });
-  }
-  const cable = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 40, 5), std({ color: 0x111111 }));
-  cable.position.y = 21.3; g.add(cable);
+  const n = createNerpa({ lights: true });
+  n.position.y = -1.05; n.rotation.y = Math.PI;      // the sphere looks the way she sinks past the camera
+  g.add(n);
+  const lamps = n.userData.lamps;
+  const cable = new THREE.Mesh(new THREE.TubeGeometry(new THREE.LineCurve3(new THREE.Vector3(0, 1.75, 0.72), new THREE.Vector3(0, 41.7, 0.72)), 1, 0.02, 6), std({ color: 0x111111, metalness: 0.5, roughness: 0.5 }));
+  g.add(cable);                                                      // the lift cable from her ring
   // a column of bubbles from the vents
   const N = 240, bp = new Float32Array(N * 3);
   for (let i = 0; i < N; i++) bp.set([(Math.random() - 0.5) * 2.2, 1 + Math.random() * 13, (Math.random() - 0.5) * 2.2], i * 3);
   const bg = new THREE.BufferGeometry(); bg.setAttribute("position", new THREE.BufferAttribute(bp, 3));
   const bubbles = new THREE.Points(bg, new THREE.PointsMaterial({ map: soft, color: 0xcfefff, size: 0.14, transparent: true, opacity: 0.75, depthWrite: false, blending: THREE.AdditiveBlending }));
   bubbles.frustumCulled = false; g.add(bubbles);
-  g.userData = { lamps, bp, bg };
+  g.userData = { lamps, bp, bg, model: n };
   return g;
 }
 
@@ -824,6 +797,7 @@ export function createDive(view) {
       top.intensity = 3.4 * (1 - k * 0.85); deep.fog.density = 0.026 + k * 0.035;
       snow.mat.uniforms.uAmb.value = 0.3 * (1 - k) + 0.045;
       if (!lit && k > 0.3) { lit = true; nerpa.userData.lamps.forEach((l) => { l.glow.material.opacity = 0.9; l.sl.intensity = 30; }); }
+      nerpa.userData.model.userData.update(1 / 60, performance.now() / 1000, 0.5);
       const bp = nerpa.userData.bp;
       for (let i = 1; i < bp.length; i += 3) { bp[i] += 0.06; if (bp[i] > 14) bp[i] = 1; }
       nerpa.userData.bg.attributes.position.needsUpdate = true;

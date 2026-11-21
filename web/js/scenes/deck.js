@@ -15,6 +15,7 @@ import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import { canvasTexture, rng } from "../view.js";
 import { steelPanel } from "./materials.js";
+import { createNerpa } from "./nerpa.js";
 import { t } from "../i18n.js";
 
 const std = (o) => new THREE.MeshStandardMaterial(o);
@@ -317,65 +318,6 @@ function binocularsModel() {
   return g;
 }
 
-/** Interim Nerpa on deck (the detailed vehicle of 23.3-A comes in M12c): rounded foam buoyancy, an
- *  orange sail with a hatch, an acrylic dome, ducted thrusters, folded arms, tubular skids, the lift eye. */
-function deckNerpa() {
-  const g = new THREE.Group();
-  const foam = paint(0xf2c94c, { seams: 2, streaks: 0.3, seed: 21 });
-  const white = paint(0xece7da, { seams: 1.4, streaks: 0.2, seed: 22 });
-  const orange = paint(0xe8601c, { seams: 1.2, streaks: 0.4, seed: 23 });
-  const steel = std({ color: 0x9aa2a8, metalness: 0.85, roughness: 0.35 });
-  const dark = std({ color: 0x22262a, metalness: 0.5, roughness: 0.5 });
-  // the pressure hull seen as a long rounded body under the foam
-  const body = mesh(lathe([[0, -1.95], [0.22, -1.9], [0.5, -1.65], [0.74, -1.25], [0.84, -0.8], [0.86, 0.8], [0.8, 1.25], [0.55, 1.5], [0, 1.58]], 36), white);
-  body.rotation.x = Math.PI / 2; body.position.y = 1.15; g.add(body);
-  const float = mesh(rbox(1.9, 0.62, 2.9, 0.22, 4), foam); float.position.set(0, 2.05, -0.15); g.add(float);
-  for (const sx of [-0.62, 0.62]) {      // battery pods along the stern, a frame with the tail fin
-    const pod = mesh(lathe([[0, -0.55], [0.16, -0.5], [0.19, -0.35], [0.19, 0.35], [0.16, 0.5], [0, 0.55]], 18), dark);
-    pod.rotation.x = Math.PI / 2; pod.position.set(sx, 0.62, -1.35); g.add(pod);
-  }
-  const fin = mesh(rbox(0.06, 0.7, 0.55, 0.025), orange); fin.position.set(0, 1.85, -1.75); g.add(fin);
-  const strobe = new THREE.Mesh(new THREE.SphereGeometry(0.05, 10, 8), emissive(0xeaf6ff, 5)); strobe.position.set(0, 2.25, -1.8); g.add(strobe);
-  const ant = mesh(lathe([[0.012, 0], [0.008, 0.6], [0, 0.61]], 8), steel); ant.position.set(0.5, 2.36, -1.0); g.add(ant);
-  const sail = mesh(rbox(0.7, 0.55, 1.0, 0.16, 3), orange); sail.position.set(0, 2.6, 0.15); g.add(sail);
-  const hatch = mesh(lathe([[0, 0], [0.27, 0], [0.28, 0.05], [0.24, 0.09], [0, 0.1]], 24), steel); hatch.position.set(0, 2.88, 0.15); g.add(hatch);
-  const eye = mesh(new THREE.TorusGeometry(0.09, 0.025, 8, 20), steel); eye.position.set(0, 3.0, -0.25); g.add(eye);
-  // the acrylic dome at the bow (+z) with the pilot's seat and a glowing screen inside
-  const dome = new THREE.Mesh(new THREE.SphereGeometry(0.7, 36, 24, 0, Math.PI * 2, 0, Math.PI / 2),
-    new THREE.MeshPhysicalMaterial({ color: 0xcfe8f2, roughness: 0.04, metalness: 0, transmission: 0.85, thickness: 0.1, ior: 1.49, transparent: true, opacity: 0.45 }));
-  dome.rotation.x = Math.PI / 2; dome.position.set(0, 1.15, 1.45); g.add(dome);
-  const seat = mesh(rbox(0.38, 0.4, 0.34, 0.08), dark); seat.position.set(0, 1.0, 1.25); g.add(seat);
-  const scr = new THREE.Mesh(new THREE.PlaneGeometry(0.28, 0.16), emissive(0x6fe0c0, 2.2)); scr.position.set(0, 1.25, 1.62); scr.rotation.x = -0.4; g.add(scr);
-  const ring = mesh(new THREE.TorusGeometry(0.7, 0.05, 10, 40), steel); ring.position.set(0, 1.15, 1.45); g.add(ring);
-  // ducted thrusters
-  for (const [x, y, z, ry] of [[-1.05, 1.0, -1.1, 0], [1.05, 1.0, -1.1, 0], [-1.05, 1.0, 0.9, 0], [1.05, 1.0, 0.9, 0]]) {
-    const duct = mesh(lathe([[0.2, -0.16], [0.24, -0.15], [0.25, 0], [0.24, 0.15], [0.2, 0.16], [0.21, 0], [0.2, -0.16]], 24), dark);
-    duct.rotation.x = Math.PI / 2; at(duct, x, y, z, ry); g.add(duct);
-    const prop = mesh(rbox(0.36, 0.03, 0.06, 0.012), steel); prop.position.set(x, y, z); prop.rotation.z = (x + z) * 2; g.add(prop);
-  }
-  // folded manipulators and the sample basket
-  for (const sx of [-0.45, 0.45]) {
-    const a1 = mesh(rbox(0.1, 0.1, 0.55, 0.035), steel); a1.position.set(sx, 0.55, 1.45); a1.rotation.x = 0.5; g.add(a1);
-    const a2 = mesh(rbox(0.09, 0.09, 0.45, 0.03), steel); a2.position.set(sx, 0.38, 1.72); a2.rotation.x = -0.7; g.add(a2);
-  }
-  const basket = mesh(rbox(1.1, 0.22, 0.45, 0.04), std({ color: 0x3a3f44, metalness: 0.6, roughness: 0.5, wireframe: false })); basket.position.set(0, 0.32, 1.95); g.add(basket);
-  // lights
-  for (const sx of [-0.62, 0.62]) {
-    const l = mesh(lathe([[0, 0], [0.09, 0], [0.11, 0.08], [0.11, 0.16], [0, 0.16]], 18), steel); l.rotation.x = Math.PI / 2; l.position.set(sx, 1.75, 1.2); g.add(l);
-  }
-  // tubular skids and ballast
-  for (const sx of [-0.85, 0.85]) {
-    g.add(mesh(tube([[sx, 0.12, -1.7], [sx, 0.08, -1.2], [sx, 0.08, 1.4], [sx, 0.2, 1.95]], 0.05, 20), steel));
-    for (const z of [-1.0, 1.0]) g.add(mesh(tube([[sx, 0.1, z], [sx * 0.9, 0.6, z]], 0.035, 4), steel));
-    const ball = mesh(rbox(0.22, 0.18, 0.9, 0.05), dark); ball.position.set(sx * 0.7, 0.32, -0.2); g.add(ball);
-  }
-  const plate = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.22), std({ roughness: 0.5, map: canvasTexture(256, 64, (c, w, h) => {
-    c.fillStyle = "#f2c94c"; c.fillRect(0, 0, w, h); c.fillStyle = "#1b1b1b"; c.font = "800 40px Onest, sans-serif"; c.textAlign = "center"; c.fillText(t("nerpa_plate"), w / 2, 46);
-  }) }));
-  plate.position.set(0.96, 2.1, 0.3); plate.rotation.y = Math.PI / 2; g.add(plate);
-  return g;
-}
-
 // ------------------------------------------------------------------ the scene
 export function createDeck(view, { lifeLabel = "" } = {}) {
   const scene = new THREE.Scene();
@@ -626,8 +568,14 @@ export function createDeck(view, { lifeLabel = "" } = {}) {
     const gl = new THREE.Mesh(new THREE.PlaneGeometry(0.26, 0.16), emissive(0xfff0d0, 5)); gl.position.set(sx, cross.position.y - 0.2, cross.position.z + 0.345); aframe.add(gl);
     aframe.add(at(glowSprite(0xffe8c0, 1.4, 1.2), sx, cross.position.y - 0.2, cross.position.z + 0.4));
   }
-  const nerpa = deckNerpa();
-  nerpa.position.set(0.6, 0.62, -10.2); nerpa.rotation.y = Math.PI;      // her dome faces the stern, ready to go over
+  const nerpa = createNerpa();                        // the same model as in the descent and on the seabed (23.3-A)
+  nerpa.position.set(0.6, 0.68, -10.2);                // her sphere faces the bow: the crane lifts her by the ring and swings her aft
+  {   // work lights on her: one from the A-frame crossbar, one from the container roof
+    const w1 = new THREE.SpotLight(0xfff4e6, 60, 14, 0.5, 0.6, 1.2); w1.position.set(0.4, 6.2, -14.6); w1.target.position.set(0.6, 1.3, -10.0); ship.add(w1, w1.target);
+    const w2 = new THREE.SpotLight(0xfff0dc, 30, 10, 0.55, 0.6, 1.3); w2.position.set(-1.9, 2.9, -8.4); w2.target.position.set(0.6, 1.0, -9.0); ship.add(w2, w2.target);
+    ship.add(at(mesh(rbox(0.3, 0.2, 0.2, 0.04), darkSteel), -1.95, 2.72, -8.4));
+    ship.add(at(glowSprite(0xfff0dc, 0.8, 1.2), -1.9, 2.66, -8.25));
+  }
   ship.add(nerpa);
   const cradle = new THREE.Group(); cradle.position.set(0.6, 0, -10.2); ship.add(cradle);
   for (const sx of [-0.95, 0.95]) for (const z of [-1.2, 1.2]) {
@@ -637,9 +585,10 @@ export function createDeck(view, { lifeLabel = "" } = {}) {
   for (const sx of [-0.95, 0.95]) cradle.add(at(mesh(rbox(0.14, 0.12, 2.7, 0.04), greyPaint), sx, 0.12, 0));
   for (const z of [-1.2, 1.2]) cradle.add(at(mesh(rbox(2.0, 0.12, 0.14, 0.04), greyPaint), 0, 0.12, z));
   // the lift cable from the sheave to the eye on Nerpa's back (slack, swinging a little)
+  ship.updateMatrixWorld(true);
   const cablePts = () => {
     const top = new THREE.Vector3(0, sheave.position.y - 0.4, sheave.position.z).add(aframe.position);
-    const eyeP = new THREE.Vector3(0.6, 0.62 + 3.0, -10.2 + 0.25);
+    const eyeP = nerpa.localToWorld(nerpa.userData.eye.clone().add(new THREE.Vector3(0, 0.1, 0)));
     return [top, top.clone().lerp(eyeP, 0.5).add(new THREE.Vector3(0, -0.25, 0)), eyeP];
   };
   const cable = mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(cablePts()), 16, 0.016, 6), std({ color: 0x2a2a2a, metalness: 0.6, roughness: 0.4 }));
@@ -697,7 +646,7 @@ export function createDeck(view, { lifeLabel = "" } = {}) {
     const l = mesh(rbox(0.4, 0.28, 0.22, 0.05), darkSteel); l.position.set(sx, HH + 0.05, HZ0 - 0.2); l.rotation.x = 0.6; ship.add(l);
     const gl = new THREE.Mesh(new THREE.PlaneGeometry(0.32, 0.2), emissive(0xffe8c0, 5)); gl.position.set(sx, HH - 0.02, HZ0 - 0.32); gl.rotation.x = 0.6 + Math.PI; ship.add(gl);
     ship.add(at(glowSprite(0xffe0b0, 1.6, 1.0), sx, HH - 0.05, HZ0 - 0.4));
-    const sl = new THREE.SpotLight(0xffd8a8, 26, 26, 0.75, 0.6, 1.4);
+    const sl = new THREE.SpotLight(0xffe8cc, 34, 26, 0.75, 0.6, 1.4);
     sl.position.set(sx, HH - 0.1, HZ0 - 0.4); sl.target.position.set(sx * 0.3, 0, -9); ship.add(sl, sl.target);
     floods.push(sl);
   }
@@ -899,7 +848,7 @@ export function createDeck(view, { lifeLabel = "" } = {}) {
     radio: { show: [radio], hit: proxy(0.8, 0.6, 0.6, -2.25, 1.25, HZ1 - 0.75), stand: [-2.1, HZ1 - 1.55], look: [-2.25, 1.2, HZ1 - 0.6] },
     binoculars: { show: [binos], hit: proxy(0.5, 0.4, 0.5, HX + 0.3, 1.15, HZ1 - 0.2), stand: [HX + 0.8, HZ1 + 0.5], look: [HX + 0.3, 1.13, HZ1 - 0.2] },
     stairs: { show: [comp], hit: proxy(1.4, 1.4, 1.9, -2.2, 0.7, 1.3), stand: [-2.2, -0.35], look: [-2.2, 0.6, 0.45] },
-    nerpa: { show: [nerpa, cradle], hit: proxy(2.6, 3.2, 4.2, 0.6, 1.6, -10.2), stand: [0.6, -7.4], look: [0.6, 1.8, -10.2] },
+    nerpa: { show: [nerpa, cradle], hit: proxy(3.0, 2.8, 3.9, 0.6, 1.5, -10.2), stand: [0.6, -7.5], look: [0.6, 1.6, -10.2] },
     workshop: { show: [cont], hit: proxy(2.6, 2.7, 6.2, -3.08, 1.3, -6.0), stand: [-1.2, -9.6], look: [-3.08, 1.3, -9.0] },
   };
 
@@ -918,6 +867,7 @@ export function createDeck(view, { lifeLabel = "" } = {}) {
     ship.rotation.set(pitch, 0, roll, "ZXY");
     ship.updateMatrixWorld(true);
     radar.rotation.y = time * 2.4;
+    nerpa.userData.update(dt, time, 0);
     topLight.material.color.setScalar(0).add(new THREE.Color(0xff2a1a).multiplyScalar(Math.sin(time * 3) > 0.2 ? 6 : 0.6));
     topHalo.material.opacity = Math.sin(time * 3) > 0.2 ? 1 : 0.15;
     const blink = radioCall ? (Math.sin(time * 9) > 0 ? 1 : 0.1) : 0.12;
