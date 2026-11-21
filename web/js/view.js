@@ -121,28 +121,48 @@ export function createView(canvas) {
   });
   water.enabled = false;
   composer.addPass(water);
-  // shot 2 of the descent (CLAUDE.md 23.3-B): the camera on the water line — below a wavy line the picture is the
-  // murky teal of the sea, wobbling; on the line a bright meniscus
+  // shot 2 of the descent (CLAUDE.md 23.3-B): the camera on the water line. Above a wavy line — the frame as is;
+  // below it — a second render of the scene without the sea surface (underRT), seen through water: fog by world
+  // height (blue-green, darker with depth) and distance, the red lost first, light shafts from the surface, a meniscus
+  const underDepth = new THREE.DepthTexture(1, 1); underDepth.type = THREE.UnsignedIntType;
+  const underRT = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, depthTexture: underDepth });
+  let under = null;                     // { scene, hide: [objects] } while shot 2 runs
   const waterline = new ShaderPass({
-    uniforms: { tDiffuse: { value: null }, uT: { value: 0 }, uLine: { value: 0.5 } },
+    uniforms: { tDiffuse: { value: null }, tUnder: { value: null }, tUD: { value: null }, uT: { value: 0 }, uLine: { value: 0.5 },
+                uInvProj: { value: new THREE.Matrix4() }, uCamW: { value: new THREE.Matrix4() } },
     vertexShader: "varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }",
     fragmentShader: /* glsl */`
-      uniform sampler2D tDiffuse; uniform float uT; uniform float uLine; varying vec2 vUv;
+      uniform sampler2D tDiffuse; uniform sampler2D tUnder; uniform sampler2D tUD; uniform float uT; uniform float uLine;
+      uniform mat4 uInvProj; uniform mat4 uCamW; varying vec2 vUv;
+      // the water's own colour along a ray: bright towards the lit surface, black looking down (night, the ship's lights above)
+      vec3 waterAlong(float dy) { return mix(vec3(0.002, 0.016, 0.024), vec3(0.03, 0.17, 0.18), smoothstep(-0.55, 0.15, dy)); }
       void main() {
         float line = uLine + 0.014 * sin(vUv.x * 13.0 + uT * 2.4) + 0.007 * sin(vUv.x * 31.0 - uT * 4.3) + 0.004 * sin(vUv.x * 71.0 + uT * 7.0);
         float d = vUv.y - line;
         vec3 col;
         if (d < 0.0) {
-          vec2 w = vec2(sin(vUv.y * 40.0 + uT * 3.0), cos(vUv.x * 33.0 + uT * 2.2)) * 0.004;
-          vec3 c = texture2D(tDiffuse, vUv + w).rgb;
-          float deep = clamp(-d * 2.2, 0.0, 1.0);
-          col = mix(c * vec3(0.35, 0.72, 0.78) + vec3(0.0, 0.03, 0.04), vec3(0.01, 0.08, 0.11), 0.35 + deep * 0.5);
+          vec2 uv = vUv + vec2(sin(vUv.y * 40.0 + uT * 3.0), cos(vUv.x * 33.0 + uT * 2.2)) * 0.003;
+          float z = texture2D(tUD, uv).r;
+          vec4 v = uInvProj * vec4(uv * 2.0 - 1.0, z * 2.0 - 1.0, 1.0); v /= v.w;
+          vec3 w = (uCamW * vec4(v.xyz, 1.0)).xyz, cam = (uCamW * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
+          float dist = z >= 1.0 ? 80.0 : length(v.xyz);
+          float dy = normalize(w - cam).y;
+          vec3 c = texture2D(tUnder, uv).rgb * 0.45;                                 // under the surface nothing is lit from above
+          vec3 absorb = exp(-dist * vec3(0.34, 0.09, 0.075));                        // red goes first
+          float fog = 1.0 - exp(-dist * 0.2);
+          col = c * absorb * (1.0 - fog) + waterAlong(dy) * fog;
+          // light shafts from the surface, slanting, fading with depth below the line
+          float sx = vUv.x * 9.0 + d * 2.5;
+          float shaft = pow(0.5 + 0.5 * sin(sx * 2.3 + sin(sx * 0.7 + uT * 0.4) * 2.0), 6.0) * 0.6 + pow(0.5 + 0.5 * sin(sx * 5.1 - uT * 0.3), 10.0) * 0.4;
+          col += vec3(0.1, 0.26, 0.26) * shaft * exp(d * 5.0) * 0.35 * fog;
+          col += vec3(0.06, 0.18, 0.19) * exp(d * 30.0) * 0.5;                       // the bright underside of the surface
         } else col = texture2D(tDiffuse, vUv).rgb;
-        float men = exp(-pow(d / 0.006, 2.0));
-        col = mix(col, vec3(0.75, 0.88, 0.92), men * 0.55);
+        float men = exp(-pow(d / 0.005, 2.0));
+        col = mix(col, vec3(0.75, 0.88, 0.92), men * 0.6);
         gl_FragColor = vec4(col, 1.0);
       }`,
   });
+  waterline.uniforms.tUnder.value = underRT.texture; waterline.uniforms.tUD.value = underDepth;   // (ShaderPass clones uniforms: render-target textures go in after)
   waterline.enabled = false;
   composer.addPass(waterline);
   composer.addPass(new OutputPass());
@@ -208,6 +228,7 @@ export function createView(canvas) {
     renderer.setSize(w, h, false);
     composer.setPixelRatio(renderer.getPixelRatio());
     composer.setSize(w, h);
+    underRT.setSize(Math.ceil(w * renderer.getPixelRatio()), Math.ceil(h * renderer.getPixelRatio()));
     film.uniforms.uRes.value.set(w * renderer.getPixelRatio(), h * renderer.getPixelRatio());
     camera.aspect = w / h;
     const cur = { target: rig.target.clone(), dist: rig.dist, tilt: rig.tilt, yaw: rig.yaw };
@@ -252,6 +273,7 @@ export function createView(canvas) {
     for (const fn of frameHooks) fn(dt, time, sway);
     steer(dt);
     film.uniforms.uTime.value = time;
+    if (waterline.enabled && under) renderUnder();
     composer.render();
     calls = renderer.info.render.calls;
     for (const p of pins) {
@@ -261,6 +283,18 @@ export function createView(canvas) {
     }
     if (++frames === 3) document.body.dataset.ready = "1";   // used by the screenshot tools
     requestAnimationFrame(frame);
+  }
+
+  const UNDER_BG = new THREE.Color(0x02161a);
+  function renderUnder() {
+    const sc = under.scene, bg = sc.background, fog = sc.fog, vis = under.hide.map((o) => o.visible), su = renderer.shadowMap.autoUpdate;
+    under.hide.forEach((o) => { o.visible = false; });
+    sc.background = UNDER_BG; sc.fog = null; renderer.shadowMap.autoUpdate = false;
+    renderer.setRenderTarget(underRT); renderer.clear(); renderer.render(sc, camera); renderer.setRenderTarget(null);
+    sc.background = bg; sc.fog = fog; renderer.shadowMap.autoUpdate = su;
+    under.hide.forEach((o, i) => { o.visible = vis[i]; });
+    camera.updateMatrixWorld();
+    waterline.uniforms.uInvProj.value.copy(camera.projectionMatrixInverse); waterline.uniforms.uCamW.value.copy(camera.matrixWorld);
   }
 
   /** The scene hangs the visible lamp shade here; the spotlight sits in its bulb. */
@@ -287,7 +321,7 @@ export function createView(canvas) {
       water.uniforms.uNear.value = camera.near; water.uniforms.uFar.value = camera.far;
     },
     /** Shot 2 of the descent: the water line across the frame (v 0..1 from the bottom), its time. */
-    setWaterline(on, v = 0.5, time = 0) { waterline.enabled = on; waterline.uniforms.uLine.value = v; waterline.uniforms.uT.value = time; },
+    setWaterline(on, v = 0.5, time = 0, below = undefined) { waterline.enabled = on; if (below !== undefined) under = below; waterline.uniforms.uLine.value = v; waterline.uniforms.uT.value = time; },
     /** Render another scene (the deep sea); the caller places the camera. null = back to the table. */
     useScene(s, { bloom: keepBloom = false } = {}) {
       manual = !!s;

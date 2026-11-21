@@ -329,7 +329,8 @@ export function createDeck(view, { lifeLabel = "" } = {}) {
     scene.environmentIntensity = 0.22;
   }
   const moonDir = new THREE.Vector3(-0.38, 0.33, 0.86).normalize();     // south-south-west, low: the moon path runs to the crash site
-  scene.add(createSky(moonDir));
+  const sky = createSky(moonDir);
+  scene.add(sky);
   const sea = createSea(moonDir);
   scene.add(sea);
   scene.add(new THREE.HemisphereLight(0x3c4656, 0x0c0e10, 0.42));     // cold night fill, no violet cast
@@ -1047,6 +1048,8 @@ export function createDeck(view, { lifeLabel = "" } = {}) {
   const local = new THREE.Vector3(), q = new THREE.Quaternion(), e = new THREE.Euler();
   return {
     scene, ship, objects, update, launch,
+    /** What the camera does not see from under the surface (shot 2): the sea itself, the sky, the spray and foam. */
+    get aboveWater() { return [sea, sky, splash, foam]; },
     /** The first-person space (fp.js): metres, ship-local, the camera rolls with the ship. */
     space: {
       scale: 1, eye: 1.65, poly: WALK, colliders, step: "metal",

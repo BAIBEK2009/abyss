@@ -50,9 +50,9 @@ export function createDescent(view, { getDeck, dive }) {
     deck.launch.lift(0, 0, performance.now() / 1000, cam);     // the first frame is already the film
     await fade(false);
     await run(D[0], (k, dt, time) => { deck.launch.lift(k, dt, time, cam); if (Math.random() < 0.015) sfx.creak?.(); });
-    view.setWaterline(true, 0.5, 0);
+    view.setWaterline(true, 0.5, 0, { scene: deck.scene, hide: deck.aboveWater });
     await run(D[1], (k, dt, time) => { deck.launch.lower(k, dt, time, cam); view.setWaterline(true, 0.5, time); });
-    view.setWaterline(false);
+    view.setWaterline(false, 0.5, 0, null);
     deck.launch.end();
     cam.up.set(0, 1, 0);
     cam.far = 260; view.setFov(null);              // the deep scene sets its own lens; the table gets its own back later
