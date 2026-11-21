@@ -152,20 +152,20 @@ const SHEET_BODY = /* glsl */`
   vec2 gp = vec2(fieldAt(sm + vec2(e, 0.0)) - fieldAt(sm - vec2(e, 0.0)), fieldAt(sm + vec2(0.0, e)) - fieldAt(sm - vec2(0.0, e))) / (2.0 * e);
   float d = (pf - th) / max(length(gp), 1e-4);              // map distance inside the outline
   float pxd = fwidth(sm.x);
-  if (d < -pxd) discard;
-  float cover = smoothstep(-pxd, pxd, d);                   // alpha-to-coverage: a smooth cut edge
+  if (d < -pxd - uEdge * 0.045) discard;                    // the dark copy peeks out 0.045 beyond the sheet: its shadow
+  float cover = smoothstep(-pxd, pxd, d + uEdge * 0.045);                   // alpha-to-coverage: a smooth cut edge
   vec3 c = uTint * (0.94 + 0.07 * ovNoise(sm * 45.0) + 0.03 * ovHash(floor(sm * 300.0)));    // paper fibres
   if (uEdge < 0.5) {
-    c = mix(c, vec3(1.0, 0.965, 0.88), (1.0 - smoothstep(0.0, 0.028, d)) * 0.55);          // light rim
-    c *= 1.0 - 0.08 * smoothstep(0.028, 0.04, d) * (1.0 - smoothstep(0.05, 0.08, d));      // soft step after it
+    c = mix(c, vec3(1.0, 0.95, 0.82), (1.0 - smoothstep(0.0, 0.022, d)) * 0.35);          // light rim
+    c *= 1.0 - 0.14 * smoothstep(0.022, 0.035, d) * (1.0 - smoothstep(0.05, 0.09, d));     // soft step after it
   }
   diffuseColor.rgb = c;
   diffuseColor.a = cover;
 `;
 
 function rampColor(k) {
-  const t = (k - 1) / (NL - 1);
-  const a = [242, 212, 150], b = [234, 166, 70], c = [212, 128, 26];
+  const t = Math.pow((k - 1) / (NL - 1), 0.8);              // colour climbs early: the start hill is amber too
+  const a = [240, 202, 122], b = [230, 142, 30], c = [200, 100, 4];     // light amber -> deep gold
   const m = t < 0.6 ? t / 0.6 : (t - 0.6) / 0.4;
   const p = t < 0.6 ? a : b, q = t < 0.6 ? b : c;
   return new THREE.Color(...p.map((v, i) => (v + (q[i] - v) * m) / 255)).convertSRGBToLinear();
@@ -214,12 +214,12 @@ export function createKalka(root, rows, reefs, signal) {
       uTh: { value: LEVELS[k - 1] }, uEdge: { value: 0 }, uGold: { value: gold ? 1 : 0 }, uTint: { value: rampColor(k) },
     };
     const mk = (edge) => {
-      const u = { ...shared, ...own, uEdge: { value: edge ? 1 : 0 }, uTint: { value: edge ? own.uTint.value.clone().multiplyScalar(0.42) : own.uTint.value } };
+      const u = { ...shared, ...own, uEdge: { value: edge ? 1 : 0 }, uTint: { value: edge ? own.uTint.value.clone().multiplyScalar(0.3) : own.uTint.value } };
       // tracing paper: a little light shines through (transmission), a soft sheen, paper fibres
       const mat = edge
         ? new THREE.MeshStandardMaterial({ roughness: 0.9, alphaToCoverage: true })
         : new THREE.MeshPhysicalMaterial({ roughness: gold ? 0.36 : 0.8, metalness: gold ? 0.5 : 0, alphaToCoverage: true,
-            transmission: gold ? 0 : 0.18, thickness: 0.02, sheen: 0.5, sheenRoughness: 0.6, sheenColor: new THREE.Color(0xfff0d0),
+            transmission: gold ? 0 : 0.08, thickness: 0.02, sheen: 0.5, sheenRoughness: 0.6, sheenColor: new THREE.Color(0xfff0d0),
             normalMap: paperFibres([9, 9]), normalScale: new THREE.Vector2(0.22, 0.22) });
       withOverlay(mat, u, SHEET_DECL, SHEET_BODY);
       mat.customProgramCacheKey = () => "sheet" + (edge ? "e" : gold ? "g" : "t");

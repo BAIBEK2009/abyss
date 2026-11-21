@@ -135,12 +135,13 @@ button:focus-visible { outline: 2px solid var(--brass2); outline-offset: 3px; }
 .hud-right .pill { min-height: 32px; padding: 5px 11px; font-size: 12.5px; }
 
 /* intercepted telegram (the rival) */
-.tg { position: fixed; top: 16px; left: 48%; transform: translateX(-50%) rotate(-1.3deg); width: min(400px, 30vw);
-  background: linear-gradient(#efe6cf, #e6dab9); color: #2a2620; padding: 16px 20px 14px; box-shadow: 0 14px 30px #000b;
-  font: 13.5px/1.55 var(--mono); }
+/* pinned in the right margin of the table, below the buttons: the chart stays fully visible */
+.tg { position: fixed; top: 104px; right: 22px; transform: rotate(1.4deg); width: min(290px, 21vw);
+  background: linear-gradient(#efe6cf, #e6dab9); color: #2a2620; padding: 13px 15px 11px; box-shadow: 0 14px 30px #000b;
+  font: 12px/1.5 var(--mono); }
 .tg::before { content: ""; position: absolute; top: -7px; left: 50%; width: 16px; height: 16px; border-radius: 50%;
   background: radial-gradient(circle at 35% 35%, #ff8a72, #a8392a 60%, #5a1a10); box-shadow: 0 3px 4px #0008; }
-.tg .hd { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: #6b6252;
+.tg .hd { display: flex; justify-content: space-between; align-items: center; font-size: 10.5px; color: #6b6252;
   border-bottom: 1px dashed #6b625266; padding-bottom: 6px; margin-bottom: 6px; }
 .tg .st { border: 2px solid #8a7f6a; color: #8a7f6a; padding: 1px 7px; transform: rotate(4deg); font-weight: 700; border-radius: 3px; }
 .tg.urgent .st { border-color: var(--rival); color: var(--rival); }
@@ -231,7 +232,7 @@ body.peek .pk .kc { transform: translateY(3px); box-shadow: 0 0 0 #6b4a1c, inset
 @keyframes seal-in { from { transform: rotate(-30deg) scale(1.8); opacity: 0; } }
 
 /* officer notes (toasts) */
-.toasts { position: fixed; right: 22px; top: 104px; z-index: 9; display: flex; flex-direction: column; gap: 8px; width: min(380px, 40vw); }
+.toasts { position: fixed; right: 22px; top: 300px; z-index: 9; display: flex; flex-direction: column; gap: 8px; width: min(380px, 40vw); }
 .toast { display: grid; grid-template-columns: 52px 1fr; gap: 12px; align-items: center; padding: 10px 16px 10px 10px; cursor: pointer;
   background: linear-gradient(170deg, #f4ead2, #e8dbbb); color: var(--ink); box-shadow: 0 18px 40px #000c; animation: toast-in 0.45s ease-out; }
 .toast .medal { width: 52px; height: 64px; }
@@ -265,7 +266,7 @@ body.cine .actions { transform: translateY(260px); }
 body.cine .dock { transform: translateY(260px); }
 body.cine .inst { transform: translateX(-170px); }
 body.cine .cap, body.cine .hud-right { opacity: 0; pointer-events: none; }
-body.cine .tg { transform: translateX(-50%) translateY(-190px) rotate(-1.3deg); }
+body.cine .tg { transform: translateX(340px) rotate(1.4deg); }
 body.cine .toasts { right: 50%; top: calc(8.5vh + 14px); translate: 50% 0; }
 body.cine .autopilot-banner { bottom: calc(8.5vh + 10px); }
 /* standing up: only the caption, the instruments and the buttons stay */

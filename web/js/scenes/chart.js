@@ -112,8 +112,8 @@ export function drawChart(g, W, { reefs, signal }) {
     g.beginPath(); g.moveTo(px(i), px(0)); g.lineTo(px(i), px(10)); g.stroke();
     g.beginPath(); g.moveTo(px(0), px(i)); g.lineTo(px(10), px(i)); g.stroke();
   }
-  g.strokeStyle = "#2b2a33"; g.lineWidth = 3; g.strokeRect(px(-0.12), px(-0.12), 10.24 * S, 10.24 * S);
-  g.lineWidth = 1.2; g.strokeRect(px(-0.24), px(-0.24), 10.48 * S, 10.48 * S);
+  g.strokeStyle = "#2b2a33"; g.lineWidth = 1.8; g.strokeRect(px(-0.12), px(-0.12), 10.24 * S, 10.24 * S);
+  g.lineWidth = 1; g.strokeRect(px(-0.18), px(-0.18), 10.36 * S, 10.36 * S);
   for (let i = 0; i <= 50; i++) {
     const len = i % 5 ? 6 : 12, a = px(i / 5);
     g.lineWidth = 1; g.beginPath();
@@ -124,8 +124,8 @@ export function drawChart(g, W, { reefs, signal }) {
   g.fillStyle = "#23222b";
   for (let i = 0; i < 52; i += 2) {
     const a0 = -0.24 + i * 0.2, w = Math.min(0.2, 10.24 - (a0 + 0.24));
-    g.fillRect(px(a0 + 0.12), px(-0.24), w * S, 0.12 * S); g.fillRect(px(a0 + 0.12), px(10.12), w * S, 0.12 * S);
-    g.fillRect(px(-0.24), px(a0 + 0.12), 0.12 * S, w * S); g.fillRect(px(10.12), px(a0 + 0.12), 0.12 * S, w * S);
+    g.fillRect(px(a0 + 0.12), px(-0.18), w * S, 0.06 * S); g.fillRect(px(a0 + 0.12), px(10.12), w * S, 0.06 * S);    // band half as thick
+    g.fillRect(px(-0.18), px(a0 + 0.12), 0.06 * S, w * S); g.fillRect(px(10.12), px(a0 + 0.12), 0.06 * S, w * S);
   }
 
   // reefs: sandy islets with a double shoreline (dashed surf + solid coast)

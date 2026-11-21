@@ -464,7 +464,7 @@ export function createMap(view, state) {
     const plan = shown.rival?.plan;
     if (plan && shown.status === "playing") {
       flag.group.visible = true;
-      const u = plan.target[0] + 0.62, v = plan.target[1] + 0.72;        // in the cell corner: the hilltop stays visible
+      const u = plan.target[0] + 0.86, v = plan.target[1] + 0.16;        // the far corner of the cell: never on the gold pin
       flag.group.position.copy(toWorld(u, v)).setY(kalka.heightAt(u, v));
     } else flag.group.visible = false;
     const vera = shown.advice?.vera?.target;
