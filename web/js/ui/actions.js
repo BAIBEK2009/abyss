@@ -7,6 +7,12 @@ import { el, hours, pct } from "./fmt.js";
 import { place } from "../places.js";
 import { t } from "../i18n.js";
 
+/** A label with "\n" is two lines: the action, then the place in small type (kk: "Osy zherde tyndau" / place). */
+const tagLabel = (label) => {
+  const [head, ...rest] = label.split("\n");
+  return rest.length ? `${head}<small class="tag-where">${rest.join(" ")}</small>` : head;
+};
+
 /** Which tags to show: without a target — act here; with a target — go there (+ tool). */
 export function tagList(st, target) {
   const here = place(st, st.pos);
@@ -70,7 +76,7 @@ export function createActions(root, handlers) {
       }
     }
     b.innerHTML = `<span class="hole"></span>${advised ? `<span class="seal">${t("advice_seal")}</span>` : ""}
-      <span class="tag-title">${tag.icon}<span>${tag.label}</span></span>
+      <span class="tag-title">${tag.icon}<span>${tagLabel(tag.label)}</span></span>
       <span class="tag-desc">${tag.desc}</span>
       <span class="tag-chips">${chips}</span>${foot}`;
     b.addEventListener("mouseenter", () => handlers.onHover(tag, pv));

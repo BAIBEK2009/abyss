@@ -1,6 +1,8 @@
 // All story texts live in web/data/story.json (ru), story.kk.json, story.en.json (CLAUDE.md 22.1, 23.1):
 // the engine only shows them. loadStory(lang) is awaited once at start-up; after that the helpers are
 // synchronous.
+import { nobreakAll } from "./i18n.js";
+
 let S = null;
 let KEYS = {};
 
@@ -9,7 +11,7 @@ export async function loadStory(lang) {
     fetch(`/api/story?lang=${encodeURIComponent(lang)}`).then((r) => r.json()),
     fetch("data/map_keys.json").then((r) => r.json()),
   ]);
-  S = story; KEYS = keys;
+  S = nobreakAll(story); KEYS = keys;      // the flight number never wraps (i18n.js)
   return S;
 }
 

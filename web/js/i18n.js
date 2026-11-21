@@ -32,11 +32,21 @@ export function saveLang(l) {
   try { localStorage.setItem(STORE, l); } catch { /* the choice lives for this page only */ }
 }
 
+// The flight number never wraps: "AQ-271" (and a Kazakh suffix, "AQ-271-ge") gets WORD JOINERs (U+2060)
+// around each hyphen. U+2011 would do the same, but none of the game fonts has that glyph, so the
+// browser would draw it in a fallback font; a word joiner is invisible and needs no glyph.
+const FLIGHT = /AQ-271(?:-[\p{L}]+)?/gu;
+export const nobreak = (s) => (typeof s === "string" ? s.replace(FLIGHT, (m) => m.replaceAll("-", "\u2060-\u2060")) : s);
+const nobreakAll = (obj) => (typeof obj === "string" ? nobreak(obj)
+  : Array.isArray(obj) ? obj.map(nobreakAll)
+  : obj && typeof obj === "object" ? Object.fromEntries(Object.entries(obj).map(([k, v]) => [k, nobreakAll(v)])) : obj);
+export { nobreakAll };
+
 /** Load a language (ru is the fallback for a missing key). */
 export async function loadLang(l) {
   lang = LANGS.includes(l) ? l : "ru";
   const [main, ru] = await Promise.all([fetchTable(lang), lang === "ru" ? null : fetchTable("ru")]);
-  table = main; fallback = ru ?? main;
+  table = nobreakAll(main); fallback = ru ? nobreakAll(ru) : table;
   document.documentElement.lang = lang;
   document.title = t("html_title");
   return lang;

@@ -51,7 +51,7 @@ export function createOfficers(root, handlers) {
     peekOn = on;
     document.body.classList.toggle("peek", on);
   }
-  const isB = (e) => e.code === "KeyB" || e.code === "Comma" || ["b", t("officers_key").toLowerCase()].includes(e.key?.toLowerCase());
+  const isB = (e) => e.code === "KeyB" || e.code === "Comma" || ["b", "\u0431"].includes(e.key?.toLowerCase());
   addEventListener("keydown", (e) => {
     if (!isB(e) || e.repeat || e.target.closest?.("input, textarea")) return;
     e.preventDefault(); peek(true);
