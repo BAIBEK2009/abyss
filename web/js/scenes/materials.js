@@ -198,3 +198,57 @@ export function steelPanel({ color = "#c4c7c6", seed = 17 } = {}) {
   };
   return mat;
 }
+
+/** A rounded rectangle path (x0, y0 = the lower-left corner). */
+function roundedRect(shape, x0, y0, w, h, r) {
+  shape.moveTo(x0 + r, y0); shape.lineTo(x0 + w - r, y0); shape.quadraticCurveTo(x0 + w, y0, x0 + w, y0 + r);
+  shape.lineTo(x0 + w, y0 + h - r); shape.quadraticCurveTo(x0 + w, y0 + h, x0 + w - r, y0 + h);
+  shape.lineTo(x0 + r, y0 + h); shape.quadraticCurveTo(x0, y0 + h, x0, y0 + h - r);
+  shape.lineTo(x0, y0 + r); shape.quadraticCurveTo(x0, y0, x0 + r, y0);
+  return shape;
+}
+
+/**
+ * A ship's watertight door (metres): a leaf with rounded corners in a rounded frame, six dog levers round its edge
+ * and a rubber gasket. The leaf lies in the xy plane facing +z, its centre at the origin, the floor at y = -h/2.
+ * opts.open = angle in radians the leaf is swung on its hinge (the -x edge); the frame stays.
+ */
+export function watertightDoor({ w = 0.8, h = 1.85, open = 0, color = 0x8c959a, frame = true } = {}) {
+  const g = new THREE.Group();
+  const paintM = new THREE.MeshStandardMaterial({ color, roughness: 0.45, metalness: 0.45 });
+  const darkM = new THREE.MeshStandardMaterial({ color: 0x2b2f33, roughness: 0.5, metalness: 0.6 });
+  const rubberM = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.9 });
+  const R = Math.min(0.2, w * 0.25);
+  const leafGeo = new THREE.ExtrudeGeometry(roundedRect(new THREE.Shape(), -w / 2, -h / 2, w, h, R),
+    { depth: 0.05, bevelEnabled: true, bevelThickness: 0.012, bevelSize: 0.012, bevelSegments: 2, curveSegments: 10 });
+  const hinge = new THREE.Group(); hinge.position.x = -w / 2; g.add(hinge);
+  const leaf = new THREE.Group(); leaf.position.x = w / 2; hinge.add(leaf);
+  leaf.add(new THREE.Mesh(leafGeo, paintM));
+  // a raised stiffener panel and the dogs (levers on pivots) round the edge
+  const panel = new THREE.Mesh(new THREE.ExtrudeGeometry(roundedRect(new THREE.Shape(), -w / 2 + 0.12, -h / 2 + 0.16, w - 0.24, h - 0.32, R * 0.6),
+    { depth: 0.015, bevelEnabled: true, bevelThickness: 0.006, bevelSize: 0.006, bevelSegments: 1, curveSegments: 8 }), paintM);
+  panel.position.z = 0.06; leaf.add(panel);
+  const dogs = [[w / 2 - 0.06, h / 2 - 0.3], [w / 2 - 0.06, 0], [w / 2 - 0.06, -h / 2 + 0.3], [-w / 2 + 0.06, h / 2 - 0.3], [-w / 2 + 0.06, -h / 2 + 0.3], [0, h / 2 - 0.08]];
+  for (const [x, y] of dogs) {
+    const piv = new THREE.Mesh(new THREE.LatheGeometry([[0, 0], [0.025, 0], [0.025, 0.03], [0.012, 0.045], [0, 0.046]].map(([a, b]) => new THREE.Vector2(a, b)), 12), darkM);
+    piv.rotation.x = Math.PI / 2; piv.position.set(x, y, 0.065); leaf.add(piv);
+    const lever = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, -0.06, 0.03), new THREE.Vector3(0, -0.14, 0.035)]), 8, 0.011, 6), darkM);
+    lever.position.set(x, y, 0.1); lever.rotation.z = x > 0 ? 0.5 : x < 0 ? -0.5 : 1.57; leaf.add(lever);
+  }
+  // the central handle
+  const handle = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([new THREE.Vector3(-0.08, 0, 0.06), new THREE.Vector3(-0.07, 0, 0.12), new THREE.Vector3(0.07, 0, 0.12), new THREE.Vector3(0.08, 0, 0.06)]), 12, 0.014, 6), darkM);
+  handle.position.set(w * 0.22, 0, 0.02); leaf.add(handle);
+  // the gasket on the leaf's back
+  const gasket = new THREE.Mesh(new THREE.ExtrudeGeometry(roundedRect(new THREE.Shape(), -w / 2 + 0.03, -h / 2 + 0.03, w - 0.06, h - 0.06, R * 0.8),
+    { depth: 0.01, bevelEnabled: false, curveSegments: 10 }), rubberM);
+  gasket.position.z = -0.012; leaf.add(gasket);
+  hinge.rotation.y = -open;
+  if (frame) {
+    const fs = roundedRect(new THREE.Shape(), -w / 2 - 0.09, -h / 2 - 0.06, w + 0.18, h + 0.15, R + 0.08);
+    fs.holes.push(roundedRect(new THREE.Path(), -w / 2 + 0.01, -h / 2 + 0.01, w - 0.02, h - 0.02, R));
+    const fr = new THREE.Mesh(new THREE.ExtrudeGeometry(fs, { depth: 0.08, bevelEnabled: true, bevelThickness: 0.01, bevelSize: 0.01, bevelSegments: 2, curveSegments: 10 }), paintM);
+    fr.position.z = -0.03; g.add(fr);
+  }
+  g.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+  return g;
+}

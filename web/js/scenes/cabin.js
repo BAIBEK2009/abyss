@@ -7,7 +7,7 @@
 // stays wooden; the light inside is warm, the moon through the portholes cold.
 import * as THREE from "three";
 import { canvasTexture, rng } from "../view.js";
-import { walnut, brass, glass, steelPanel } from "./materials.js";
+import { walnut, brass, glass, steelPanel, watertightDoor } from "./materials.js";
 import { t } from "../i18n.js";
 
 export const FLOOR_Y = -10;
@@ -204,12 +204,17 @@ export function createCabin(scene) {
     const sillD = mesh(new THREE.BoxGeometry(11.6, 3.6, 1.8), std({ color: 0x7b8185, roughness: 0.6, metalness: 0.4 })); sillD.position.set(SX, FLOOR_Y + 1.8, Z1 - 0.9); stairs.add(sillD);
     const signTex = canvasTexture(512, 176, (g, w, h) => {
       g.fillStyle = "#0b8a3e"; g.fillRect(0, 0, w, h);
-      g.fillStyle = "#f4fff6"; g.font = "800 62px Onest, sans-serif"; g.textAlign = "center"; g.textBaseline = "middle";
+      g.fillStyle = "#f4fff6"; g.textAlign = "center"; g.textBaseline = "middle";
+      g.font = "800 62px Onest, sans-serif";
+      const fit = Math.min(1, (w - 70) / g.measureText(t("sign_exit")).width);
+      g.font = `800 ${Math.floor(62 * fit)}px Onest, sans-serif`;
       g.fillText(t("sign_exit"), w / 2, h / 2 + 3);
       g.strokeStyle = "#f4fff6"; g.lineWidth = 6; g.strokeRect(10, 10, w - 20, h - 20);
     });
     const signM = new THREE.Mesh(new THREE.PlaneGeometry(6, 2.06), new THREE.MeshBasicMaterial({ map: signTex, color: new THREE.Color(1, 1, 1).multiplyScalar(1.5) }));
     signM.position.set(SX, FLOOR_Y + 25.1, Z1 - 1.5); signM.rotation.y = Math.PI; stairs.add(signM);
+    const leaf = watertightDoor({ w: 0.9, h: 1.9, open: 1.6, frame: false });       // the watertight door, swung open against the wall
+    leaf.scale.setScalar(12); leaf.position.set(SX + 5.6, FLOOR_Y + 11.6, Z1 - 0.8); leaf.rotation.y = Math.PI; stairs.add(leaf);
     const fe = new THREE.Group(); fe.position.set(SX - 9, FLOOR_Y + 5, Z1 - 1.3); fe.scale.setScalar(12); stairs.add(fe);
     const red = std({ color: 0xc8231b, roughness: 0.35, metalness: 0.2 }), blackM = std({ color: 0x1c1c1c, metalness: 0.6, roughness: 0.4 });
     fe.add(mesh(new THREE.LatheGeometry([[0, 0], [0.075, 0], [0.085, 0.02], [0.085, 0.5], [0.07, 0.56], [0.03, 0.6], [0, 0.6]].map(([x, y]) => new THREE.Vector2(x, y)), 24), red));

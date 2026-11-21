@@ -15,7 +15,7 @@ import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { canvasTexture, rng } from "../view.js";
-import { steelPanel } from "./materials.js";
+import { steelPanel, watertightDoor } from "./materials.js";
 import { createNerpa } from "./nerpa.js";
 import { t } from "../i18n.js";
 
@@ -423,6 +423,7 @@ export function createDeck(view, { lifeLabel = "" } = {}) {
   wallX(HZ0, -HX, HX, [[-2.6, -1.6], [1.6, 2.6]], [-0.6, 0.6]);                               // the back: the door
   wallZ(-HX, HZ0, HZ1, [[4.2, 5.8], [6.4, 8.0], [8.6, 10.6]]);
   wallZ(HX, HZ0, HZ1, [[4.2, 5.8], [6.4, 8.0], [8.6, 10.6]]);
+  { const ent = watertightDoor({ w: 1.12, h: 1.95, open: 1.75, frame: false }); ent.position.set(0, 1.04, HZ0 - 0.12); ent.rotation.y = Math.PI; house.add(ent); }
   const roof = mesh(rbox(2 * HX + 0.6, 0.22, HZ1 - HZ0 + 0.6, 0.08), steelFor(6.8, 9.6)); roof.position.set(0, HH + 0.1, (HZ0 + HZ1) / 2); house.add(roof);
   const ceiling = mesh(new THREE.PlaneGeometry(2 * HX - 0.2, HZ1 - HZ0 - 0.2).rotateX(Math.PI / 2), steelFor(6.2, 8.8), { cast: false }); ceiling.position.set(0, HH - 0.01, (HZ0 + HZ1) / 2); house.add(ceiling);
   const visor = mesh(rbox(2 * HX + 0.8, 0.08, 0.7, 0.03), whitePaint); visor.position.set(0, HH - 0.12, HZ1 + 0.38); visor.rotation.x = -0.15; house.add(visor);
@@ -480,10 +481,8 @@ export function createDeck(view, { lifeLabel = "" } = {}) {
     const len = CZ - HZ0 - 0.16;
     const part = mesh(rbox(0.12, HH - 0.02, len, 0.04), steelFor(len, HH)); part.position.set(sx * CX, HH / 2, HZ0 + 0.08 + len / 2); house.add(part);
     const jamb = mesh(rbox(0.16, HH, 0.16, 0.04), greyPaint); jamb.position.set(sx * CX, HH / 2, CZ); house.add(jamb);
-    const door = mesh(rbox(0.05, 1.95, 0.8, 0.03), paint(0x8d969b, { seams: 0.6, streaks: 0.3, seed: 70 + sx })); door.position.set(sx * (CX - 0.07), 1.0, HZ0 + 1.9); house.add(door);
-    const handle = mesh(lathe([[0.012, 0], [0.012, 0.1], [0, 0.1]], 8), steel); handle.rotation.z = Math.PI / 2; handle.position.set(sx * (CX - 0.12), 1.0, HZ0 + 1.62); house.add(handle);
-    const frame = mesh(tube([[sx * (CX - 0.05), 0.02, HZ0 + 1.48], [sx * (CX - 0.05), 2.0, HZ0 + 1.48], [sx * (CX - 0.05), 2.0, HZ0 + 2.32], [sx * (CX - 0.05), 0.02, HZ0 + 2.32]], 0.025, 20), greyPaint); house.add(frame);
-    const sill = mesh(rbox(0.1, 0.18, 0.84, 0.03), greyPaint); sill.position.set(sx * (CX - 0.05), 0.09, HZ0 + 1.9); house.add(sill);
+    const door = watertightDoor({ w: 0.78, h: 1.85 });          // a watertight cabin door: rounded corners, dog levers
+    door.position.set(sx * (CX - 0.07), 0.98, HZ0 + 1.9); door.rotation.y = -sx * Math.PI / 2; house.add(door);
   }
   const lampsAt = [[0, HZ0 + 1.2], [0, HZ0 + 3.2], [-1.6, HZ1 - 2.2], [1.6, HZ1 - 2.2]];
   for (const [x, z] of lampsAt) {
@@ -497,7 +496,10 @@ export function createDeck(view, { lifeLabel = "" } = {}) {
     sign.add(mesh(rbox(0.48, 0.18, 0.06, 0.02), greyPaint));
     const face = new THREE.Mesh(new THREE.PlaneGeometry(0.44, 0.15), new THREE.MeshBasicMaterial({ map: canvasTexture(512, 176, (g, w, h) => {
       g.fillStyle = "#0b8a3e"; g.fillRect(0, 0, w, h);
-      g.fillStyle = "#f4fff6"; g.font = "800 62px Onest, sans-serif"; g.textAlign = "center"; g.textBaseline = "middle";
+      g.fillStyle = "#f4fff6"; g.textAlign = "center"; g.textBaseline = "middle";
+      g.font = "800 62px Onest, sans-serif";
+      const fit = Math.min(1, (w - 70) / g.measureText(t("sign_exit")).width);   // the whole text inside the frame
+      g.font = `800 ${Math.floor(62 * fit)}px Onest, sans-serif`;
       g.fillText(t("sign_exit"), w / 2, h / 2 + 3);
       g.strokeStyle = "#f4fff6"; g.lineWidth = 6; g.strokeRect(10, 10, w - 20, h - 20);
     }), color: new THREE.Color(1, 1, 1).multiplyScalar(1.6) }));
@@ -731,9 +733,9 @@ export function createDeck(view, { lifeLabel = "" } = {}) {
     b.add(at(mesh(rbox(2.6, 0.9, 2.2, 0.25), cabP, { cast: false }), 0, 3.6, -0.4));
     b.add(at(mesh(lathe([[0.1, 0], [0.08, 3.4], [0, 3.42]], 10), cabP, { cast: false }), 0, 4.0, -0.4));
     b.add(at(glowSprite(0xfff4dc, 1.6, 3.0), 0, 7.4, -0.4));                 // masthead, white
-    b.add(at(glowSprite(0xff2a20, 1.1, 3.0), -1.7, 3.3, 0.3));               // port, red
-    b.add(at(glowSprite(0x20ff60, 1.1, 3.0), 1.7, 3.3, 0.3));                // starboard, green
-    const strobe = glowSprite(0x3a6cff, 2.6, 3.6); strobe.position.set(0, 4.7, -0.4); b.add(strobe);
+    b.add(at(glowSprite(0xff2a20, 1.9, 3.4), -1.7, 3.3, 0.3));               // port, red
+    b.add(at(glowSprite(0x20ff60, 1.9, 3.4), 1.7, 3.3, 0.3));                // starboard, green
+    const strobe = glowSprite(0x3a6cff, 3.6, 4.0); strobe.position.set(0, 4.7, -0.4); b.add(strobe);
     const lamp = new THREE.Object3D(); lamp.position.set(0, 4.3, 0.8); b.add(lamp);
     b.add(at(glowSprite(0xfff6e6, 1.2, 3.0), 0, 4.3, 0.9));
     b.userData = { strobe, lamp, seed };
@@ -746,7 +748,7 @@ export function createDeck(view, { lifeLabel = "" } = {}) {
     return b;
   });
   // the helicopter: a silhouette with blinking red and white lights, rotor discs, skids
-  const heli = new THREE.Group(); south.add(heli);
+  const heli = new THREE.Group(); heli.scale.setScalar(1.6); south.add(heli);     // x1.6: a readable silhouette at 1 km
   const heliPaint = paint(0x2f3c48, { seed: 61 });
   heli.add(mesh(lathe([[0, -2.4], [0.9, -2.1], [1.25, -1.0], [1.3, 0.6], [1.0, 1.6], [0.45, 2.3], [0, 2.4]], 22), heliPaint, { cast: false }).rotateX(-Math.PI / 2));
   heli.add(at(mesh(lathe([[0.28, 0], [0.2, 3.0], [0.12, 5.2], [0, 5.3]], 14), heliPaint, { cast: false }).rotateX(-Math.PI / 2), 0, 0.3, 2.0));
@@ -764,6 +766,7 @@ export function createDeck(view, { lifeLabel = "" } = {}) {
   const heliLamp = new THREE.Object3D(); heliLamp.position.set(0, -1.5, -1.6); heli.add(heliLamp);
   heli.add(at(glowSprite(0xfffaf0, 1.4, 3.5), 0, -1.6, -1.7));
   const heliBeam = new THREE.Mesh(coneGeo, beamMaterial(0xf4f6ff, 0.34)); south.add(heliBeam);
+  const heliFill = new THREE.PointLight(0xc8d4e8, 30, 25, 1.2); heli.add(heliFill); heliFill.position.set(0, -4, 2);   // its own beam lights its belly
   const heliSpot = new THREE.SpotLight(0xfaf8ff, 70, 0, 0.42, 0.5, 0); scene.add(heliSpot, heliSpot.target);
   const poolSprite = new THREE.Mesh(new THREE.CircleGeometry(1, 48).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: SOFT, color: new THREE.Color(0xeef2ff).multiplyScalar(0.5), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }));
   south.add(poolSprite);
@@ -780,25 +783,25 @@ export function createDeck(view, { lifeLabel = "" } = {}) {
       void main() {
         vec2 p = vUv * 2.0 - 1.0;
         float n = vn(vUv * 4.0 + 3.1) * 0.55 + vn(vUv * 11.0) * 0.3 + vn(vUv * 27.0) * 0.15;
-        float blob = 1.0 - smoothstep(0.35, 0.8, length(p * vec2(1.0, 1.2)) + (n - 0.5) * 0.75);
+        float blob = 1.0 - smoothstep(0.32, 0.62, length(p * vec2(1.0, 1.3)) + (n - 0.5) * 1.1 + (vn(vUv * 40.0) - 0.5) * 0.12);
         float lit = 0.0;
         for (int i = 0; i < 4; i++) { vec2 d = vW.xz - uPools[i].xy; lit += uPools[i].w * exp(-dot(d, d) / (uPools[i].z * uPools[i].z)); }
         float film = vn(vUv * 7.0 + vec2(uTime * 0.015, 0.0)) * 5.0 + n * 3.0;
         vec3 rainbow = 0.5 + 0.5 * cos(6.2831 * (film + vec3(0.0, 0.33, 0.67)));
-        vec3 col = vec3(0.012, 0.016, 0.02) + rainbow * min(lit, 1.3) * 0.9;          // dark, flat water outside the light
-        gl_FragColor = vec4(col, blob * (0.55 + 0.35 * min(lit, 1.0)));
+        vec3 col = vec3(0.012, 0.016, 0.02) + rainbow * min(lit, 1.6) * 1.6;          // dark, flat water outside the light
+        gl_FragColor = vec4(col, blob * (0.5 + 0.5 * min(lit, 1.0)));
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
       }`,
   }));
-  slick.position.set(C.x - 8, 0.06, C.z + 10); slick.scale.setScalar(0.6); south.add(slick);
+  slick.position.set(C.x - 2, 0.06, C.z + 2); slick.scale.setScalar(0.45); south.add(slick);       // under the beam's path
   // debris rocking in the light: a row of seats, an orange life jacket, a suitcase, a piece of fuselage skin
   const debris = [];
-  // a little larger than life (x1.5): at 1 km a metre is a dozen pixels even at 16x
-  const addDebris = (g, dx, dz, tilt) => { g.scale.setScalar(1.5); g.userData.base = new THREE.Vector3(C.x + dx, 0, C.z + dz); g.userData.tilt = tilt; south.add(g); debris.push(g); return g; };
+  // larger than life (x2.2): at 1 km a metre is a dozen pixels even at 16x
+  const addDebris = (g, dx, dz, tilt) => { g.scale.setScalar(2.2); g.userData.base = new THREE.Vector3(C.x + dx, 0, C.z + dz); g.userData.tilt = tilt; south.add(g); debris.push(g); return g; };
   {
     const seatRow = new THREE.Group();
-    const blue = std({ color: 0x4a7fc8, roughness: 0.7 }), cover = std({ color: 0xf2efe6, roughness: 0.8 }), frameM = std({ color: 0xb8c0c6, metalness: 0.8, roughness: 0.35 });
+    const blue = std({ color: 0x7aa6e6, roughness: 0.6, emissive: 0x0a1424 }), cover = std({ color: 0xffffff, roughness: 0.7 }), frameM = std({ color: 0xd0d6da, metalness: 0.7, roughness: 0.3 });
     for (const sx of [-0.56, 0, 0.56]) {
       seatRow.add(at(mesh(rbox(0.5, 0.14, 0.52, 0.06), blue, { cast: false }), sx, 0, 0));
       const back = mesh(rbox(0.5, 0.72, 0.13, 0.06), blue, { cast: false }); back.position.set(sx, 0.28, -0.3); back.rotation.x = -1.15; seatRow.add(back);
@@ -807,13 +810,13 @@ export function createDeck(view, { lifeLabel = "" } = {}) {
     for (const sx of [-0.83, -0.28, 0.28, 0.83]) seatRow.add(at(mesh(rbox(0.05, 0.08, 0.5, 0.02), frameM, { cast: false }), sx, 0.1, 0));
     addDebris(seatRow, -4, 2, 0.12);
     const vest = new THREE.Group();
-    const orange = std({ color: 0xff6a12, roughness: 0.55, emissive: 0x2a0c00 });
+    const orange = std({ color: 0xff7a1a, roughness: 0.5, emissive: 0x5a1c00 });
     for (const sx of [-0.2, 0.2]) vest.add(at(mesh(rbox(0.34, 0.12, 0.55, 0.06), orange, { cast: false }), sx, 0, 0));
     vest.add(at(mesh(rbox(0.36, 0.1, 0.18, 0.05), orange, { cast: false }), 0, 0.02, -0.3));
     for (const z of [-0.1, 0.12]) vest.add(at(mesh(rbox(0.74, 0.125, 0.04, 0.01), std({ color: 0xdfe6ea, metalness: 0.6, roughness: 0.2 }), { cast: false }), 0, 0.005, z));
     addDebris(vest, 5, -3, 0.25);
     const suitcase = new THREE.Group();
-    suitcase.add(mesh(rbox(0.7, 0.26, 0.48, 0.06), std({ color: 0x8a2433, roughness: 0.5 }), { cast: false }));
+    suitcase.add(mesh(rbox(0.7, 0.26, 0.48, 0.06), std({ color: 0xc23a4c, roughness: 0.45, emissive: 0x200508 }), { cast: false }));
     suitcase.add(mesh(tube([[-0.12, 0.13, -0.24], [-0.1, 0.13, -0.3], [0.1, 0.13, -0.3], [0.12, 0.13, -0.24]], 0.015, 10), std({ color: 0x222222 }), { cast: false }));
     addDebris(suitcase, 2, 5, 0.18);
     const skin = canvasTexture(256, 128, (g, w, h) => {
@@ -827,7 +830,7 @@ export function createDeck(view, { lifeLabel = "" } = {}) {
     jag.moveTo(...pts[0]); pts.slice(1).forEach((q) => jag.lineTo(...q)); jag.closePath();
     const skinGeo = new THREE.ExtrudeGeometry(jag, { depth: 0.04, bevelEnabled: true, bevelThickness: 0.01, bevelSize: 0.01, bevelSegments: 1 }).rotateX(-Math.PI / 2);
     const uv = skinGeo.attributes.uv, pp = skinGeo.attributes.position; for (let k = 0; k < uv.count; k++) uv.setXY(k, (pp.getX(k) + 1.8) / 3.6, (pp.getZ(k) + 1.1) / 2.2);
-    const panel = mesh(skinGeo, std({ map: skin, metalness: 0.55, roughness: 0.35, side: THREE.DoubleSide }), { cast: false });
+    const panel = mesh(skinGeo, std({ map: skin, metalness: 0.35, roughness: 0.3, side: THREE.DoubleSide, emissive: 0x161a1c }), { cast: false });
     const pg = new THREE.Group(); pg.add(panel); addDebris(pg, -7, -3, 0.08);
   }
 
@@ -900,8 +903,7 @@ export function createDeck(view, { lifeLabel = "" } = {}) {
     // the crash site: the helicopter hovers and its pool of light crawls over the swell
     const poolAt = tmp.set(C.x + Math.sin(time * 0.06) * 7, 0, C.z + Math.cos(time * 0.045) * 5);
     heli.position.set(C.x - 4 + Math.sin(time * 0.11) * 5, 30 + Math.sin(time * 0.4) * 1.0, C.z - 16 + Math.cos(time * 0.09) * 4);
-    heli.lookAt(poolAt.x, heli.position.y, poolAt.z); heli.rotateY(Math.PI);
-    heli.rotation.x += 0.06;
+    heli.rotation.set(0, Math.PI / 2 + Math.sin(time * 0.05) * 0.25, 0.05);      // side-on to the ship: the tail boom reads
     rotor.rotation.y = time * 28; tailRotor.rotation.x = time * 40;
     heliRed.material.opacity = Math.sin(time * 4.2) > 0.4 ? 1 : 0.06;
     heliRed2.material.opacity = Math.sin(time * 4.2 + 1.5) > 0.4 ? 1 : 0.06;
@@ -916,7 +918,7 @@ export function createDeck(view, { lifeLabel = "" } = {}) {
       const sd = b.userData.seed;
       b.position.y = seaHeight(b.position.x, b.position.z, time) * 0.6;
       b.rotation.z = Math.sin(time * 0.7 + sd) * 0.05;
-      b.userData.strobe.material.opacity = (time * 1.3 + k * 0.37) % 1 < 0.12 ? 1 : 0;
+      b.userData.strobe.material.opacity = ((time * 1.6 + k * 0.37) % 1 < 0.08 || (time * 1.6 + k * 0.37) % 1 > 0.16 && (time * 1.6 + k * 0.37) % 1 < 0.24) ? 1 : 0;   // a double flash
       const target = new THREE.Vector3(C.x + Math.sin(time * 0.2 + sd) * 10, 0, C.z + Math.cos(time * 0.17 + sd) * 8);
       target.y = seaHeight(target.x, target.z, time);
       aimCone(b.userData.beam, b.userData.lamp.getWorldPosition(new THREE.Vector3()), target, 3.2);
