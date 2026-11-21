@@ -12,6 +12,7 @@
 // A Bayes update looks physical: sheets lift one after another (80 ms apart) with a tiny tilt,
 // change their outline in the air and settle back.
 import * as THREE from "three";
+import { paperFibres } from "./materials.js";
 
 export const LEVELS = [0.018, 0.026, 0.035, 0.045, 0.06, 0.09, 0.16, 0.30];
 export const NL = LEVELS.length;
@@ -214,9 +215,14 @@ export function createKalka(root, rows, reefs, signal) {
     };
     const mk = (edge) => {
       const u = { ...shared, ...own, uEdge: { value: edge ? 1 : 0 }, uTint: { value: edge ? own.uTint.value.clone().multiplyScalar(0.42) : own.uTint.value } };
-      const mat = new THREE.MeshStandardMaterial({ roughness: gold && !edge ? 0.38 : 0.86, metalness: gold && !edge ? 0.45 : 0, alphaToCoverage: true });
+      // tracing paper: a little light shines through (transmission), a soft sheen, paper fibres
+      const mat = edge
+        ? new THREE.MeshStandardMaterial({ roughness: 0.9, alphaToCoverage: true })
+        : new THREE.MeshPhysicalMaterial({ roughness: gold ? 0.36 : 0.8, metalness: gold ? 0.5 : 0, alphaToCoverage: true,
+            transmission: gold ? 0 : 0.18, thickness: 0.02, sheen: 0.5, sheenRoughness: 0.6, sheenColor: new THREE.Color(0xfff0d0),
+            normalMap: paperFibres([9, 9]), normalScale: new THREE.Vector2(0.22, 0.22) });
       withOverlay(mat, u, SHEET_DECL, SHEET_BODY);
-      mat.customProgramCacheKey = () => "sheet";
+      mat.customProgramCacheKey = () => "sheet" + (edge ? "e" : gold ? "g" : "t");
       const depth = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking });
       depth.onBeforeCompile = (shader) => {
         Object.assign(shader.uniforms, u);

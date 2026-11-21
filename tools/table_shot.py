@@ -22,6 +22,7 @@ ap.add_argument("--seed", type=int, default=272)
 ap.add_argument("--size", default="1440x900")
 ap.add_argument("--hover", default=None, help="cell x,y to hover before the shot")
 ap.add_argument("--wait", type=int, default=2500, help="ms after load")
+ap.add_argument("--intro", action="store_true", help="keep the opening camera flight")
 ap.add_argument("--keys", default="", help="keys to hold during the shot, e.g. b")
 args = ap.parse_args()
 
@@ -40,8 +41,12 @@ with sync_playwright() as pw:
     page.on("pageerror", lambda e: errors.append(str(e)))
     page.on("console", lambda m: m.type == "error" and errors.append(m.text))
     page.add_init_script("try { localStorage.setItem('abyss.coachDone', '1'); localStorage.setItem('abyss.introDone', '1'); } catch (e) {}")
-    page.goto(url)
-    page.wait_for_selector("body[data-ready='1']", timeout=60000)
+    page.goto(url if args.intro else url + "&nointro=1")
+    try:
+        page.wait_for_selector("body[data-ready='1']", timeout=30000)
+    except Exception:
+        print("page did not start:", *errors, sep="\n  ")
+        sys.exit(1)
     page.wait_for_timeout(args.wait)
     if args.hover:
         x, y = map(int, args.hover.split(","))

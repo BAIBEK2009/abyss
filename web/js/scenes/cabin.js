@@ -1,0 +1,235 @@
+// The captain's cabin around the chart table (CLAUDE.md v3.1, 21.1 p. 6; v3 4.3): the table does not
+// hang in emptiness. Plank floor and walls, ceiling beams, two portholes with the night sea and the
+// moon, a green radio on a cabinet, the ship's wheel and a chart of the Atlantic on the walls,
+// a barrel, the brass lamp over the table with dust floating in its light.
+// Scale: the chart sheet (12 units) is about a metre, so the room is about 5 x 5.5 m.
+import * as THREE from "three";
+import { canvasTexture, rng } from "../view.js";
+import { walnut, brass, glass } from "./materials.js";
+
+export const FLOOR_Y = -10;
+const CEIL_Y = 18, X0 = -30, X1 = 30, Z0 = -38, Z1 = 30;
+
+const std = (o) => new THREE.MeshStandardMaterial(o);
+function mesh(geo, mat, cast = true) {
+  const m = new THREE.Mesh(geo, mat);
+  m.castShadow = cast; m.receiveShadow = true;
+  return m;
+}
+
+/** Night sea through a porthole: sky, moon with a halo, moonlit path on the waves. */
+function nightSea(seed) {
+  return canvasTexture(512, 512, (g, w, h) => {
+    const r = rng(seed);
+    const sky = g.createLinearGradient(0, 0, 0, h * 0.55);
+    sky.addColorStop(0, "#050a18"); sky.addColorStop(1, "#1b2c4a");
+    g.fillStyle = sky; g.fillRect(0, 0, w, h * 0.55);
+    for (let i = 0; i < 140; i++) { g.fillStyle = `rgba(255,255,255,${r() * 0.8})`; g.fillRect(r() * w, r() * h * 0.5, 1.4, 1.4); }
+    const mx = w * (0.3 + r() * 0.4), my = h * 0.2;
+    const halo = g.createRadialGradient(mx, my, 0, mx, my, 120);
+    halo.addColorStop(0, "rgba(220,230,255,.55)"); halo.addColorStop(1, "rgba(220,230,255,0)");
+    g.fillStyle = halo; g.fillRect(0, 0, w, h);
+    g.fillStyle = "#f4f1e6"; g.beginPath(); g.arc(mx, my, 22, 0, 7); g.fill();
+    const sea = g.createLinearGradient(0, h * 0.55, 0, h);
+    sea.addColorStop(0, "#0e1c30"); sea.addColorStop(1, "#04080f");
+    g.fillStyle = sea; g.fillRect(0, h * 0.55, w, h * 0.45);
+    for (let i = 0; i < 520; i++) {                         // the moon path on the waves
+      const y = h * 0.56 + Math.pow(r(), 1.6) * h * 0.44, spread = 10 + (y - h * 0.55) * 0.7;
+      const x = mx + (r() - 0.5) * spread * 2;
+      g.fillStyle = `rgba(210,225,255,${0.25 + r() * 0.5})`; g.fillRect(x, y, 4 + r() * 12, 1.4);
+    }
+  });
+}
+
+function atlanticChart() {
+  return canvasTexture(512, 360, (g, w, h) => {
+    g.fillStyle = "#e6d6b0"; g.fillRect(0, 0, w, h);
+    const r = rng(77);
+    for (let i = 0; i < 6000; i++) { g.fillStyle = `rgba(90,60,30,${r() * 0.06})`; g.fillRect(r() * w, r() * h, 2, 2); }
+    g.strokeStyle = "rgba(60,45,30,.35)"; g.lineWidth = 1;
+    for (let i = 1; i < 8; i++) { g.beginPath(); g.moveTo(i * w / 8, 0); g.lineTo(i * w / 8, h); g.stroke(); }
+    for (let i = 1; i < 6; i++) { g.beginPath(); g.moveTo(0, i * h / 6); g.lineTo(w, i * h / 6); g.stroke(); }
+    g.fillStyle = "#c9b48a"; g.strokeStyle = "#5a4630"; g.lineWidth = 2;
+    const coast = (pts) => { g.beginPath(); pts.forEach(([x, y], i) => (i ? g.lineTo(x * w, y * h) : g.moveTo(x * w, y * h))); g.closePath(); g.fill(); g.stroke(); };
+    coast([[0, 0.05], [0.18, 0.1], [0.24, 0.3], [0.17, 0.5], [0.22, 0.72], [0.12, 1], [0, 1]]);          // the Americas
+    coast([[1, 0], [0.78, 0.06], [0.72, 0.22], [0.8, 0.34], [0.74, 0.5], [0.84, 0.76], [0.9, 1], [1, 1]]);  // Europe and Africa
+    g.strokeStyle = "#a8392a"; g.lineWidth = 3; g.setLineDash([8, 6]);
+    g.beginPath(); g.moveTo(0.2 * w, 0.32 * h); g.quadraticCurveTo(0.45 * w, 0.18 * h, 0.52 * w, 0.4 * h); g.stroke();
+    g.setLineDash([]);
+    g.beginPath(); g.arc(0.52 * w, 0.4 * h, 9, 0, 7); g.stroke();
+    g.fillStyle = "#3a2c1c"; g.font = 'italic 700 26px "Cormorant Garamond", Georgia, serif'; g.textAlign = "center";
+    g.fillText("Atlanticus", w / 2, 34);
+  });
+}
+
+export function createCabin(scene) {
+  const group = new THREE.Group();
+  scene.add(group);
+  const W = X1 - X0, D = Z1 - Z0, H = CEIL_Y - FLOOR_Y;
+
+  // floor, walls, ceiling: old planks
+  const floorMat = walnut([4, 5]);
+  floorMat.color.set(0x8a7464);
+  const floor = mesh(new THREE.PlaneGeometry(W, D).rotateX(-Math.PI / 2), floorMat, false);
+  floor.position.set((X0 + X1) / 2, FLOOR_Y, (Z0 + Z1) / 2);
+  group.add(floor);
+  const wallMat = walnut([3, 1.6]);
+  wallMat.color.set(0x9a7c62);
+  const wall = (w, x, z, ry) => {
+    const m = mesh(new THREE.PlaneGeometry(w, H), wallMat, false);
+    m.position.set(x, FLOOR_Y + H / 2, z); m.rotation.y = ry;
+    group.add(m);
+  };
+  wall(W, (X0 + X1) / 2, Z0, 0);
+  wall(W, (X0 + X1) / 2, Z1, Math.PI);
+  wall(D, X0, (Z0 + Z1) / 2, Math.PI / 2);
+  wall(D, X1, (Z0 + Z1) / 2, -Math.PI / 2);
+  const ceil = mesh(new THREE.PlaneGeometry(W, D).rotateX(Math.PI / 2), std({ color: 0x2a1c12, roughness: 0.9 }), false);
+  ceil.position.set((X0 + X1) / 2, CEIL_Y, (Z0 + Z1) / 2);
+  group.add(ceil);
+  const beamMat = std({ color: 0x3a2618, roughness: 0.8 });
+  for (let z = Z0 + 8; z < Z1; z += 14) {                  // ceiling beams
+    const b = mesh(new THREE.BoxGeometry(W, 1.6, 1.4), beamMat, false);
+    b.position.set((X0 + X1) / 2, CEIL_Y - 0.8, z); group.add(b);
+  }
+  for (const x of [X0 + 0.7, X1 - 0.7]) for (const z of [Z0 + 0.7, -4, Z1 - 0.7]) {   // posts
+    const p = mesh(new THREE.BoxGeometry(1.4, H, 1.4), beamMat, false);
+    p.position.set(x, FLOOR_Y + H / 2, z); group.add(p);
+  }
+
+  // two portholes on the far wall: night sea and the moon behind thick glass in a bolted brass ring
+  const ringMat = brass();
+  for (const [x, seed] of [[-13, 3], [13, 9]]) {
+    const y = 6.5, z = Z0 + 0.05;
+    const view = new THREE.Mesh(new THREE.CircleGeometry(3.3, 48), new THREE.MeshBasicMaterial({ map: nightSea(seed), toneMapped: true }));
+    view.material.color.setScalar(1.6);
+    view.position.set(x, y, z + 0.02); group.add(view);
+    const lens = new THREE.Mesh(new THREE.CircleGeometry(3.3, 48), glass());
+    lens.position.set(x, y, z + 0.25); group.add(lens);
+    const ring = mesh(new THREE.TorusGeometry(3.6, 0.45, 16, 64), ringMat);
+    ring.position.set(x, y, z + 0.3); group.add(ring);
+    for (let i = 0; i < 10; i++) {
+      const a = (i / 10) * Math.PI * 2;
+      const bolt = mesh(new THREE.SphereGeometry(0.22, 10, 8), ringMat);
+      bolt.position.set(x + Math.cos(a) * 4.35, y + Math.sin(a) * 4.35, z + 0.25); group.add(bolt);
+    }
+    const glow = new THREE.PointLight(0x8fb0ff, 6, 22, 1.6);      // cold moonlight falling in
+    glow.position.set(x, y, z + 3); group.add(glow);
+  }
+
+  // the green radio on a cabinet in the far-left corner (its scale glows)
+  {
+    const cab = mesh(new THREE.BoxGeometry(9, 9, 5), std({ color: 0x4a3020, roughness: 0.7 }));
+    cab.position.set(X0 + 6, FLOOR_Y + 4.5, Z0 + 3.5); group.add(cab);
+    const radio = mesh(new THREE.BoxGeometry(7, 4, 3.4), std({ color: 0x2f4a36, roughness: 0.5, metalness: 0.2 }));
+    radio.position.set(X0 + 6, FLOOR_Y + 11, Z0 + 3.5); group.add(radio);
+    const scale = new THREE.Mesh(new THREE.PlaneGeometry(4.4, 1.2), new THREE.MeshBasicMaterial({ color: new THREE.Color(0x9fe08a).multiplyScalar(2.6) }));
+    scale.position.set(X0 + 6, FLOOR_Y + 11.6, Z0 + 5.22); group.add(scale);
+    for (const dx of [-2.2, 2.2]) {
+      const knob = mesh(new THREE.CylinderGeometry(0.45, 0.45, 0.4, 20), ringMat);
+      knob.rotation.x = Math.PI / 2; knob.position.set(X0 + 6 + dx, FLOOR_Y + 10.1, Z0 + 5.3); group.add(knob);
+    }
+    const ant = mesh(new THREE.CylinderGeometry(0.06, 0.06, 6, 6), ringMat);
+    ant.position.set(X0 + 8.8, FLOOR_Y + 16, Z0 + 3.5); ant.rotation.z = 0.3; group.add(ant);
+    const lampR = new THREE.PointLight(0x9fe08a, 4, 14, 1.8);
+    lampR.position.set(X0 + 6, FLOOR_Y + 12, Z0 + 7); group.add(lampR);
+  }
+
+  // the ship's wheel on the left wall, the Atlantic chart on the right wall, a barrel
+  {
+    const wheel = new THREE.Group();
+    const wood = std({ color: 0x5a3820, roughness: 0.6 });
+    wheel.add(mesh(new THREE.TorusGeometry(3.2, 0.32, 12, 48), wood));
+    wheel.add(mesh(new THREE.CylinderGeometry(0.7, 0.7, 0.8, 20).rotateX(Math.PI / 2), ringMat));
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2;
+      const spoke = mesh(new THREE.CylinderGeometry(0.16, 0.2, 8.2, 8), wood);
+      spoke.rotation.z = a; wheel.add(spoke);
+    }
+    wheel.position.set(X0 + 0.9, 5, -12); wheel.rotation.y = Math.PI / 2;
+    group.add(wheel);
+    const chartW = new THREE.Mesh(new THREE.PlaneGeometry(14, 10), std({ map: atlanticChart(), roughness: 0.9 }));
+    chartW.position.set(X1 - 0.1, 5, -14); chartW.rotation.y = -Math.PI / 2; group.add(chartW);
+    const barrel = new THREE.Group();
+    const staves = mesh(new THREE.CylinderGeometry(3, 3, 8, 24), std({ color: 0x6a4428, roughness: 0.75 }));
+    barrel.add(staves);
+    for (const y of [-2.8, 2.8]) { const band = mesh(new THREE.TorusGeometry(3.05, 0.18, 8, 32).rotateX(Math.PI / 2), std({ color: 0x2a2a2a, metalness: 0.6, roughness: 0.5 })); band.position.y = y; barrel.add(band); }
+    barrel.position.set(X1 - 5, FLOOR_Y + 4, Z0 + 6); group.add(barrel);
+  }
+
+  // an oil lantern on the far wall between the portholes: a little warmth on the planks
+  {
+    const lan = new THREE.Group();
+    lan.add(mesh(new THREE.CylinderGeometry(0.9, 1.1, 0.4, 16), ringMat));
+    const glassL = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, 1.8, 16), new THREE.MeshBasicMaterial({ color: new THREE.Color(0xffb862).multiplyScalar(3.2) }));
+    glassL.position.y = 1.1; lan.add(glassL);
+    const top = mesh(new THREE.ConeGeometry(1.1, 0.9, 16), ringMat); top.position.y = 2.4; lan.add(top);
+    const arm = mesh(new THREE.BoxGeometry(0.25, 0.25, 1.8), ringMat); arm.position.set(0, 2.9, -0.9); lan.add(arm);
+    lan.position.set(0, 6.5, Z0 + 1.9);
+    group.add(lan);
+    const warm = new THREE.PointLight(0xffa850, 70, 46, 1.4);
+    warm.position.set(0, 8, Z0 + 3.5);
+    group.add(warm);
+  }
+
+  // the table's legs (the top is the map's table board)
+  {
+    const legMat = std({ color: 0x3a2416, roughness: 0.6 });
+    for (const x of [-13.5, 12.5]) for (const z of [-10.8, 9.8]) {
+      const leg = mesh(new THREE.BoxGeometry(1.6, -FLOOR_Y - 1.2, 1.6), legMat);
+      leg.position.set(x, FLOOR_Y + (-FLOOR_Y - 1.2) / 2, z); group.add(leg);
+    }
+  }
+
+  // the brass lamp over the table; the scene's spotlight sits in its bulb
+  const lamp = new THREE.Group();
+  {
+    const cord = mesh(new THREE.CylinderGeometry(0.06, 0.06, CEIL_Y - 16.2, 6), std({ color: 0x1a1612 }), false);
+    cord.position.y = (CEIL_Y - 16.2) / 2 + 1.2; lamp.add(cord);
+    const shade = mesh(new THREE.ConeGeometry(2.2, 1.8, 40, 1, true), (() => { const m = brass(); m.side = THREE.DoubleSide; return m; })(), false);
+    shade.position.y = 0.3; lamp.add(shade);
+    const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.45, 16, 12), new THREE.MeshBasicMaterial({ color: new THREE.Color(0xffd9a0).multiplyScalar(8) }));
+    bulb.position.y = -0.35; lamp.add(bulb);
+    lamp.position.set(-1.2, 15.35, -1.8);
+    group.add(lamp);
+  }
+
+  // dust in the lamp's light
+  const N = 420, pos = new Float32Array(N * 3), seeds = new Float32Array(N);
+  const r = rng(5);
+  for (let i = 0; i < N; i++) {
+    const h = 0.15 + r() * 0.75, rad = (0.4 + h * 7) * Math.sqrt(r()), a = r() * Math.PI * 2;      // inside the light cone, above the table
+    pos.set([-1.2 + Math.cos(a) * rad, 15 - h * 15, -1.8 + Math.sin(a) * rad], i * 3);
+    seeds[i] = r() * 100;
+  }
+  const dustGeo = new THREE.BufferGeometry();
+  dustGeo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+  const dustTex = canvasTexture(32, 32, (g) => {
+    const gr = g.createRadialGradient(16, 16, 0, 16, 16, 16);
+    gr.addColorStop(0, "rgba(255,240,210,1)"); gr.addColorStop(1, "rgba(255,240,210,0)");
+    g.fillStyle = gr; g.fillRect(0, 0, 32, 32);
+  });
+  const dust = new THREE.Points(dustGeo, new THREE.PointsMaterial({ map: dustTex, color: 0xffe2b0, size: 0.11, transparent: true, opacity: 0.32,
+                                                                    depthWrite: false, blending: THREE.AdditiveBlending }));
+  dust.frustumCulled = false;
+  group.add(dust);
+  const base = pos.slice();
+
+  return {
+    group,
+    /** Where the camera stands when the captain gets up from the table: a view of the whole cabin. */
+    standPose: { target: new THREE.Vector3(1, 2.5, -10), dist: 41, tilt: 15, yaw: 20 },
+    update(dt, time, sway) {
+      lamp.position.x = -1.2 + (sway?.x ?? 0);
+      lamp.position.z = -1.8 + (sway?.z ?? 0);
+      const p = dustGeo.attributes.position;
+      for (let i = 0; i < N; i++) {
+        const s = seeds[i];
+        p.array[i * 3] = base[i * 3] + Math.sin(time * 0.13 + s) * 0.5;
+        p.array[i * 3 + 1] = base[i * 3 + 1] + Math.sin(time * 0.09 + s * 1.3) * 0.6;
+        p.array[i * 3 + 2] = base[i * 3 + 2] + Math.cos(time * 0.11 + s) * 0.5;
+      }
+      p.needsUpdate = true;
+    },
+  };
+}

@@ -1,6 +1,7 @@
 // Entry point: fonts -> state from Python -> the navigator's table (map + table UI).
 import { createView } from "./view.js";
 import { createMap } from "./scenes/map.js";
+import { createCabin } from "./scenes/cabin.js";
 import { createTable } from "./table.js";
 import { api } from "./api.js";
 import { setLang } from "./strings.js";
@@ -40,9 +41,17 @@ async function start() {
 
   const view = createView($("scene"));
   view.onResize((w, h) => aimCamera(view, w, h));
+  const cabin = createCabin(view.scene);
+  view.onFrame((dt, time, sway) => cabin.update(dt, time, sway));
   const map = createMap(view, state);
-  const table = createTable(view, map, state);
+  const table = createTable(view, map, state, { cabin });
   view.start();
+  // the opening shot: the whole cabin first, then the camera glides down to the chart table
+  if (!new URLSearchParams(location.search).has("nointro")) {
+    document.body.classList.add("standing");            // the interface waits until the camera is at the table
+    view.flyFrom(cabin.standPose, 0.75);
+    setTimeout(() => document.body.classList.remove("standing"), 2600);
+  }
 
   window.__abyss = { state: () => table.state, busy: () => table.busy, cellScreen: map.cellScreen };
 }

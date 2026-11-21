@@ -11,6 +11,7 @@ import * as THREE from "three";
 import { createKalka, withOverlay } from "./kalka.js";
 import { drawChart, CH0, CHS } from "./chart.js";
 import { canvasTexture, deg, rng } from "../view.js";
+import { walnut, brass, glass, paperFibres, contactShadow } from "./materials.js";
 import { t } from "../strings.js";
 
 const SEC_PER_HOUR = 0.16;                               // playback speed of the shared clock
@@ -33,41 +34,6 @@ const soft = (rgb) => canvasTexture(64, 64, (g) => {
 });
 
 // ------------------------------------------------------------------ the table
-/** Walnut planks with fine grain (tiled). */
-function woodTexture() {
-  const tex = canvasTexture(2048, 2048, (g, w, h) => {
-    const r = rng(7), planks = 8;
-    for (let p = 0; p < planks; p++) {
-      const tone = 0.85 + r() * 0.3;
-      g.fillStyle = `rgb(${Math.round(84 * tone)},${Math.round(53 * tone)},${Math.round(33 * tone)})`;
-      g.fillRect(0, (p * h) / planks, w, h / planks);
-    }
-    for (let i = 0; i < 1600; i++) {
-      const y0 = r() * h, amp = 1 + r() * 4, f = 0.002 + r() * 0.01, dark = r() < 0.65;
-      g.strokeStyle = dark ? `rgba(34,18,8,${0.10 + r() * 0.22})` : `rgba(170,120,78,${0.05 + r() * 0.12})`;
-      g.lineWidth = 0.5 + r() * 1.3;
-      g.beginPath();
-      for (let x = 0; x <= w; x += 8) {
-        const y = y0 + Math.sin(x * f + i) * amp + Math.sin(x * f * 4.3 + i * 1.7) * amp * 0.25;
-        x === 0 ? g.moveTo(x, y) : g.lineTo(x, y);
-      }
-      g.stroke();
-    }
-    for (let i = 0; i < 14; i++) {
-      const x = r() * w, y = r() * h;
-      for (let k = 7; k > 0; k--) {
-        g.strokeStyle = `rgba(35,18,8,${0.06 + 0.035 * k})`; g.lineWidth = 1.2;
-        g.beginPath(); g.ellipse(x, y, 5 + k * 7, 2 + k * 2.4, 0, 0, Math.PI * 2); g.stroke();
-      }
-    }
-    for (let p = 1; p < planks; p++) { g.fillStyle = "rgba(14,7,2,0.85)"; g.fillRect(0, (p * h) / planks - 1, w, 3); }
-  });
-  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-  tex.repeat.set(3, 2);
-  tex.anisotropy = 16;
-  return tex;
-}
-
 // ------------------------------------------------------------------ ships (bow towards +x)
 function hullShape(L, B) {
   const s = new THREE.Shape();
@@ -152,7 +118,7 @@ function shipModel(kind) {
   const glowTex = soft("255,255,255");
   const lights = [];
   for (const [x, c] of [[-0.07, 0xff3b2a], [0.07, 0x3bff6a], [0, 0xfff2d0]]) {
-    const l = new THREE.Mesh(new THREE.SphereGeometry(0.012, 8, 6), new THREE.MeshBasicMaterial({ color: c }));
+    const l = new THREE.Mesh(new THREE.SphereGeometry(0.012, 8, 6), new THREE.MeshBasicMaterial({ color: new THREE.Color(c).multiplyScalar(6) }));   // HDR: blooms
     l.position.set(x, x ? 0.6 : 0.7, -0.16); g.add(l);
     const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: c, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.8 }));
     halo.scale.set(0.075, 0.075, 1); halo.position.copy(l.position); g.add(halo);
@@ -184,6 +150,9 @@ function shipModel(kind) {
   }
   const wake = new THREE.Mesh(new THREE.PlaneGeometry(0.75, 1.4), new THREE.MeshBasicMaterial({ map: wakeTex, transparent: true, depthWrite: false, opacity: 0.8 }));
   wake.rotation.x = -Math.PI / 2; wake.position.set(0, 0.012, L * 0.5 + 0.68); g.add(wake);
+  const shade = contactShadow(1.7, 0.75, 0.75);             // soft contact shadow under the hull
+  shade.position.y = 0.006;
+  outer.add(shade);
   outer.scale.setScalar(1.1);
   return { group: outer, lights, wake, funnelTop: new THREE.Vector3(0, 0.56, 0.07), body: g };
 }
@@ -216,8 +185,9 @@ function pinModel(head, metal, h = 0.78, headScale = 1) {
   const g = new THREE.Group();
   const n = mesh(new THREE.CylinderGeometry(0.012, 0.006, h, 8), std({ color: 0xcfd3d6, metalness: 0.9, roughness: 0.3 }));
   n.position.y = h / 2; g.add(n);
-  const s = mesh(new THREE.SphereGeometry(0.1, 24, 16), std({ color: head, metalness: metal, roughness: metal ? 0.25 : 0.45 }));
+  const s = mesh(new THREE.SphereGeometry(0.1, 24, 16), metal ? brass(head) : new THREE.MeshPhysicalMaterial({ color: head, roughness: 0.35, clearcoat: 0.8, clearcoatRoughness: 0.2 }));
   s.position.y = h; s.scale.setScalar(headScale); g.add(s);
+  if (h > 0.3) { const sh = contactShadow(0.3, 0.3, 0.6); sh.position.y = 0.004; g.add(sh); }
   return g;
 }
 function flagPin() {
@@ -235,7 +205,7 @@ function lighthouse() {
     const c = mesh(new THREE.CylinderGeometry(0.1 - i * 0.01, 0.11 - i * 0.01, 0.11, 18), std({ color: i % 2 ? 0xa8392a : 0xf2ede2, roughness: 0.5 }));
     c.position.y = 0.06 + i * 0.11; g.add(c);
   }
-  const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.05, 12, 8), new THREE.MeshBasicMaterial({ color: 0xffe2a8 }));
+  const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.05, 12, 8), new THREE.MeshBasicMaterial({ color: new THREE.Color(0xffe2a8).multiplyScalar(6) }));
   lamp.position.y = 0.53; g.add(lamp);
   const cap = mesh(new THREE.ConeGeometry(0.075, 0.08, 14), std({ color: 0xa8392a, roughness: 0.5 }));
   cap.position.y = 0.6; g.add(cap);
@@ -252,7 +222,7 @@ function mug() {
   const hd = mesh(new THREE.TorusGeometry(0.2, 0.05, 10, 24, Math.PI), cer); hd.position.set(0.45, 0.45, 0); hd.rotation.z = -Math.PI / 2; g.add(hd);
   return g;
 }
-const brassMat = () => std({ color: 0xc39447, metalness: 0.9, roughness: 0.28 });
+const brassMat = () => brass();
 function dividers() {
   const g = new THREE.Group(), brass = brassMat();
   for (const a of [-0.06, 0.06]) {
@@ -271,7 +241,7 @@ function pencil() {
 function magnifier() {
   const g = new THREE.Group(), brass = brassMat();
   const rim = mesh(new THREE.TorusGeometry(0.62, 0.05, 12, 48), brass); rim.rotation.x = Math.PI / 2; g.add(rim);
-  const gl = new THREE.Mesh(new THREE.CircleGeometry(0.6, 40), std({ color: 0xdfeaf0, transparent: true, opacity: 0.18, roughness: 0.05, metalness: 0.2 }));
+  const gl = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.6, 0.04, 48), glass());
   gl.rotation.x = -Math.PI / 2; g.add(gl);
   const h = mesh(new THREE.CylinderGeometry(0.06, 0.07, 1.1, 14), std({ color: 0x3a2214, roughness: 0.5 })); h.rotation.z = Math.PI / 2; h.position.x = 1.2; g.add(h);
   return g;
@@ -306,8 +276,10 @@ export function createMap(view, state) {
   const root = new THREE.Group();
   scene.add(root);
 
-  const table = mesh(new THREE.BoxGeometry(60, 1, 44), std({ map: woodTexture(), roughness: 0.62 }));
-  table.position.set(0, -0.5, -2);
+  const tableMat = walnut([3, 2.4]);
+  tableMat.color.set(0xd8c8b8);                               // a darker, older walnut
+  const table = mesh(new THREE.BoxGeometry(29, 1.2, 23), tableMat);
+  table.position.set(-0.5, -0.6, -0.5);
   root.add(table);
 
   const kalka = createKalka(root, state.P, state.reefs, state.signal);
@@ -316,11 +288,30 @@ export function createMap(view, state) {
   // the nautical chart (a sheet of paper on the table) with the shared overlay on its face
   const chartTex = canvasTexture(2048, 2048, (g, W) => drawChart(g, W, { reefs: state.reefs, signal: state.signal }));
   chartTex.anisotropy = view.renderer.capabilities.getMaxAnisotropy();
-  const edgeMat = std({ color: 0xe8dcc0, roughness: 0.9 });
-  const faceMat = withOverlay(std({ map: chartTex, roughness: 0.93 }), kalka.shared);
-  const chart = mesh(new THREE.BoxGeometry(CHS, 0.014, CHS), [edgeMat, edgeMat, faceMat, edgeMat, edgeMat, edgeMat]);
-  chart.position.set(CH0 + CHS / 2 - 5, 0.007, CH0 + CHS / 2 - 5);
+  // a real sheet: fibre normal map, edges curling up a little, a soft shadow under it
+  const faceMat = withOverlay(new THREE.MeshStandardMaterial({ map: chartTex, roughness: 0.93, normalMap: paperFibres([7, 7]),
+                                                              normalScale: new THREE.Vector2(0.35, 0.35), side: THREE.DoubleSide }), kalka.shared);
+  const sheetGeo = new THREE.PlaneGeometry(CHS, CHS, 120, 120).rotateX(-Math.PI / 2);
+  {
+    const pos = sheetGeo.attributes.position, half = CHS / 2;
+    for (let i = 0; i < pos.count; i++) {
+      const x = pos.getX(i), z = pos.getZ(i);
+      const d = Math.min(half - Math.abs(x), half - Math.abs(z));               // distance to the nearest edge
+      const corner = Math.max(0, 1 - Math.hypot(half - Math.abs(x), half - Math.abs(z)) / 1.2);
+      const curl = Math.pow(Math.max(0, 1 - d / 0.55), 2.2) * 0.07 + corner * corner * 0.09;
+      pos.setY(i, 0.014 + curl);
+    }
+    sheetGeo.computeVertexNormals();
+  }
+  const chart = mesh(sheetGeo, faceMat);
+  chart.position.set(CH0 + CHS / 2 - 5, 0, CH0 + CHS / 2 - 5);
   root.add(chart);
+  const under = new THREE.Mesh(new THREE.PlaneGeometry(CHS + 1.2, CHS + 1.2), new THREE.MeshBasicMaterial({
+    map: canvasTexture(256, 256, (g, w) => { g.filter = "blur(14px)"; g.fillStyle = "rgba(0,0,0,0.55)"; g.fillRect(26, 26, w - 52, w - 52); }),
+    transparent: true, depthWrite: false }));
+  under.rotation.x = -Math.PI / 2;
+  under.position.set(chart.position.x + 0.12, 0.002, chart.position.z + 0.16);
+  root.add(under);
   // brass tacks in the corners
   for (const [u, v] of [[CH0 + 0.3, CH0 + 0.3], [CH0 + CHS - 0.3, CH0 + 0.3], [CH0 + 0.3, CH0 + CHS - 0.3], [CH0 + CHS - 0.3, CH0 + CHS - 0.3]]) {
     const tack = pinModel(0xc39447, 0.9, 0.05);

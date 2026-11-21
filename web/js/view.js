@@ -4,6 +4,9 @@ import * as THREE from "three";
 import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
+import { ShaderPass } from "three/addons/postprocessing/ShaderPass.js";
+import { GTAOPass } from "three/addons/postprocessing/GTAOPass.js";
+import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 
 export const deg = THREE.MathUtils.degToRad;
@@ -26,7 +29,7 @@ export function canvasTexture(w, h, draw, srgb = true) {
 
 export function createView(canvas) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, preserveDrawingBuffer: true });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));   // HTML text stays sharp; the 3D keeps 60 FPS on Retina
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -35,12 +38,12 @@ export function createView(canvas) {
 
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x0a0807);
-  scene.fog = new THREE.Fog(0x0a0807, 26, 52);
+  scene.fog = new THREE.Fog(0x0a0807, 40, 120);
   const pmrem = new THREE.PMREMGenerator(renderer);
   scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-  scene.environmentIntensity = 0.13;     // a hint for the brass and the table edges: the lamp does the lighting
+  scene.environmentIntensity = 0.3;      // reflections for brass, glass and lacquer (CLAUDE.md v3.1, 21.1 p. 2)
 
-  const camera = new THREE.PerspectiveCamera(22, 1, 0.1, 160);
+  const camera = new THREE.PerspectiveCamera(22, 1, 0.1, 260);
 
   // one warm lamp above the chart (soft shadows; it sways a little) + cold moonlight from the porthole
   // (three r170 uses physical light units: the reference r128 values are multiplied by π, decay 0)
@@ -50,7 +53,7 @@ export function createView(canvas) {
   lamp.position.copy(LAMP_POS);
   lamp.target.position.set(0.3, 0, 0.8);
   lamp.castShadow = true;
-  lamp.shadow.mapSize.set(2048, 2048);
+  lamp.shadow.mapSize.set(4096, 4096);
   lamp.shadow.bias = -0.00035;
   lamp.shadow.normalBias = 0.01;
   lamp.shadow.radius = 3;
@@ -61,29 +64,69 @@ export function createView(canvas) {
   moon.position.set(19, 7, -13);
   scene.add(moon);
 
-  // post: render -> tone map + sRGB (no tilt-shift blur: CLAUDE.md v3.1, 18)
-  const rt = new THREE.WebGLRenderTarget(1, 1, { samples: 4, type: THREE.HalfFloatType });
+  // post (CLAUDE.md v3.1, 21.1 p. 1; no tilt-shift blur, 18):
+  //   render -> GTAO (weak: soft shade in the joints of the tracing paper, under ships and pins)
+  //   -> bloom (high threshold: only lamps, mast lights, the lighthouse glow) -> ACES + sRGB
+  //   -> film: warm highlights / teal shadows, 3.5 % grain, soft vignette, chromatic aberration at the edges
+  // The scene depth goes to GTAO from the main render, so cut-out paper sheets (discard) are honoured.
+  const depthTex = new THREE.DepthTexture(1, 1);
+  depthTex.type = THREE.UnsignedIntType;
+  const rt = new THREE.WebGLRenderTarget(1, 1, { samples: 4, type: THREE.HalfFloatType, depthTexture: depthTex });
   const composer = new EffectComposer(renderer, rt);
+  composer.renderTarget2.depthTexture = depthTex;            // both buffers share one depth: GTAO always reads it
   composer.addPass(new RenderPass(scene, camera));
+  const gtao = new GTAOPass(scene, camera, 1, 1);
+  gtao.setGBuffer(depthTex);          // set after construction (r170 needs its own targets to exist first)
+  gtao.blendIntensity = 0.55;
+  gtao.updateGtaoMaterial({ radius: 0.35, distanceExponent: 1.4, thickness: 1.2, scale: 1.0, samples: 16 });
+  gtao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 6, rings: 2, samples: 16 });
+  composer.addPass(gtao);
+  const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.45, 0.5, 2.6);   // HDR threshold: only emitters (lit paper stays below)
+  composer.addPass(bloom);
   composer.addPass(new OutputPass());
+  const film = new ShaderPass({
+    uniforms: { tDiffuse: { value: null }, uTime: { value: 0 }, uRes: { value: new THREE.Vector2(1, 1) } },
+    vertexShader: "varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }",
+    fragmentShader: /* glsl */`
+      uniform sampler2D tDiffuse; uniform float uTime; uniform vec2 uRes; varying vec2 vUv;
+      float h(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+      void main() {
+        vec2 c = vUv - 0.5;
+        float r2 = dot(c, c);
+        vec2 ca = c * smoothstep(0.14, 0.5, r2) * 0.004;           // colour fringe only near the edges
+        vec3 col = vec3(texture2D(tDiffuse, vUv - ca).r, texture2D(tDiffuse, vUv).g, texture2D(tDiffuse, vUv + ca).b);
+        float l = dot(col, vec3(0.299, 0.587, 0.114));
+        col += vec3(0.035, 0.012, -0.03) * smoothstep(0.45, 1.0, l);   // warm highlights
+        col += vec3(-0.02, 0.012, 0.03) * (1.0 - smoothstep(0.0, 0.4, l)); // teal shadows
+        col *= 1.0 - 0.55 * smoothstep(0.18, 0.62, r2 * 1.35);       // soft vignette
+        col += (h(vUv * uRes + fract(uTime * 13.0)) - 0.5) * 0.035;  // film grain
+        gl_FragColor = vec4(col, 1.0);
+      }`,
+  });
+  composer.addPass(film);
 
   // camera rig: look at `target` from `dist` at `tilt` degrees above the horizon.
   // hfov = horizontal field of view: a long lens (30-35°) keeps the chart from looking like a trapezoid
   const rig = { target: new THREE.Vector3(), dist: 36, tilt: 40, yaw: 0, hfov: 33 };
-  // `home` is where the camera rests (set on resize); `follow` = a function filling a point to fly after
-  const home = { target: new THREE.Vector3(), dist: 36, tilt: 40 };
-  let follow = null, settled = true;
+  // `home` is where the camera rests (set on resize). The camera can fly after a point (`follow`,
+  // the cinema mode), to a fixed `pose` (standing up from the table) or start from somewhere else
+  // and glide home (`flyFrom`, the opening shot of the cabin).
+  const home = { target: new THREE.Vector3(), dist: 36, tilt: 40, yaw: 0 };
+  let follow = null, pose = null, settled = true, rate = 2.2;
   const goal = new THREE.Vector3();
   function steer(dt) {
-    if (!follow && settled) return;
-    const k = 1 - Math.exp(-dt * 2.2);
-    if (follow) follow(goal); else goal.copy(home.target);
-    const gd = follow ? 9.5 : home.dist, gt = follow ? 34 : home.tilt;
+    if (!follow && !pose && settled) return;
+    const k = 1 - Math.exp(-dt * rate);
+    let gd, gt, gy;
+    if (follow) { follow(goal); gd = 9.5; gt = 34; gy = 0; }
+    else if (pose) { goal.copy(pose.target); gd = pose.dist; gt = pose.tilt; gy = pose.yaw; }
+    else { goal.copy(home.target); gd = home.dist; gt = home.tilt; gy = home.yaw; }
     rig.target.lerp(goal, k);
     rig.dist += (gd - rig.dist) * k;
     rig.tilt += (gt - rig.tilt) * k;
-    if (!follow && rig.target.distanceTo(home.target) < 0.002 && Math.abs(rig.dist - home.dist) < 0.002) {
-      rig.target.copy(home.target); rig.dist = home.dist; rig.tilt = home.tilt; settled = true;
+    rig.yaw += (gy - rig.yaw) * k;
+    if (!follow && !pose && rig.target.distanceTo(home.target) < 0.002 && Math.abs(rig.dist - home.dist) < 0.002 && Math.abs(rig.yaw) < 0.01) {
+      rig.target.copy(home.target); rig.dist = home.dist; rig.tilt = home.tilt; rig.yaw = home.yaw; settled = true; rate = 2.2;
     }
     aim();
   }
@@ -100,11 +143,12 @@ export function createView(canvas) {
     renderer.setSize(w, h, false);
     composer.setPixelRatio(renderer.getPixelRatio());
     composer.setSize(w, h);
+    film.uniforms.uRes.value.set(w * renderer.getPixelRatio(), h * renderer.getPixelRatio());
     camera.aspect = w / h;
-    const cur = { target: rig.target.clone(), dist: rig.dist, tilt: rig.tilt };
+    const cur = { target: rig.target.clone(), dist: rig.dist, tilt: rig.tilt, yaw: rig.yaw };
     for (const fn of resizeHooks) fn(w, h);                  // the screen sets the resting camera
-    home.target.copy(rig.target); home.dist = rig.dist; home.tilt = rig.tilt;
-    if (!settled) { rig.target.copy(cur.target); rig.dist = cur.dist; rig.tilt = cur.tilt; }   // mid-flight: keep going
+    home.target.copy(rig.target); home.dist = rig.dist; home.tilt = rig.tilt; home.yaw = rig.yaw;
+    if (!settled) { rig.target.copy(cur.target); rig.dist = cur.dist; rig.tilt = cur.tilt; rig.yaw = cur.yaw; }   // mid-flight: keep going
     camera.fov = THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(deg(rig.hfov) / 2) / camera.aspect));
     camera.updateProjectionMatrix();
     aim();
@@ -137,6 +181,7 @@ export function createView(canvas) {
     lamp.position.set(LAMP_POS.x + sway.x, LAMP_POS.y, LAMP_POS.z + sway.z);
     for (const fn of frameHooks) fn(dt, time, sway);
     steer(dt);
+    film.uniforms.uTime.value = time;
     composer.render();
     for (const p of pins) {
       const s = toScreen(p.anchor);
@@ -158,6 +203,13 @@ export function createView(canvas) {
     renderer, scene, camera, rig, aim, lamp, pin, toScreen, placeLamp,
     /** Fly the camera after a point (fn(vector) fills it) or back home (null). */
     follow(fn) { if (!fn && !follow) return; follow = fn; settled = false; },
+    /** Stay at a fixed pose {target, dist, tilt, yaw} (null = back to the table). */
+    pose(p) { pose = p; settled = false; rate = 1.4; },
+    /** Start from a pose and glide home slowly (the opening shot). */
+    flyFrom(p, speed = 0.9) {
+      rig.target.copy(p.target); rig.dist = p.dist; rig.tilt = p.tilt; rig.yaw = p.yaw ?? 0;
+      settled = false; rate = speed; aim();
+    },
     onFrame: (fn) => frameHooks.push(fn),
     onResize: (fn) => resizeHooks.push(fn),
     start() { resize(); requestAnimationFrame(frame); },

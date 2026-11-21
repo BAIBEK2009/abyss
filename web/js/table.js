@@ -24,7 +24,7 @@ const SPEAKER = {                       // who explains which event (CLAUDE.md 6
   refuel: "grisha", tow: "grisha",
 };
 
-export function createTable(view, map, initialState) {
+export function createTable(view, map, initialState, { cabin } = {}) {
   let state = initialState;
   let busy = false;
   let autopilot = false;
@@ -34,7 +34,7 @@ export function createTable(view, map, initialState) {
 
   // ------------------------------------------------------------------ widgets
   const hud = createHud(ui, [
-    { id: "stand", icon: ICONS.stand, label: t("btn_stand"), soon: "M7.3" },
+    { id: "stand", icon: ICONS.stand, label: t("btn_stand"), onClick: () => stand() },
     { id: "autopilot", icon: ICONS.autopilot, label: t("btn_autopilot"), onClick: () => toggleAutopilot() },
     { id: "journal", icon: ICONS.journal, label: t("btn_journal_top"), soon: "M8" },
     { id: "hints", icon: ICONS.hints, label: t("btn_hints"), onClick: () => coach.start() },
@@ -174,6 +174,7 @@ export function createTable(view, map, initialState) {
     map.showAdvice(false); map.showZone(null); map.showForecast(null); map.target(null); map.setRoute("ours", null);
     tip.hide();
     officers.peek(false);
+    if (standing) stand(false);
     render();
     cinema(true);
     try {
@@ -244,6 +245,16 @@ export function createTable(view, map, initialState) {
     if (on) autopilotLoop();
   }
 
+  /** Get up from the table and look at the cabin; the second press sits back down. */
+  let standing = false;
+  function stand(on = !standing) {
+    if (on && (busy || !cabin)) return;
+    standing = on;
+    hud.setActive("stand", on);
+    document.body.classList.toggle("standing", on);
+    view.pose(on ? cabin.standPose : null);
+  }
+
   /** Cinema mode during a move (CLAUDE.md v3.1, 18): the interface slides off, black bars, the camera follows the ship. */
   function cinema(on) {
     document.body.classList.toggle("cine", on);
@@ -252,7 +263,7 @@ export function createTable(view, map, initialState) {
 
   render();
   if (state.status !== "playing") finish();
-  else setTimeout(() => { if (!intro.showIfFirstTime()) coach.startIfFirstTime(); }, 600);
+  else setTimeout(() => { if (!intro.showIfFirstTime()) coach.startIfFirstTime(); }, 3200);   // after the opening shot
   return {
     get state() { return state; },
     get busy() { return busy; },
