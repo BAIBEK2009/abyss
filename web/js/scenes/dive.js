@@ -49,22 +49,25 @@ export function marineSnow(count = 2800) {
                 uPR: { value: 1 }, uAmb: { value: 0.045 }, uOn: { value: 1 }, uStreak: { value: 0 } },
     vertexShader: /* glsl */`
       uniform vec3 uLP; uniform vec3 uLD; uniform float uCos; uniform float uPR; uniform float uAmb; uniform float uOn;
-      attribute float aS; varying float vB;
+      attribute float aS; varying float vB; varying float vBok;
       void main() {
         vec4 wp = modelMatrix * vec4(position, 1.0);
         vec3 d = wp.xyz - uLP; float dist = max(length(d), 0.001); float c = dot(d / dist, uLD);
         float cone = smoothstep(uCos - 0.05, uCos + 0.08, c) / (1.0 + dist * dist * 0.05) * uOn;
         vec4 mv = viewMatrix * wp; float z = max(0.25, -mv.z);
         vB = (uAmb + cone * 1.8) * exp(-z * 0.06);
-        gl_PointSize = aS * uPR * (7.0 / z);
+        vBok = 1.0 - smoothstep(0.35, 1.4, z);                // right at the porthole: out of focus
+        vB *= 1.0 - vBok * 0.7;
+        gl_PointSize = aS * uPR * (7.0 / z) * (1.0 + vBok * 2.5);
         gl_Position = projectionMatrix * mv;
       }`,
     fragmentShader: /* glsl */`
-      uniform float uStreak; varying float vB;
+      uniform float uStreak; varying float vB; varying float vBok;
       void main() {
         vec2 p = gl_PointCoord - 0.5;
-        p.y *= 1.0 - uStreak * 0.75;                       // moving fast: flakes stretch into short streaks
-        float a = smoothstep(0.5, 0.05, length(p));
+        p.y *= 1.0 - uStreak * 0.75 * (1.0 - vBok);           // moving fast: flakes stretch into short streaks
+        float r = length(p);
+        float a = mix(smoothstep(0.5, 0.05, r), smoothstep(0.5, 0.38, r) * 0.55 + smoothstep(0.5, 0.0, r) * 0.25, vBok);   // bokeh: a soft disc with a brighter rim
         gl_FragColor = vec4(vec3(0.82, 0.91, 0.93) * vB, a);
       }`,
   });
@@ -416,6 +419,23 @@ export function createDive(view) {
   }));
   surfPlane.rotation.x = Math.PI / 2; surfPlane.position.y = 14;
   surf.add(surfPlane);
+  // caustics near the surface: the light through the swell, projected as a moving bright net (shots 3, < 50 m)
+  const causticTex = canvasTexture(256, 256, (g, w, h) => {
+    g.fillStyle = "#000"; g.fillRect(0, 0, w, h);
+    g.globalCompositeOperation = "lighter";
+    for (let i = 0; i < 90; i++) {
+      const x = hash(i, 71) * w, y = hash(i, 72) * h, r = 10 + hash(i, 73) * 22;
+      g.strokeStyle = `rgba(255,255,255,${0.25 + hash(i, 74) * 0.35})`; g.lineWidth = 1.5 + hash(i, 75) * 2.5;
+      g.beginPath();
+      for (let k = 0; k <= 7; k++) { const a = (k / 7) * Math.PI * 2, rr = r * (0.8 + hash(i * 7 + k, 76) * 0.4); k ? g.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr) : g.moveTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr); }
+      g.closePath(); g.stroke();
+    }
+  });
+  causticTex.wrapS = causticTex.wrapT = THREE.RepeatWrapping;
+  const caustic = new THREE.SpotLight(0xcfeeff, 0, 40, 0.75, 0.4, 0.6);
+  caustic.map = causticTex; caustic.castShadow = true; caustic.shadow.mapSize.set(512, 512);
+  caustic.position.set(0, 22, 0); caustic.target.position.set(0, 0, 0);
+  surf.add(caustic, caustic.target);
   // the underside of «Tulpar» at the surface: her hull, the propeller turning, the rudder
   const hullUnder = new THREE.Group(); surf.add(hullUnder);
   {
@@ -546,13 +566,7 @@ export function createDive(view) {
   deep.add(spot, spot.target);
   const CH = 11, coneGeo = new THREE.ConeGeometry(Math.tan(0.42) * CH, CH, 40, 1, true);
   coneGeo.translate(0, -CH / 2, 0); coneGeo.rotateX(-Math.PI / 2);
-  const cone = new THREE.Mesh(coneGeo, new THREE.ShaderMaterial({
-    transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, fog: false,
-    vertexShader: `varying float vH; varying vec3 vN; varying vec3 vV;
-      void main() { vH = position.z / ${CH.toFixed(1)}; vec4 mv = modelViewMatrix * vec4(position, 1.0); vV = normalize(-mv.xyz); vN = normalize(normalMatrix * normal); gl_Position = projectionMatrix * mv; }`,
-    fragmentShader: `varying float vH; varying vec3 vN; varying vec3 vV;
-      void main() { float edge = pow(abs(dot(vN, vV)), 1.6); float a = 0.085 * pow(1.0 - vH, 1.7) * edge; gl_FragColor = vec4(0.72, 0.9, 1.0, a); }`,
-  }));
+  const cone = new THREE.Mesh(coneGeo, beamMat(1.25));               // volumetric, with drifting murk (23.3-V)
   cone.visible = false;
   deep.add(cone);
 
@@ -959,13 +973,14 @@ export function createDive(view) {
       seal.position.set(-7 + k * 13, Y0 + 12.2 + Math.sin(k * 6) * 0.15, -3 + k * 2); seal.rotation.set(0, Math.PI / 2 - 0.3, Math.sin(time * 6) * 0.15);
       seal.userData.tail.rotation.y = Math.sin(time * 8) * 0.5;
       for (const m of shafts) m.material.opacity = 0.3 + 0.2 * Math.sin(time * 0.8 + m.userData.ph);
+      caustic.intensity = 90 * (1 - k * 0.6); causticTex.offset.set(Math.sin(time * 0.31) * 0.2 + time * 0.03, Math.cos(time * 0.27) * 0.2);
       const bp = nerpa.userData.bp;
       for (let i = 1; i < bp.length; i += 3) { bp[i] += dt * 3.6; if (bp[i] > 14) bp[i] = 1; }
       nerpa.userData.bg.attributes.position.needsUpdate = true;
       model.update(dt, time, 0.4);
       setDepth(k * 12);
     });
-    surf.visible = false;
+    surf.visible = false; caustic.intensity = 0;
 
     // ---- shot 4: the twilight zone — blue to black, the depth races, comb jellies; the lamps click on at ~200 m
     const H = 400, deepCol = new THREE.Color(), c0 = new THREE.Color(0x0a3550), c1 = new THREE.Color(0x03141f), c2 = new THREE.Color(0x010508);

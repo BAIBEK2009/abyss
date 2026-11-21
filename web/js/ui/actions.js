@@ -97,7 +97,8 @@ export function createActions(root, handlers) {
         ? t("hint_target", { ...place(st, target), p: pct(st.P[target[1]][target[0]]) })
         : t("hint_none", place(st, st.pos));
       const tags = tagList(st, target);
-      const previews = await Promise.all(tags.map((tg) => preview(tg.action).catch(() => null)));
+      // no previews while a move runs (the tags are disabled and hidden; a dive in progress would refuse them)
+      const previews = busy ? tags.map(() => null) : await Promise.all(tags.map((tg) => preview(tg.action).catch(() => null)));
       if (my !== seq) return;                       // a newer update replaced this one
       const advice = st.advice?.advice?.action;
       row.replaceChildren(...tags.map((tg, i) => renderTag(tg, previews[i], st, sameAction(tg.action, advice))));

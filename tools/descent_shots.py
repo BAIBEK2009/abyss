@@ -36,6 +36,7 @@ with sync_playwright() as pw:
     page = b.new_page(viewport={"width": 1440, "height": 900})
     page.on("pageerror", lambda e: errors.append(f"{e} | {(e.stack or '')[:300]}"))
     page.on("console", lambda m: m.type == "error" and errors.append(m.text))
+    page.on("response", lambda r: r.status >= 400 and errors.append(f"{r.status} {r.request.method} {r.url} {r.request.post_data or ''}"))
     page.add_init_script("try { localStorage.setItem('abyss.coachDone','1'); localStorage.setItem('abyss.introDone','1'); localStorage.setItem('abyss.deckHintsDone','1'); } catch (e) {}")
     page.goto(url)
     page.wait_for_selector("body[data-ready='1']", timeout=30000)
