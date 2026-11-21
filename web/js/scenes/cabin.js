@@ -184,6 +184,23 @@ export function createCabin(scene) {
     }
   }
 
+  // the companionway up to the deck on the near wall (M12b): a door frame, steep steps into the night
+  const stairs = new THREE.Group();
+  {
+    const SX = 19, frameMat = std({ color: 0x3a2618, roughness: 0.7 });
+    const dark = new THREE.Mesh(new THREE.PlaneGeometry(11, 22), std({ color: 0x050608, roughness: 1 }));
+    dark.position.set(SX, FLOOR_Y + 11, Z1 - 0.05); dark.rotation.y = Math.PI; stairs.add(dark);
+    for (const dx of [-6, 6]) { const j = mesh(new THREE.BoxGeometry(1.2, 23, 1.6), frameMat); j.position.set(SX + dx, FLOOR_Y + 11.5, Z1 - 0.6); stairs.add(j); }
+    const lintel = mesh(new THREE.BoxGeometry(13.2, 1.4, 1.6), frameMat); lintel.position.set(SX, FLOOR_Y + 23, Z1 - 0.6); stairs.add(lintel);
+    const stepMat = std({ color: 0x6a4a30, roughness: 0.75 });
+    for (let i = 0; i < 7; i++) { const st = mesh(new THREE.BoxGeometry(10, 0.7, 3.2), stepMat); st.position.set(SX, FLOOR_Y + 1.6 + i * 3.0, Z1 - 7 + i * 1.0); stairs.add(st); }
+    for (const dx of [-5.2, 5.2]) { const rail = mesh(new THREE.CylinderGeometry(0.25, 0.25, 26, 8), ringMat); rail.position.set(SX + dx, FLOOR_Y + 12, Z1 - 4); rail.rotation.x = -0.32; stairs.add(rail); }
+    const lampD = new THREE.Mesh(new THREE.SphereGeometry(0.6, 12, 8), new THREE.MeshBasicMaterial({ color: new THREE.Color(0xffb862).multiplyScalar(3) }));
+    lampD.position.set(SX, FLOOR_Y + 21, Z1 - 1.6); stairs.add(lampD);
+    const lightD = new THREE.PointLight(0xffa850, 18, 28, 1.4); lightD.position.set(SX, FLOOR_Y + 19, Z1 - 4); stairs.add(lightD);
+    group.add(stairs);
+  }
+
   // the brass lamp over the table; the scene's spotlight sits in its bulb
   const lamp = new THREE.Group();
   {
@@ -218,8 +235,29 @@ export function createCabin(scene) {
   group.add(dust);
   const base = pos.slice();
 
+  // first person (M12b): metres; the chart sheet (12 units) is about a metre
+  const proxyMat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false, colorWrite: false });
+  const proxy = (w, h, d, x, y, z) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), proxyMat); m.position.set(x, y, z); group.add(m); return m; };
+  const M = 12, q = new THREE.Quaternion(), e = new THREE.Euler();
+  const space = {
+    scale: M, eye: 1.65, step: "wood",
+    poly: [[-2.35, -3.0], [2.35, -3.0], [2.35, 2.36], [-2.35, 2.36]],
+    colliders: [[-1.25, -1.02, 1.17, 0.94], [-2.55, -3.25, -1.72, -2.72], [1.82, -2.95, 2.36, -2.4],
+                [-2.55, -0.42, -2.36, -0.25], [2.36, -0.42, 2.55, -0.25], [1.05, 2.0, 1.15, 2.6], [2.05, 2.0, 2.15, 2.6]],
+    floor: [floor],
+    toWorld: (x, y, z, out) => out.set(x, FLOOR_Y + y, z),
+    toLocal: (w, out) => out.set(w.x, w.y - FLOOR_Y, w.z),
+    orient: (yaw, pitch, out) => out.setFromEuler(e.set(pitch, yaw + Math.PI, 0, "YXZ")),
+  };
+  const things = {
+    table: { show: [], hit: proxy(28, 3, 22.6, -0.5, 0, -0.5), stand: [0.0, 1.5], look: [0.0, 0.85, 0.2] },
+    stairs_up: { show: [stairs], hit: proxy(11, 22, 4, 19, FLOOR_Y + 11, Z1 - 2.5), stand: [1.58, 1.95], look: [1.58, 1.4, 2.5] },
+  };
+
   return {
-    group,
+    group, space, things,
+    /** First person: where the captain stands coming down the stairs / getting up from the table. */
+    spawn: { stairs: { x: 1.58, z: 1.85, yaw: Math.PI, pitch: -0.12 }, table: { x: 0.0, z: 1.45, yaw: Math.PI, pitch: -0.45 } },
     /** Where the camera stands when the captain gets up from the table: a view of the whole cabin. */
     standPose: { target: new THREE.Vector3(1, 2.5, -10), dist: 41, tilt: 15, yaw: 20 },
     update(dt, time, sway) {

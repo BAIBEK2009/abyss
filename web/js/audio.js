@@ -2,7 +2,7 @@
 // pinger with stereo panning (v3.1, 19 p. 6), sonar, splash, bubbles, hull creaks, the heartbeat at
 // low oxygen, thrusters, the manipulator. Music and the table sounds come in M11.
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-let ac = null, master, noise, amb, under, drone, thr;
+let ac = null, master, noise, amb, under, drone, thr, wind;
 
 function loop(freq, vol, lfo, type = "lowpass") {
   const s = ac.createBufferSource(); s.buffer = noise; s.loop = true;
@@ -27,6 +27,7 @@ export function initAudio() {
   amb = loop(480, 0.03, 0.11);                 // the sea outside the hull
   under = loop(170, 0);
   thr = loop(300, 0, 0, "bandpass");
+  wind = loop(900, 0, 0.07, "bandpass");     // the wind on the open deck (M12b)
   const o = ac.createOscillator(); drone = ac.createGain();
   o.type = "sine"; o.frequency.value = 44; drone.gain.value = 0; o.connect(drone); drone.connect(master); o.start();
 }
@@ -80,5 +81,16 @@ export const sfx = {
   radio: () => { nz(0.35, 1800, "bandpass", 0.06, 0, 0.7); tone(1400, 1400, 0.06, "sine", 0.05, 0.36); },
   door: () => { tone(120, 70, 0.5, "sawtooth", 0.03); nz(0.4, 400, "lowpass", 0.18, 0.25); },
   chapter: () => [147, 220, 294].forEach((f, i) => tone(f, f, 2.4, "triangle", 0.05, i * 0.05)),
+  // M12b: on foot
+  /** A step: on steel plates (the deck) or on planks (the cabin); running is harder. */
+  step: (kind = "metal", run = false) => {
+    const v = run ? 1.4 : 1, p = (Math.random() - 0.5) * 0.3;
+    if (kind === "metal") { tone(160 + Math.random() * 40, 90, 0.07, "triangle", 0.07 * v, 0, p); nz(0.06, 2600 + Math.random() * 900, "bandpass", 0.05 * v, 0, 3, p); tone(1900 + Math.random() * 300, 1700, 0.05, "sine", 0.012 * v, 0.005, p); }
+    else { tone(110 + Math.random() * 30, 70, 0.09, "sine", 0.1 * v, 0, p); nz(0.07, 700 + Math.random() * 300, "bandpass", 0.06 * v, 0, 2, p); }
+  },
+  /** Outside: the wind and the sea louder; inside: muffled. */
+  outside(on) { if (!ac) return; ramp(wind.g.gain, on ? 0.035 : 0, 0.8); ramp(amb.g.gain, on ? 0.06 : 0.03, 0.8); },
+  crackle: () => { nz(0.5, 1500, "bandpass", 0.05, 0, 0.6); tone(1250, 1250, 0.05, "sine", 0.03, 0.1); tone(1250, 1250, 0.05, "sine", 0.03, 0.3); },
+  hatch: () => { tone(90, 50, 0.4, "square", 0.05); nz(0.5, 300, "lowpass", 0.2, 0.05); },
   thud: () => { tone(70, 35, 0.5, "sine", 0.3); nz(0.6, 220, "lowpass", 0.2); },
 };
