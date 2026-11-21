@@ -938,11 +938,36 @@ export function createDeck(view, { lifeLabel = "" } = {}) {
   const wire = new THREE.Mesh(new THREE.TubeGeometry(new THREE.LineCurve3(new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, -1, 0)), 1, 0.016, 6),
                               std({ color: 0x2a2a2a, metalness: 0.6, roughness: 0.4 }));
   wire.visible = false; ship.add(wire);
-  const SPL = 360, splP = new Float32Array(SPL * 3), splV = new Float32Array(SPL * 3), splL = new Float32Array(SPL).fill(-1);
-  const splG = new THREE.BufferGeometry(); splG.setAttribute("position", new THREE.BufferAttribute(splP, 3));
-  const splash = new THREE.Points(splG, new THREE.PointsMaterial({ map: SOFT, color: 0xdfeef6, size: 0.22, transparent: true, opacity: 0.85, depthWrite: false }));
-  splash.frustumCulled = false; scene.add(splash);
+  // the splash (above water only — no bubbles here): fine droplets that fly up and fall, a few fat ones, and a
+  // ring of foam spreading on the water where she went in
+  const SPL = 520, splP = new Float32Array(SPL * 3), splV = new Float32Array(SPL * 3), splL = new Float32Array(SPL).fill(-1), splS = new Float32Array(SPL);
+  const splG = new THREE.BufferGeometry();
+  splG.setAttribute("position", new THREE.BufferAttribute(splP, 3));
+  splG.setAttribute("aS", new THREE.BufferAttribute(splS, 1));
+  const splash = new THREE.Points(splG, new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, uniforms: { uPR: { value: 1 } },
+    vertexShader: `uniform float uPR; attribute float aS; varying float vA;
+      void main() { vec4 mv = modelViewMatrix * vec4(position, 1.0); float z = max(0.3, -mv.z);
+        vA = smoothstep(-0.05, 0.25, position.y);                                   // gone into the sea
+        gl_PointSize = clamp(aS * uPR * 380.0 / z, 1.0, 16.0); gl_Position = projectionMatrix * mv; }`,
+    fragmentShader: `varying float vA;
+      void main() { vec2 p = gl_PointCoord - 0.5; p.x *= 1.9;                         // a falling drop: taller than wide
+        float a = smoothstep(0.5, 0.15, length(p)) * vA * 0.85; if (a < 0.01) discard;
+        gl_FragColor = vec4(0.86, 0.92, 0.95, a); }`,
+  }));
+  splash.frustumCulled = false; scene.add(splash); splash.material.uniforms.uPR.value = Math.min(devicePixelRatio, 1.5);
   for (let i = 0; i < SPL; i++) splP[i * 3 + 1] = -100;
+  const foamTex = canvasTexture(256, 256, (g, w, h) => {
+    g.clearRect(0, 0, w, h);
+    for (let k = 0; k < 2600; k++) {
+      const a = Math.random() * Math.PI * 2, r = w * (0.3 + 0.17 * Math.pow(Math.random(), 0.6) * (Math.random() < 0.5 ? -1 : 1) * 0.6 + 0.08);
+      g.fillStyle = `rgba(240,246,248,${0.15 + Math.random() * 0.4})`;
+      g.beginPath(); g.arc(w / 2 + Math.cos(a) * r, h / 2 + Math.sin(a) * r, 0.6 + Math.random() * 2.4, 0, 7); g.fill();
+    }
+  });
+  const foam = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: foamTex, transparent: true, depthWrite: false, opacity: 0 }));
+  foam.rotation.x = -Math.PI / 2; foam.visible = false; scene.add(foam);
+  let foamT = -1;
   const home = { pos: nerpa.position.clone(), rot: nerpa.rotation.clone() };
   const sheaveLocal = new THREE.Vector3(), v1 = new THREE.Vector3(), up = new THREE.Vector3();
   let splashed = false, lastT = 0;
@@ -961,20 +986,30 @@ export function createDeck(view, { lifeLabel = "" } = {}) {
   }
   function burst(at) {
     let n = 0;
-    for (let i = 0; i < SPL && n < 300; i++) if (splL[i] < 0) {
-      const a = Math.random() * Math.PI * 2, r = Math.random() * 1.6, sp = 1.5 + Math.random() * 4;
-      splP.set([at.x + Math.cos(a) * r, at.y, at.z + Math.sin(a) * r], i * 3);
-      splV.set([Math.cos(a) * sp * 0.5, 2 + Math.random() * 5.5, Math.sin(a) * sp * 0.5], i * 3);
-      splL[i] = 1.4 + Math.random(); n++;
+    for (let i = 0; i < SPL && n < 460; i++) if (splL[i] < 0) {
+      const a = Math.random() * Math.PI * 2, r = 0.6 + Math.random() * 1.1, sp = 0.8 + Math.random() * 2.6, fat = Math.random() < 0.12;
+      splP.set([at.x + Math.cos(a) * r, at.y + 0.05, at.z + Math.sin(a) * r], i * 3);
+      splV.set([Math.cos(a) * sp, 1.5 + Math.random() * (fat ? 3 : 5.5), Math.sin(a) * sp], i * 3);
+      splL[i] = 1.6 + Math.random(); splS[i] = fat ? 0.06 + Math.random() * 0.06 : 0.014 + Math.random() * 0.026; n++;
     }
+    splG.attributes.aS.needsUpdate = true;
+    foam.position.set(at.x, at.y + 0.04, at.z); foamT = 0; foam.visible = true;
   }
-  function stepSplash(dt) {
+  function stepSplash(dt, time = lastT) {
     for (let i = 0; i < SPL; i++) if (splL[i] >= 0) {
       splL[i] -= dt; splV[i * 3 + 1] -= 9.8 * dt;
       for (let k = 0; k < 3; k++) splP[i * 3 + k] += splV[i * 3 + k] * dt;
-      if (splL[i] < 0 || splP[i * 3 + 1] < -0.3) { splL[i] = -1; splP[i * 3 + 1] = -100; }
+      if (splL[i] < 0 || splP[i * 3 + 1] < -0.1) { splL[i] = -1; splP[i * 3 + 1] = -100; }
     }
     splG.attributes.position.needsUpdate = true;
+    if (foamT >= 0) {
+      foamT += dt;
+      const r = 1.6 + 5 * (1 - Math.exp(-foamT * 0.9));
+      foam.scale.set(r, r, 1);
+      foam.position.y = seaHeight(foam.position.x, foam.position.z, time) + 0.04;
+      foam.material.opacity = Math.min(1, foamT * 6) * Math.max(0, 1 - foamT / 5) * 0.9;
+      if (foamT > 5) { foamT = -1; foam.visible = false; }
+    }
   }
   const look = (cam, from, to) => {
     deckSpace.toWorld(from[0], from[1], from[2], cam.position);
@@ -1006,7 +1041,7 @@ export function createDeck(view, { lifeLabel = "" } = {}) {
       return w;
     },
     end() { aframe.rotation.x = 0; nerpa.position.copy(home.pos); nerpa.rotation.copy(home.rot); cable.visible = true; wire.visible = false;
-            for (let i = 0; i < SPL; i++) { splL[i] = -1; splP[i * 3 + 1] = -100; } splG.attributes.position.needsUpdate = true; },
+            for (let i = 0; i < SPL; i++) { splL[i] = -1; splP[i * 3 + 1] = -100; } splG.attributes.position.needsUpdate = true; foamT = -1; foam.visible = false; },
   };
 
   const local = new THREE.Vector3(), q = new THREE.Quaternion(), e = new THREE.Euler();

@@ -27,6 +27,7 @@ const fbm = (x, y) => vnoise(x, y) * 0.55 + vnoise(x * 2.1, y * 2.1) * 0.3 + vno
 /** Seabed height around the dive spot (gentle dunes and ripples). */
 export const bedH = (x, z) => (fbm(x * 0.07 + 3.1, z * 0.07 + 1.7) - 0.5) * 3.4 + Math.sin(x * 0.9 + z * 0.35) * 0.06 + Math.sin(x * 0.37 - z * 0.83) * 0.05
   + 0.03 * Math.sin(x * 6.4 + z * 2.1 + 0.8 * Math.sin(z * 0.45 + x * 0.12));          // sand ripples, curved crests ~0.9 m apart
+const SPOT_I = 230;          // the cockpit searchlight (decay 2: physically falling off)
 const BED_M = 950, O2_MAX = 60, SEARCH_R = 17, TETHER = 24, CINE_S = 2;
 
 const std = (o) => new THREE.MeshStandardMaterial(o);
@@ -36,60 +37,174 @@ const soft = canvasTexture(64, 64, (g) => {
   g.fillStyle = gr; g.fillRect(0, 0, 64, 64);
 });
 
-/** "Marine snow": points that glow only inside the searchlight cone (plus a faint ambient). */
-export function marineSnow(count = 2800) {
+// the brightness of a point lit by up to two searchlight cones (GLSL, shared by the snow, the bokeh and the bubbles)
+const CONE_GLSL = /* glsl */`
+  uniform vec3 uLP; uniform vec3 uLD; uniform vec3 uLP2; uniform vec3 uLD2; uniform float uCos; uniform float uOn; uniform float uOn2;
+  float coneOf(vec3 w, vec3 lp, vec3 ld) {
+    vec3 d = w - lp; float dist = max(length(d), 0.001);
+    return smoothstep(uCos - 0.06, uCos + 0.1, dot(d / dist, ld)) / (1.0 + dist * dist * 0.045);
+  }
+  float lit(vec3 w) { return min(1.4, coneOf(w, uLP, uLD) * uOn + coneOf(w, uLP2, uLD2) * uOn2); }`;
+const coneUniforms = () => ({ uLP: { value: new THREE.Vector3() }, uLD: { value: new THREE.Vector3(0, 0, -1) }, uLP2: { value: new THREE.Vector3() },
+  uLD2: { value: new THREE.Vector3(0, 0, -1) }, uCos: { value: Math.cos(0.44) }, uOn: { value: 1 }, uOn2: { value: 0 } });
+
+/** "Marine snow" (23.3-V): thousands of 1-2 px flakes and a few of 3 px; in a searchlight cone they shine, outside
+ *  it they are a faint ~10 %. A handful of out-of-focus bokeh discs drift within 1.5 m of the glass. */
+export function marineSnow(count = 3600) {
   const pos = new Float32Array(count * 3), size = new Float32Array(count);
   for (let i = 0; i < count; i++) {
     pos.set([(Math.random() - 0.5) * 28, (Math.random() - 0.5) * 14, (Math.random() - 0.5) * 28], i * 3);
-    size[i] = 0.5 + Math.random() * Math.random() * 2.6;
+    const r = Math.random();
+    size[i] = r < 0.78 ? 1 + Math.random() * 0.6 : r < 0.96 ? 2 : 3;          // px: many tiny, a few bigger
   }
   const geo = new THREE.BufferGeometry();
   geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
   geo.setAttribute("aS", new THREE.BufferAttribute(size, 1));
+  const uniforms = { ...coneUniforms(), uPR: { value: 1 }, uAmb: { value: 0.1 }, uStreak: { value: 0 } };
   const mat = new THREE.ShaderMaterial({
-    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
-    uniforms: { uLP: { value: new THREE.Vector3() }, uLD: { value: new THREE.Vector3(0, 0, -1) }, uCos: { value: Math.cos(0.44) },
-                uPR: { value: 1 }, uAmb: { value: 0.045 }, uOn: { value: 1 }, uStreak: { value: 0 } },
-    vertexShader: /* glsl */`
-      uniform vec3 uLP; uniform vec3 uLD; uniform float uCos; uniform float uPR; uniform float uAmb; uniform float uOn;
-      attribute float aS; varying float vB; varying float vBok;
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, uniforms,
+    vertexShader: CONE_GLSL + /* glsl */`
+      uniform float uPR; uniform float uAmb; attribute float aS; varying float vB;
       void main() {
         vec4 wp = modelMatrix * vec4(position, 1.0);
-        vec3 d = wp.xyz - uLP; float dist = max(length(d), 0.001); float c = dot(d / dist, uLD);
-        float cone = smoothstep(uCos - 0.05, uCos + 0.08, c) / (1.0 + dist * dist * 0.05) * uOn;
-        vec4 mv = viewMatrix * wp; float z = max(0.25, -mv.z);
-        vB = (uAmb + cone * 1.8) * exp(-z * 0.06);
-        vBok = 1.0 - smoothstep(0.35, 1.4, z);                // right at the porthole: out of focus
-        vB *= 1.0 - vBok * 0.7;
-        gl_PointSize = aS * uPR * (7.0 / z) * (1.0 + vBok * 2.5);
+        vec4 mv = viewMatrix * wp; float z = max(0.05, -mv.z);
+        float c = lit(wp.xyz);
+        vB = mix(uAmb, 1.0, clamp(c, 0.0, 1.0)) * (0.55 + 0.45 * c) * exp(-z * 0.05);
+        vB *= smoothstep(0.5, 1.2, z);                             // nothing big at the glass: the bokeh layer does that
+        gl_PointSize = max(1.0, aS * uPR * clamp(2.2 / z, 0.75, 1.5));
         gl_Position = projectionMatrix * mv;
       }`,
     fragmentShader: /* glsl */`
-      uniform float uStreak; varying float vB; varying float vBok;
+      uniform float uStreak; varying float vB;
       void main() {
         vec2 p = gl_PointCoord - 0.5;
-        p.y *= 1.0 - uStreak * 0.75 * (1.0 - vBok);           // moving fast: flakes stretch into short streaks
-        float r = length(p);
-        float a = mix(smoothstep(0.5, 0.05, r), smoothstep(0.5, 0.38, r) * 0.55 + smoothstep(0.5, 0.0, r) * 0.25, vBok);   // bokeh: a soft disc with a brighter rim
-        gl_FragColor = vec4(vec3(0.82, 0.91, 0.93) * vB, a);
+        p.y *= 1.0 - uStreak * 0.7;                                 // moving fast: flakes stretch into short streaks
+        float a = smoothstep(0.5, 0.0, length(p));
+        gl_FragColor = vec4(vec3(0.84, 0.92, 0.94) * vB * a, 1.0);
       }`,
   });
   const points = new THREE.Points(geo, mat);
   points.frustumCulled = false;
+  // bokeh: a few soft discs right in front of the glass, lit only when they float through the beam
+  const NB = 6, bpos = new Float32Array(NB * 3), bsz = new Float32Array(NB);
+  const bgeo = new THREE.BufferGeometry();
+  bgeo.setAttribute("position", new THREE.BufferAttribute(bpos, 3));
+  bgeo.setAttribute("aS", new THREE.BufferAttribute(bsz, 1));
+  const bmat = new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, uniforms,
+    vertexShader: CONE_GLSL + /* glsl */`
+      uniform float uPR; uniform float uAmb; attribute float aS; varying float vB;
+      void main() {
+        vec4 wp = modelMatrix * vec4(position, 1.0); vec4 mv = viewMatrix * wp; float z = max(0.2, -mv.z);
+        vB = mix(min(uAmb, 0.2) * 0.25, 0.4, clamp(lit(wp.xyz), 0.0, 1.0)) * smoothstep(0.3, 0.55, z) * smoothstep(1.6, 1.2, z);
+        gl_PointSize = aS * uPR / z;
+        gl_Position = projectionMatrix * mv;
+      }`,
+    fragmentShader: /* glsl */`
+      varying float vB;
+      void main() {
+        float r = length(gl_PointCoord - 0.5);
+        float a = smoothstep(0.5, 0.42, r) * 0.55 + smoothstep(0.5, 0.0, r) * 0.2;   // a soft disc with a brighter rim
+        gl_FragColor = vec4(vec3(0.8, 0.92, 0.96) * vB * a, 1.0);
+      }`,
+  });
+  const bokeh = new THREE.Points(bgeo, bmat);
+  bokeh.frustumCulled = false;
+  points.add(bokeh);
+  const fwd = new THREE.Vector3(), tmp = new THREE.Vector3(), right = new THREE.Vector3(), upv = new THREE.Vector3();
+  const respawn = (i, cam) => {
+    cam.getWorldDirection(fwd); right.crossVectors(fwd, cam.up).normalize(); upv.crossVectors(right, fwd);
+    const d = 0.55 + Math.random() * 0.9;
+    tmp.copy(cam.position).addScaledVector(fwd, d).addScaledVector(right, (Math.random() - 0.5) * d * 1.4).addScaledVector(upv, (Math.random() - 0.5) * d * 0.9);
+    bpos.set([tmp.x, tmp.y, tmp.z], i * 3); bsz[i] = 22 + Math.random() * 30;
+  };
+  let bokehInit = false;
   return {
     points, mat,
     /** Keep flakes around the camera; rise = extra drift upwards (descending fast). */
     update(dt, time, cam, rise = 0) {
-      const p = pos;
+      const p = pos, camP = cam.position ?? cam;
       for (let i = 0; i < p.length; i += 3) {
-        p[i + 1] += dt * (0.06 + rise); p[i] += Math.sin(time * 0.3 + i) * dt * 0.02;
+        p[i + 1] += dt * (0.05 + rise); p[i] += Math.sin(time * 0.3 + i) * dt * 0.02; p[i + 2] += Math.cos(time * 0.23 + i) * dt * 0.015;
         for (let a = 0; a < 3; a++) {
-          const c = a === 0 ? cam.x : a === 1 ? cam.y : cam.z, h = a === 1 ? 7 : 14, v = p[i + a] - c;
+          const c = a === 0 ? camP.x : a === 1 ? camP.y : camP.z, h = a === 1 ? 7 : 14, v = p[i + a] - c;
           if (v > h) p[i + a] -= 2 * h; else if (v < -h) p[i + a] += 2 * h;
         }
       }
       geo.attributes.position.needsUpdate = true;
+      if (!cam.isCamera) return;
+      cam.getWorldDirection(fwd);
+      for (let i = 0; i < NB; i++) {
+        bpos[i * 3 + 1] += dt * (0.04 + rise); bpos[i * 3] += Math.sin(time * 0.4 + i) * dt * 0.03;
+        tmp.fromArray(bpos, i * 3).sub(camP);
+        const along = tmp.dot(fwd);
+        if (!bokehInit || along < 0.35 || along > 1.6 || tmp.length() > 1.9) respawn(i, cam);
+      }
+      bokehInit = true;
+      bgeo.attributes.position.needsUpdate = true; bgeo.attributes.aS.needsUpdate = true;
     },
+  };
+}
+
+/** Bubbles (23.3-V): small rings that rise with a wobble from emitters (Nerpa's hull and thrusters, the mud
+ *  volcano); never above the surface (uSurf). emit() returns a world point or null. */
+export function bubbleTrail({ count = 260, rate = 60, life = 4.5, speed = 0.35, spread = 0.2 } = {}) {
+  const pos = new Float32Array(count * 3), base = new Float32Array(count * 3), age = new Float32Array(count).fill(-1),
+        sz = new Float32Array(count), ph = new Float32Array(count), sp = new Float32Array(count);
+  for (let i = 0; i < count; i++) pos[i * 3 + 1] = -1e5;
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+  geo.setAttribute("aS", new THREE.BufferAttribute(sz, 1));
+  const uniforms = { ...coneUniforms(), uPR: { value: 1 }, uAmb: { value: 0.25 }, uSurf: { value: 1e6 } };
+  const mat = new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, uniforms,
+    vertexShader: CONE_GLSL + /* glsl */`
+      uniform float uPR; uniform float uAmb; uniform float uSurf; attribute float aS; varying float vB; varying float vPx;
+      void main() {
+        vec4 wp = modelMatrix * vec4(position, 1.0); vec4 mv = viewMatrix * wp; float z = max(0.2, -mv.z);
+        vB = (uAmb + 1.2 * lit(wp.xyz)) * exp(-z * 0.06) * step(wp.y, uSurf - 0.05);
+        gl_PointSize = clamp(aS * uPR * 900.0 / z, 1.5, 22.0); vPx = gl_PointSize;     // aS: the diameter in metres
+        gl_Position = projectionMatrix * mv;
+      }`,
+    fragmentShader: /* glsl */`
+      varying float vB; varying float vPx;
+      void main() {
+        vec2 p = gl_PointCoord - 0.5; float r = length(p);
+        if (r > 0.5) discard;
+        float rim = smoothstep(0.5, 0.4, r) * smoothstep(0.22, 0.4, r);            // a bubble: a bright thin rim
+        float glint = smoothstep(0.13, 0.0, length(p - vec2(-0.14, -0.14)));       // and a glint of the light
+        float big = rim * 0.9 + glint + 0.08, dot = smoothstep(0.5, 0.0, r) * 0.9; // far/small ones are just a bright dot
+        gl_FragColor = vec4(vec3(0.85, 0.95, 1.0) * vB * mix(dot, big, smoothstep(3.0, 6.0, vPx)), 1.0);
+      }`,
+  });
+  const points = new THREE.Points(geo, mat);
+  points.frustumCulled = false;
+  let acc = 0, next = 0;
+  const v = new THREE.Vector3();
+  return {
+    points, mat,
+    update(dt, time, emit, boost = 1) {
+      acc += emit ? dt * rate * boost : 0;
+      while (acc >= 1) {
+        acc -= 1;
+        const at = emit(v);
+        if (!at) break;
+        const i = next; next = (next + 1) % count;
+        base.set([at.x + (Math.random() - 0.5) * spread, at.y, at.z + (Math.random() - 0.5) * spread], i * 3);
+        age[i] = 0; sz[i] = 0.012 + Math.random() * Math.random() * 0.05; ph[i] = Math.random() * 6.3; sp[i] = speed * (0.7 + Math.random() * 0.7);
+      }
+      for (let i = 0; i < count; i++) {
+        if (age[i] < 0) continue;
+        age[i] += dt;
+        if (age[i] > life) { age[i] = -1; pos[i * 3 + 1] = -1e5; continue; }
+        const a = age[i], w = 0.06 + sz[i];
+        pos[i * 3] = base[i * 3] + Math.sin(a * 5 + ph[i]) * w;                       // wobbling up
+        pos[i * 3 + 1] = base[i * 3 + 1] + a * sp[i] * (1 + a * 0.15);
+        pos[i * 3 + 2] = base[i * 3 + 2] + Math.cos(a * 4.3 + ph[i]) * w;
+      }
+      geo.attributes.position.needsUpdate = true; geo.attributes.aS.needsUpdate = true;
+    },
+    clear() { age.fill(-1); for (let i = 0; i < count; i++) pos[i * 3 + 1] = -1e5; geo.attributes.position.needsUpdate = true; },
   };
 }
 
@@ -160,12 +275,6 @@ function realNerpa() {
   const lamps = n.userData.lamps;
   const cable = new THREE.Mesh(new THREE.TubeGeometry(new THREE.LineCurve3(new THREE.Vector3(0, 1.75, 0.72), new THREE.Vector3(0, 41.7, 0.72)), 1, 0.02, 6), std({ color: 0x111111, metalness: 0.5, roughness: 0.5 }));
   g.add(cable);                                                      // the lift cable from her ring
-  // a column of bubbles from the vents
-  const N = 240, bp = new Float32Array(N * 3);
-  for (let i = 0; i < N; i++) bp.set([(Math.random() - 0.5) * 2.2, 1 + Math.random() * 13, (Math.random() - 0.5) * 2.2], i * 3);
-  const bg = new THREE.BufferGeometry(); bg.setAttribute("position", new THREE.BufferAttribute(bp, 3));
-  const bubbles = new THREE.Points(bg, new THREE.PointsMaterial({ map: soft, color: 0xcfefff, size: 0.14, transparent: true, opacity: 0.75, depthWrite: false, blending: THREE.AdditiveBlending }));
-  bubbles.frustumCulled = false; g.add(bubbles);
   // the lamps' cones of light in the water (volumetric look: additive, soft rim, drifting noise)
   const cones = lamps.map((l) => {
     const L = 13, geo = new THREE.ConeGeometry(Math.tan(0.4) * L, L, 48, 8, true).translate(0, -L / 2, 0);
@@ -176,7 +285,7 @@ function realNerpa() {
     m.visible = false; n.add(m);
     return m;
   });
-  g.userData = { lamps, bp, bg, model: n, cones };
+  g.userData = { lamps, model: n, cones };
   return g;
 }
 
@@ -352,6 +461,9 @@ export function createDive(view) {
   const snow = marineSnow();
   snow.mat.uniforms.uPR.value = view.renderer.getPixelRatio();
   deep.add(snow.points);
+  // bubbles share the snow's searchlight uniforms: they sparkle in the same cones
+  const shareCones = (b) => { for (const k of ["uLP", "uLD", "uLP2", "uLD2", "uCos", "uOn", "uOn2"]) b.mat.uniforms[k] = snow.mat.uniforms[k]; b.mat.uniforms.uPR.value = view.renderer.getPixelRatio(); deep.add(b.points); return b; };
+  const trail = shareCones(bubbleTrail({ count: 700, rate: 80, life: 5, spread: 0.35 }));      // from Nerpa's hull and thrusters in the film
 
   // ---- the surface shot
   const surf = new THREE.Group();
@@ -552,15 +664,14 @@ export function createDive(view) {
     const mud = siltOnTop(std({ color: 0x5a554a, roughness: 1 }), 0x7a7262);
     const cone = new THREE.Mesh(new THREE.LatheGeometry([[0, 1.05], [0.3, 1.1], [0.55, 1.55], [0.75, 1.62], [1.0, 1.45], [1.8, 0.95], [2.8, 0.45], [4.0, 0.08], [4.6, -0.3]].map(([a, b]) => new THREE.Vector2(a, b)), 64), mud);   // a cone with a crater
     MV.y = bedH(MV.x, MV.z); cone.position.copy(MV); cone.receiveShadow = true; bedGroup.add(cone);
-    const N = 90, bp = new Float32Array(N * 3), bs = new Float32Array(N);
-    for (let i = 0; i < N; i++) { bp.set([MV.x + (Math.random() - 0.5) * 0.3, MV.y + 1.1 + Math.random() * 14, MV.z + (Math.random() - 0.5) * 0.3], i * 3); bs[i] = 0.6 + Math.random(); }
-    const bg = new THREE.BufferGeometry(); bg.setAttribute("position", new THREE.BufferAttribute(bp, 3));
-    const pts = new THREE.Points(bg, new THREE.PointsMaterial({ map: soft, color: new THREE.Color(0xdff2f8).multiplyScalar(1.6), size: 0.2, transparent: true, opacity: 0.9, depthWrite: false, blending: THREE.AdditiveBlending }));
-    pts.frustumCulled = false; bedGroup.add(pts);
-    return { bp, bs, bg, N };
+    const gas = bubbleTrail({ count: 160, rate: 9, life: 16, speed: 0.8, spread: 0.12 });
+    gas.at = new THREE.Vector3(MV.x, MV.y + 1.15, MV.z);
+    return gas;
   })();
+  shareCones(bubbleCol);
+  bubbleCol.mat.uniforms.uAmb.value = 0.12;
   // the searchlight of Nerpa and its visible cone of light in the water
-  const spot = new THREE.SpotLight(0xe2f4ff, 0, 30, 0.42, 0.5, 1.2);
+  const spot = new THREE.SpotLight(0xe2f4ff, 0, 34, 0.42, 0.6, 2);
   spot.castShadow = true; spot.shadow.mapSize.set(1024, 1024); spot.shadow.bias = -0.0005;
   deep.add(spot, spot.target);
   const CH = 11, coneGeo = new THREE.ConeGeometry(Math.tan(0.42) * CH, CH, 40, 1, true);
@@ -785,13 +896,13 @@ export function createDive(view) {
     D.y = bedH(0, 0) + (quick ? 2.6 : 22);
     top.intensity = 1.8; top.color.set(0x3f86a8);
     deep.fog.color.set(0x02161f); deep.fog.density = 0.082; deep.background.set(0x010a10);
-    snow.mat.uniforms.uAmb.value = 0.045; snow.mat.uniforms.uOn.value = 1;
+    snow.mat.uniforms.uAmb.value = 0.16; snow.mat.uniforms.uOn.value = 1;
     spot.intensity = 0; cone.visible = false; D.desc = 1;
     cockpit.show(); document.body.classList.add("diving");
     sfx.underwater(true);
     if (!quick) cockpit.msg(t("dv_descent", { m: String(BED_M) }), 2600);
-    if (quick) { spot.intensity = 60; cone.visible = true; top.intensity = 0; }      // the film showed the way down
-    else setTimeout(() => { sfx.clack(); spot.intensity = 60; cone.visible = true; cockpit.msg(t("dv_light"), 1600); }, 1500);
+    if (quick) { spot.intensity = SPOT_I; cone.visible = true; top.intensity = 0; }      // the film showed the way down
+    else setTimeout(() => { sfx.clack(); spot.intensity = SPOT_I; cone.visible = true; cockpit.msg(t("dv_light"), 1600); }, 1500);
     const y0 = D.y, y1 = bedH(0, 0) + 1.8;
     await anim(quick ? 1.2 : 5.5, (k) => {
       D.y = y0 + (y1 - y0) * ease(k); top.intensity = 1.8 * (1 - k);
@@ -951,14 +1062,10 @@ export function createDive(view) {
     }
     rise = mode === "descent" ? D.desc * 3.5 : 0;
     snow.mat.uniforms.uStreak.value = clamp(Math.hypot(D.vx || 0, D.vz || 0) * 0.5 + (D.desc || 0), 0, 1);
-    snow.update(dt, time, camera.position, rise);
+    snow.update(dt, time, camera, rise);
     surfPlane.material.uniforms.uT.value = time;
     beamUniforms.uT.value = time;
-    for (let i = 0; i < bubbleCol.N; i++) {
-      const k = i * 3; bubbleCol.bp[k + 1] += dt * 0.8 * bubbleCol.bs[i]; bubbleCol.bp[k] += Math.sin(time * 2 + i) * dt * 0.05;
-      if (bubbleCol.bp[k + 1] > MV.y + 15) { bubbleCol.bp[k + 1] = MV.y + 1.1; bubbleCol.bp[k] = MV.x + (Math.random() - 0.5) * 0.3; }
-    }
-    bubbleCol.bg.attributes.position.needsUpdate = true;
+    bubbleCol.update(dt, time, (v) => v.copy(bubbleCol.at).add(new THREE.Vector3((Math.random() - 0.5) * 0.3, 0, (Math.random() - 0.5) * 0.3)));
     if (mode === "dive") stepPuffs(dt);
   });
   let active = false;
@@ -1020,20 +1127,30 @@ export function createDive(view) {
       requestAnimationFrame(step);
     });
     const tmpV = new THREE.Vector3();
+    const Y0 = 60, Y0_SURF = Y0 + 14;
+    // bubbles from the thrusters and the vents on top of the fairing
+    const emitHull = (v) => {
+      const props = model.props, r = Math.random();
+      if (r < 0.7) props[Math.floor(Math.random() * props.length)].getWorldPosition(v);
+      else v.set((Math.random() - 0.5) * 1.6, 2.0, -0.6 + Math.random() * 1.2).applyMatrix4(nerpa.userData.model.matrixWorld);
+      return v;
+    };
+    trail.clear(); trail.mat.uniforms.uSurf.value = Y0_SURF; trail.mat.uniforms.uAmb.value = 1.1;
     const snowToLamp = () => {        // the flakes glow in Nerpa's lamp cone
-      const l = nerpa.userData.lamps[0];
+      const [l1, l2] = nerpa.userData.lamps, u = snow.mat.uniforms, mw = nerpa.userData.model.matrixWorld;
       nerpa.updateMatrixWorld(true);
-      snow.mat.uniforms.uLP.value.copy(l.at).applyMatrix4(nerpa.userData.model.matrixWorld);
-      snow.mat.uniforms.uLD.value.set(0, -0.3, 1).applyQuaternion(nerpa.userData.model.getWorldQuaternion(new THREE.Quaternion())).normalize();
+      const qn = nerpa.userData.model.getWorldQuaternion(new THREE.Quaternion());
+      u.uLP.value.copy(l1.at).applyMatrix4(mw); u.uLP2.value.copy(l2.at).applyMatrix4(mw);
+      u.uLD.value.set(0, -0.3, 1).applyQuaternion(qn).normalize(); u.uLD2.value.copy(u.uLD.value);
+      u.uOn2.value = u.uOn.value;
     };
 
     // ---- shot 3: from under the surface looking up — Snell's window, Tulpar's hull, Nerpa sinks past, a seal
-    const Y0 = 60;
     surf.position.set(0, Y0, 0); surf.visible = true;
     surfPlane.material.uniforms.uSurf.value = Y0 + 14; surfPlane.material.uniforms.uOrg.value.set(0, 0);
     deep.fog.color.set(0x0b3c50); deep.fog.density = 0.022; deep.background.set(0x0c4762);
     top.color.set(0x8fc4dc); top.intensity = 3.6;
-    snow.mat.uniforms.uOn.value = 0; snow.mat.uniforms.uAmb.value = 0.32;
+    snow.mat.uniforms.uOn.value = 0; snow.mat.uniforms.uOn2.value = 0; snow.mat.uniforms.uAmb.value = 0.55;
     sounds.under?.();
     await shot(durs[0], (k, dt, time) => {
       const e = ease(k);
@@ -1046,15 +1163,14 @@ export function createDive(view) {
       seal.userData.tail.rotation.y = Math.sin(time * 8) * 0.5;
       for (const m of shafts) m.material.opacity = 0.3 + 0.2 * Math.sin(time * 0.8 + m.userData.ph);
       caustic.intensity = 90 * (1 - k * 0.6); causticTex.offset.set(Math.sin(time * 0.31) * 0.2 + time * 0.03, Math.cos(time * 0.27) * 0.2);
-      const bp = nerpa.userData.bp;
-      for (let i = 1; i < bp.length; i += 3) { bp[i] += dt * 3.6; if (bp[i] > 14) bp[i] = 1; }
-      nerpa.userData.bg.attributes.position.needsUpdate = true;
+      trail.update(dt, time, emitHull, k < 0.12 ? 6 : 1);          // the ballast vents: a burst of air as she goes under
       model.update(dt, time, 0.4);
       setDepth(k * 12);
     });
     surf.visible = false; caustic.intensity = 0;
 
     // ---- shot 4: the twilight zone — blue to black, the depth races, comb jellies; the lamps click on at ~200 m
+    trail.mat.uniforms.uSurf.value = 1e6; trail.mat.uniforms.uAmb.value = 0.25;
     const H = 400, deepCol = new THREE.Color(), c0 = new THREE.Color(0x0a3550), c1 = new THREE.Color(0x03141f), c2 = new THREE.Color(0x010508);
     let lit = false;
     combs.forEach((c, i) => { c.visible = true; c.userData.ph = i * 1.7; });
@@ -1064,7 +1180,7 @@ export function createDive(view) {
       deepCol.copy(c0).lerp(c1, Math.min(1, k * 1.6)).lerp(c2, Math.max(0, (k - 0.6) / 0.4));
       deep.background.copy(deepCol); deep.fog.color.copy(deepCol); deep.fog.density = 0.03 + k * 0.05;
       top.intensity = 1.4 * Math.max(0, 1 - k * 2.2);
-      snow.mat.uniforms.uAmb.value = 0.24 * (1 - k) + 0.04;
+      snow.mat.uniforms.uAmb.value = 0.4 * (1 - k) + 0.16;
       const ny = H - k * 30;
       nerpa.position.set(0, ny, 0); nerpa.rotation.set(0, 0.9 + k * 0.4, Math.sin(time * 0.9) * 0.03);
       // three-quarters from the front: the beams cross the frame instead of shining into the lens
@@ -1084,14 +1200,14 @@ export function createDive(view) {
         c.userData.mat.uniforms.uT.value = time + c.userData.ph; c.userData.mat.uniforms.uLit.value = lit ? 1 : 0.15;
       });
       if (Math.random() < 0.01) sounds.creak?.();
-      model.update(dt, time, 0.3); glare();
+      model.update(dt, time, 0.3); glare(); trail.update(dt, time, k < 0.7 ? emitHull : null);
     });
     combs.forEach((c) => { c.visible = false; });
 
     // ---- shot 5: the seabed comes up in the light; the skids touch, a cloud of silt; then into the cockpit
     if (!lit) { lampsOn(true); snow.mat.uniforms.uOn.value = 1; }
     deep.fog.color.set(0x02161f); deep.fog.density = 0.07; deep.background.set(0x010a10); top.intensity = 0;
-    snow.mat.uniforms.uAmb.value = 0.045;
+    snow.mat.uniforms.uAmb.value = 0.16;
     const bed = bedH(0, 0);
     let landed = false;
     await shot(durs[2], (k, dt, time) => {
@@ -1105,10 +1221,10 @@ export function createDive(view) {
       snowToLamp();
       if (!landed && kk >= 1) { landed = true; puffBurst(0, 0); sounds.thud?.(); }
       stepPuffs(dt);
-      model.update(dt, time, landed ? 0.05 : 0.2); glare();
+      model.update(dt, time, landed ? 0.05 : 0.2); glare(); trail.update(dt, time, null);
     });
     if (!landed) { nerpa.position.set(0, bed + 1.05, 0); puffBurst(0, 0); }
-    fill.intensity = 0;
+    fill.intensity = 0; trail.clear(); snow.mat.uniforms.uOn2.value = 0;
     depthBox.hidden = true;
   }
 
