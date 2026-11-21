@@ -13,7 +13,7 @@ export function showBrief(root, brief) {
       <div class="br-row">${ICONS.target}<div><b>${t("brief_task")}</b><p>${brief.task}</p></div></div>
       <div class="br-row">${ICONS.sonar}<div><b>${t("brief_how")}</b><p>${brief.how}</p></div></div>
       <div class="br-row">${ICONS.clock}<div><b>${t("brief_o2")}</b><p>${t("brief_o2_value", { s: brief.oxygen_s })}</p></div></div>
-      <button class="br-go">${ICONS.dive}<span>${t("btn_dive_start")}</span></button></div>`;
+      <button class="br-go" data-id="dive-start">${ICONS.dive}<span>${t("btn_dive_start")}</span></button></div>`;
     root.append(back);
     sfx.clack?.();
     const go = back.querySelector(".br-go");

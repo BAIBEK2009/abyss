@@ -15,7 +15,7 @@ export function createIntro(root, { onClose } = {}) {
   const rows = [["#f29a1c", "who_you"], ["#b8432f", "who_rival"], ["#e0a83a", "who_hills"], ["#2f7d86", "who_goal"]];
   back.innerHTML = `<div class="ib" role="dialog" aria-modal="true"><h2>${t("who_title")}</h2><p class="sub">${t("who_sub")}</p>
     ${rows.map(([c, k]) => `<div class="ir"><i style="background:${c}"></i><div>${t(k)}</div></div>`).join("")}
-    <button class="go">${t("who_go")}</button></div>`;
+    <button class="go" data-id="who-go">${t("who_go")}</button></div>`;
   root.append(back);
   let first = false;
   back.querySelector(".go").addEventListener("click", () => {

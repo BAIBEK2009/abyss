@@ -14,6 +14,7 @@ import { createGoal } from "./ui/goal.js";
 import { createChapter } from "./ui/chapter.js";
 import { createSpeech } from "./ui/speech.js";
 import { createStoryFlow } from "./story_flow.js";
+import { createWalk } from "./walk.js";
 import { showResult } from "./ui/result.js";
 import { ICONS } from "./ui/icons.js";
 import { pct, hours } from "./ui/fmt.js";
@@ -85,13 +86,19 @@ export function createTable(view, map, initialState, { cabin, dive } = {}) {
   const flow = createStoryFlow({
     view, cabin, ui, speech, chapter, toasts, intro, goal,
     getState: () => state, setState: (st) => { state = st; map.setState(st); }, render: () => render(),
-    stand: (on) => stand(on, true), auto: () => autopilot,
+    stand: (on) => stand(on, true), auto: () => autopilot, walk: () => walk,
+  });
+  // on foot: the deck and the cabin in first person (CLAUDE.md 22.4, 23.2)
+  const walk = createWalk({
+    view, cabin, speech, chapter, getState: () => state, flow: () => flow, busy: () => busy,
+    onDive: () => diveFromDeck(),
   });
   const banner = document.getElementById("autopilot-banner");
   banner.textContent = t("autopilot_on");
 
   function render() {
     goal.update(state.campaign);
+    walk?.refresh();
     if (state.dive) return;              // under water: the table waits (no previews while the dive is open)
     hud.update(state);
     rival.update(state);
@@ -197,6 +204,7 @@ export function createTable(view, map, initialState, { cabin, dive } = {}) {
     tip.hide();
     officers.peek(false);
     if (standing) stand(false);
+    if (walk.mode !== "table") walk.toTable();
     render();
     cinema(true);
     try {
@@ -298,15 +306,22 @@ export function createTable(view, map, initialState, { cabin, dive } = {}) {
     if (on) autopilotLoop();
   }
 
-  /** Get up from the table and look at the cabin; the second press sits back down. */
+  /** Get up from the table: the captain stands in the cabin and walks (first person); E at the table sits back. */
   let standing = false;
   function stand(on = !standing, fromStory = false) {
-    if (on && (busy || !cabin)) return;
-    if (!fromStory && state.campaign?.act === "prologue") return;
-    standing = on;
-    hud.setActive("stand", on);
-    document.body.classList.toggle("standing", on);
-    view.pose(on ? cabin.standPose : null);
+    if (fromStory) { standing = false; hud.setActive("stand", false); return; }
+    if (!on || busy || !cabin || state.campaign?.act === "prologue") return;
+    setTarget(null);
+    walk.enterCabin("table");
+  }
+  /** [E] "Lower Nerpa into the water" on the deck: back to the chart and the dive right where the ship is. */
+  async function diveFromDeck() {
+    if (busy || state.status !== "playing") return;
+    await fade(true);
+    walk.toTable();
+    view.flyFrom(cabin.standPose, 3);
+    await fade(false);
+    await run({ type: "go", target: state.pos, tool: "dive" });
   }
 
   /** The dive (CLAUDE.md v3.1, 19): the crane lowers Nerpa, then the shot from under the surface. */
@@ -340,6 +355,6 @@ export function createTable(view, map, initialState, { cabin, dive } = {}) {
   return {
     get state() { return state; },
     get busy() { return busy; },
-    run, acceptClues, goal, chapter, speech, flow,
+    run, acceptClues, goal, chapter, speech, flow, walk,
   };
 }

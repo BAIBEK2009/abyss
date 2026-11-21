@@ -29,7 +29,7 @@ export function showResult(root, st, handlers) {
       <div><b>${par != null ? t("hours_unit", { h: hours(par) }) : "—"}</b><span>${t("num_par")}</span></div>
       <div><b>${st.counts.sonar} / ${st.counts.dive}</b><span>${t("num_probes")}</span></div>
     </div>
-    <div class="result-buttons"><button class="again">${t("again_map")}</button><button class="new">${t("new_map")}</button></div>`;
+    <div class="result-buttons"><button class="again" data-id="again">${t("again_map")}</button><button class="new" data-id="new-map">${t("new_map")}</button></div>`;
   card.querySelector(".again").onclick = handlers.onAgain;
   card.querySelector(".new").onclick = handlers.onNew;
   back.append(card);

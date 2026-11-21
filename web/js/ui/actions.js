@@ -54,6 +54,7 @@ export function createActions(root, handlers) {
 
   function renderTag(tag, pv, st, advised) {
     const b = el("button", "tag tag-action");
+    b.dataset.id = tag.id;
     b.style.setProperty("--sw", `${(swing++ % 2 ? 1 : -1) * 0.6}deg`);
     if (advised) b.classList.add("advised", "rec");
     let chips = "";
@@ -70,7 +71,8 @@ export function createActions(root, handlers) {
         const r = pv.rival;
         if (r.dive_done) foot = `<span class="tag-rival urgent">${t("rival_will_dive", place(st, r.dive_done.cell))}</span>`;
         else {
-          const moved = r.pos[0] !== st.rival.pos[0] || r.pos[1] !== st.rival.pos[1];
+          const was = st.rival?.pos ?? r.pos;            // the rival may arrive after this state (the campaign, act I)
+          const moved = r.pos[0] !== was[0] || r.pos[1] !== was[1];
           foot = `<span class="tag-rival">${t(moved ? "rival_will_reach" : "rival_will_stay", place(st, r.pos))}</span>`;
         }
       }

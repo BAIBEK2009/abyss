@@ -17,8 +17,8 @@ export function createRadio(root) {
     <p class="radio-text"></p>
     <div class="radio-meta"><div class="rel"><span class="rel-label"></span><div class="rel-bar"><div class="rel-fill"></div></div></div>
       <span class="radio-hears">${t("rival_hears")}</span></div>
-    <div class="radio-buttons"><button class="radio-accept">${ICONS.check}<span>${t("clue_accept")}</span></button>
-      <button class="radio-reject">${t("clue_reject")}</button></div>`;
+    <div class="radio-buttons"><button class="radio-accept" data-id="clue-accept">${ICONS.check}<span>${t("clue_accept")}</span></button>
+      <button class="radio-reject" data-id="clue-reject">${t("clue_reject")}</button></div>`;
   back.append(box);
   root.append(back);
   const text = box.querySelector(".radio-text");

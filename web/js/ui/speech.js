@@ -70,7 +70,7 @@ export function createSpeech(root = document.body) {
       box.onclick = step;
       addEventListener("keydown", onKey, true);
       if (auto) autoT = setTimeout(done, Math.max(3200, full.length * 55 + 1200));
-      current = { done };
+      current = { done, step };
     });
   }
 
@@ -88,6 +88,8 @@ export function createSpeech(root = document.body) {
     /** Hide after the queue drains. */
     async idle() { await chain; box.hidden = true; },
     hide() { current?.done(); box.hidden = true; },
+    /** Like a click on the window: the whole line, then the next one. False if nothing is shown. */
+    next() { if (!current || box.hidden) return false; current.step(); return true; },
     get open() { return !box.hidden; },
   };
 }
@@ -100,7 +102,7 @@ export function goalCards(root, line, buttonLabel) {
     back.innerHTML = `<div class="gc-row">${line.cards.map((c, i) => {
       const [head, ...rest] = c.split(":");
       return `<div class="gc" style="--d:${i * 0.18}s">${icons[i] ?? ""}<b>${head}</b><p>${rest.join(":").trim()}</p></div>`;
-    }).join("")}</div><button class="gc-go">${buttonLabel}</button>`;
+    }).join("")}</div><button class="gc-go" data-id="cards-ok">${buttonLabel}</button>`;
     root.append(back);
     sfx.clack?.();
     back.querySelector(".gc-go").onclick = async () => {

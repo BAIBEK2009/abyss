@@ -33,10 +33,12 @@ export function createOfficers(root, handlers) {
 
   const dock = el("div", "dock");
   const peekBtn = el("button", "pk");
+  peekBtn.dataset.id = "officers";
   peekBtn.title = t("officers_hold");
   peekBtn.innerHTML = `<span class="kc">${t("officers_key")}</span><span><b>${t("officers_btn")}</b><small>${t("officers_hold_short")}</small></span>
     <span class="fc">${OFFICERS.map((id) => `<i class="face face-${id}">${portrait(id)}</i>`).join("")}</span>`;
   const accept = el("button", "adv accept-advice");
+  accept.dataset.id = "accept-advice";
   accept.innerHTML = `${TAG_ICONS.check}<b class="accept-title">${t("accept_advice")}</b><small class="accept-what"></small>`;
   accept.addEventListener("click", () => handlers.onAccept());
   accept.addEventListener("mouseenter", () => handlers.onAdviceHover(true));

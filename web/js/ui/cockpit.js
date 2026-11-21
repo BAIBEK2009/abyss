@@ -41,7 +41,7 @@ export function createCockpit(root, handlers) {
       <canvas class="ck-scope" width="400" height="400"></canvas>
       <div class="ck-lbl">${t("ck_sonar")}</div>
     </div>
-    <button class="ck-surf">${t("ck_surface")} <b>Q</b></button>
+    <button class="ck-surf" data-id="surface">${t("ck_surface")} <b>Q</b></button>
     <div class="ck-plate">${t("ck_plate")}</div>
     <div class="ck-msg"></div>
     <div class="ck-prompt"><span class="pr"></span><b>${t("ck_grab")}</b></div>

@@ -1,14 +1,12 @@
 // The story director (CLAUDE.md 17, 22): plays what the campaign core sends — story lines, goal cards,
-// chapter cards between acts — and runs the prologue: the radio at night, down to the cabin, the officers
-// introduce themselves, the golden pin over the chart table, sitting down at the table.
+// chapter cards between acts — and runs the prologue on foot: the radio on the bridge, the binoculars,
+// down to the cabin (the officers introduce themselves), the chart table.
 // Texts come from story.json only; the core decides what fires (core/campaign.py).
-import * as THREE from "three";
 import { api } from "./api.js";
 import { act, beat, who } from "./story.js";
 import { goalCards } from "./ui/speech.js";
 import { showBrief } from "./ui/brief.js";
-import { el } from "./ui/fmt.js";
-import { fade, sleep } from "./anim.js";
+import { sleep } from "./anim.js";
 import { sfx } from "./audio.js";
 import { t } from "./i18n.js";
 
@@ -17,7 +15,7 @@ import { t } from "./i18n.js";
  *        getState(), setState(st), render(), stand(on), auto() -> autopilot on? }
  */
 export function createStoryFlow(ctx) {
-  const { view, cabin, speech, chapter } = ctx;
+  const { speech, chapter } = ctx;
   let queue = Promise.resolve();
   const camp = () => ctx.getState().campaign;
 
@@ -44,10 +42,9 @@ export function createStoryFlow(ctx) {
       if (!b || b.type === "act_end" || b.type === "clue" || b.type === "choice") continue;
       if (b.type === "goal_cards") {
         await speech.idle();
-        await goalCards(ctx.ui, b, t("btn_go_cabin"));
+        ctx.walk()?.freeCursor();
+        await goalCards(ctx.ui, b, t("coach_done"));
         await send("radio_heard");
-        await send("binoculars");     // until M12b: p5 already showed Poseidon on the horizon
-        await goCabin();
         continue;
       }
       const p = speech.say(it.beat, { auto: ctx.auto() || speech.place === "cockpit" });
@@ -71,57 +68,45 @@ export function createStoryFlow(ctx) {
     return playItems(res.story);
   }
 
-  // ------------------------------------------------------------------ the prologue
-  let night = null;
-  function showNight() {
-    night = el("div", "night", `<div class="moon"></div><div class="sea"></div><div class="path"></div><div class="mast"></div>`);
-    document.body.prepend(night);
-  }
-  async function hideNight() {
-    if (!night) return;
-    night.classList.add("out");
-    await sleep(800);
-    night.remove(); night = null;
-  }
+  // ------------------------------------------------------------------ the prologue, on foot (CLAUDE.md 23.2)
+  // The deck: answer the radio on the bridge -> the binoculars to the south -> down the companionway ->
+  // the cabin: walk up to the chart table. The waypoint and the "[E] ..." prompts live in walk.js.
+  const walk = () => ctx.walk();
 
-  /** Down to the cabin: the door, the dark, the whole cabin from where the captain stands. */
-  async function goCabin() {
-    sfx.door?.();
-    await fade(true);
-    await hideNight();
-    ctx.stand(true);
-    view.flyFrom(cabin.standPose, 3);
-    speech.place = "table";
-    await fade(false);
-    await send("enter_cabin");
-    tablePin(true);
+  /** [E] on the radio: Aigerim's call (p1-p5), the goal cards, then the task is ticked. */
+  async function answerRadio() {
+    await queue;
+    const c = camp();
+    queue = (c.fired.includes("p1") ? playItems([{ beat: "p6" }]) : send("start")).catch((e) => console.warn(e));
+    await queue;
   }
-
-  // the golden pin over the chart table: pin_table + pin_table_sub
-  let pin = null, pinHook = false;
-  const PIN_AT = new THREE.Vector3(0.6, 1.4, 2.6);
-  function tablePin(on) {
-    if (!on) { pin?.remove(); pin = null; return; }
-    if (pin) return;
-    pin = el("button", "cabin-pin", `<span class="pl"><b>${t("pin_table")}</b><small>${t("pin_table_sub")}</small></span><span class="dot"></span>`);
-    pin.addEventListener("click", sitDown);
-    document.body.append(pin);
-    if (!pinHook) {
-      pinHook = true;
-      view.onFrame(() => {
-        if (!pin) return;
-        const s = view.toScreen(PIN_AT);
-        pin.style.transform = `translate(${s.x.toFixed(1)}px, ${s.y.toFixed(1)}px)`;
-      });
+  /** The binoculars lines were heard (walk.js plays them while the player looks south). */
+  async function binocularsDone() {
+    queue = queue.then(() => send("binoculars")).catch((e) => console.warn(e));
+    await queue;
+  }
+  /** [E] on the companionway: down to the cabin (in the prologue the officers introduce themselves). */
+  async function downstairs() {
+    sfx.hatch?.();
+    await walk().enterCabin("stairs");
+    const c = camp();
+    if (c?.act === "prologue" && !c.tasks[2]) {
+      queue = queue.then(() => send("enter_cabin")).catch((e) => console.warn(e));
+      await queue;
     }
+    walk().refresh();
   }
-  async function sitDown() {
-    tablePin(false);
+  /** [E] at the chart table: sit down (the camera glides from the eyes to the chart). */
+  async function sitAtTable() {
     sfx.clack?.();
+    walk().toTable();
     ctx.stand(false);
+    const pro = camp()?.act === "prologue";
     document.body.classList.remove("prologue");
-    await sleep(1700);
-    await send("sit_at_table");
+    if (pro) {
+      await sleep(1700);
+      queue = queue.then(() => send("sit_at_table")).catch((e) => console.warn(e));
+    }
   }
 
   /** On load: start or resume the prologue where it was left. Returns true if the prologue is running. */
@@ -129,23 +114,12 @@ export function createStoryFlow(ctx) {
     const c = camp();
     if (!c || c.act !== "prologue") return false;
     document.body.classList.add("prologue");
-    const [heard, inCabin] = c.tasks;
-    if (!heard) {
-      showNight();
-      speech.place = "deck";
-      queue = queue.then(async () => {
-        await chapter.show("prologue");
-        if (!c.fired.length) await send("start");
-        else await playItems([{ beat: "p6" }]);          // reloaded during the radio: the goal cards again
-      });
-    } else if (!inCabin) {
-      queue = queue.then(goCabin);
-    } else {
-      ctx.stand(true);
-      view.flyFrom(cabin.standPose, 3);
-      speech.place = "table";
-      tablePin(true);
-    }
+    speech.place = "deck";
+    const [, , inCabin] = c.tasks;
+    if (!inCabin) {
+      walk().enterDeckNow();
+      if (!c.fired.length) queue = queue.then(() => chapter.show("prologue"));
+    } else walk().enterCabinNow("stairs");
     return true;
   }
 
@@ -182,5 +156,6 @@ export function createStoryFlow(ctx) {
     return { text, src: `${p.name} · ${p.role}` };
   }
 
-  return { play, send, hold, startIfNeeded, beforeDive, diveEvent, afterDive, clueLine, get busy() { return queue; } };
+  return { play, send, hold, startIfNeeded, beforeDive, diveEvent, afterDive, clueLine, answerRadio, binocularsDone, downstairs, sitAtTable,
+           get busy() { return queue; } };
 }

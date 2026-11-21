@@ -38,8 +38,8 @@ export function createCoach(root, steps) {
     const last = i === steps.length - 1;
     card.innerHTML = `<div class="coach-count">${t("coach_count", { n: i + 1, total: steps.length })}</div>
       <h3>${s.title}</h3><p>${s.text}</p>
-      <div class="coach-buttons"><button class="coach-next">${t(last ? "coach_done" : "coach_next")}</button>
-      <button class="coach-skip">${t("coach_skip")}</button></div>`;
+      <div class="coach-buttons"><button class="coach-next" data-id="coach-next">${t(last ? "coach_done" : "coach_next")}</button>
+      <button class="coach-skip" data-id="coach-skip">${t("coach_skip")}</button></div>`;
     card.querySelector(".coach-next").onclick = () => { if (last) stop(); else { i++; show(); } };
     card.querySelector(".coach-skip").onclick = stop;
     layer.hidden = false;
