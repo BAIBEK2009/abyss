@@ -866,21 +866,85 @@ export function createDive(view) {
       g.rotation.x = 0;
       g.children.forEach((c) => { c.position.y -= R * 0.55; });
     }, "dv_fuselage");
-    // a row of three seats, the masks hanging from a piece of the ceiling panel
+    // a row of three economy seats (23.3-G): woven fabric with the fictional airline's pattern, headrests with
+    // covers, armrests, seat-back pockets, lap belts with buckles hanging loose; the end seat is broken — its back
+    // snapped forward and sideways, its headrest torn off; an oxygen mask on its hose lies beside the row
     mk((g) => {
-      for (let i = 0; i < 3; i++) {
-        const x = i * 0.56 - 0.56;
-        const seat = new THREE.Mesh(rbox(0.48, 0.12, 0.5, 0.05), fab); seat.position.set(x, 0.42, 0); g.add(seat);
-        const back = new THREE.Mesh(rbox(0.48, 0.72, 0.11, 0.05), fab); back.position.set(x, 0.78, -0.24); back.rotation.x = -0.18; g.add(back);
-        const head = new THREE.Mesh(rbox(0.4, 0.2, 0.04, 0.015), std({ color: 0xe8e2d0, roughness: 0.8 })); head.position.set(x, 1.05, -0.3); head.rotation.x = -0.18; g.add(head);
-        const mask = new THREE.Mesh(new THREE.LatheGeometry([[0, 0], [0.05, 0.005], [0.055, 0.04], [0.04, 0.06], [0, 0.06]].map(([a, b]) => new THREE.Vector2(a, b)), 12), yellow);
-        mask.position.set(x + 0.1, 0.95, 0.15); g.add(mask);
-        g.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([new THREE.Vector3(x + 0.1, 1.01, 0.15), new THREE.Vector3(x + 0.12, 1.25, 0.12), new THREE.Vector3(x + 0.1, 1.45, 0.05)]), 10, 0.006, 4), std({ color: 0xd8e4ea, roughness: 0.4, transparent: true, opacity: 0.8 })));
+      const W = 512, weave = (c, w, h) => { for (let y = 0; y < h; y += 2) for (let x = (y / 2) % 2 ? 0 : 2; x < w; x += 4) { c.fillStyle = `rgba(0,0,0,${0.08 + Math.random() * 0.1})`; c.fillRect(x, y, 2, 2); } };
+      const fabMap = canvasTexture(W, W, (c, w, h) => {
+        c.fillStyle = "#18264a"; c.fillRect(0, 0, w, h);
+        c.strokeStyle = "rgba(47,160,170,.5)"; c.lineWidth = 6;                    // the airline's teal wave, repeating
+        for (let y = 40; y < h; y += 96) { c.beginPath(); for (let x = 0; x <= w; x += 8) c.lineTo(x, y + Math.sin(x / w * Math.PI * 4) * 14); c.stroke(); }
+        c.fillStyle = "rgba(232,176,74,.5)"; for (let y = 88; y < h; y += 96) for (let x = 32; x < w; x += 64) { c.beginPath(); c.arc(x, y, 4, 0, 7); c.fill(); }
+        weave(c, w, h);
+      });
+      fabMap.wrapS = fabMap.wrapT = THREE.RepeatWrapping;
+      const fabNor = (() => {
+        const S2 = 128, c = document.createElement("canvas"); c.width = c.height = S2; const x2 = c.getContext("2d"), img = x2.createImageData(S2, S2);
+        for (let y = 0; y < S2; y++) for (let x = 0; x < S2; x++) {         // a basket weave: threads alternate over and under
+          const cell = ((x >> 2) + (y >> 2)) % 2, fx = (x % 4) / 4 - 0.4, fy = (y % 4) / 4 - 0.4;
+          const nx = cell ? fx * 0.9 : 0, ny = cell ? 0 : fy * 0.9, l = Math.hypot(nx, ny, 1), k = (y * S2 + x) * 4;
+          img.data[k] = (nx / l * 0.5 + 0.5) * 255; img.data[k + 1] = (ny / l * 0.5 + 0.5) * 255; img.data[k + 2] = (1 / l * 0.5 + 0.5) * 255; img.data[k + 3] = 255;
+        }
+        x2.putImageData(img, 0, 0); const tx = new THREE.CanvasTexture(c); tx.wrapS = tx.wrapT = THREE.RepeatWrapping; tx.repeat.set(10, 10); return tx;
+      })();
+      const fab = siltMat(std({ map: fabMap, normalMap: fabNor, normalScale: new THREE.Vector2(0.8, 0.8), roughness: 0.95 }));
+      const cover = siltMat(std({ map: canvasTexture(256, 128, (c, w, h) => {
+        c.fillStyle = "#e9e4d8"; c.fillRect(0, 0, w, h); c.fillStyle = "#2fa0aa"; c.fillRect(0, h - 22, w, 10);
+        c.fillStyle = "#22355a"; c.font = "800 44px Onest, sans-serif"; c.textAlign = "center"; c.fillText("AQ", w / 2, h / 2 + 8); weave(c, w, h);
+      }), roughness: 0.9 }));
+      const plastic = siltMat(std({ color: 0x8f9396, roughness: 0.55 })), darkFab = siltMat(std({ color: 0x1a2236, roughness: 0.95 }));
+      const metal = siltMat(std({ color: 0x7d8286, metalness: 0.8, roughness: 0.5 })), strap = std({ color: 0x3a3f46, roughness: 0.85 });
+      const ribbon = (pts, w) => {        // a flat strap along a curve
+        const cur = new THREE.CatmullRomCurve3(pts.map((p) => new THREE.Vector3(...p))), N = 24, pos = [], idx = [];
+        for (let k = 0; k <= N; k++) { const p = cur.getPoint(k / N), tn = cur.getTangent(k / N), side = new THREE.Vector3(1, 0, 0).sub(tn.clone().multiplyScalar(tn.x)).normalize().multiplyScalar(w / 2);
+          pos.push(p.x - side.x, p.y - side.y, p.z - side.z, p.x + side.x, p.y + side.y, p.z + side.z);
+          if (k < N) idx.push(k * 2, k * 2 + 1, k * 2 + 2, k * 2 + 1, k * 2 + 3, k * 2 + 2); }
+        const geo = new THREE.BufferGeometry(); geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); geo.setIndex(idx); geo.computeVertexNormals(); return geo;
+      };
+      const seat = (x, broken) => {
+        const s = new THREE.Group(); s.position.x = x; g.add(s);
+        const cush = new THREE.Mesh(rbox(0.46, 0.13, 0.48, 0.05, 4), fab); cush.position.set(0, 0.44, 0.02); s.add(cush);
+        const back = new THREE.Group(); back.position.set(0, 0.5, -0.22); s.add(back);
+        const bf = new THREE.Mesh(rbox(0.46, 0.68, 0.11, 0.05, 4), fab); bf.position.set(0, 0.34, 0); back.add(bf);
+        const shell = new THREE.Mesh(rbox(0.47, 0.7, 0.035, 0.015, 2), plastic); shell.position.set(0, 0.34, -0.07); back.add(shell);
+        const pocket = new THREE.Mesh(rbox(0.36, 0.24, 0.025, 0.01, 2), darkFab); pocket.position.set(0, 0.16, -0.095); back.add(pocket);
+        const band = new THREE.Mesh(rbox(0.36, 0.02, 0.03, 0.008, 1), strap); band.position.set(0, 0.28, -0.1); back.add(band);
+        const card = new THREE.Mesh(rbox(0.16, 0.12, 0.004, 0.002, 1), std({ color: 0xe8e2d0, roughness: 0.8 })); card.position.set(0.07, 0.3, -0.1); card.rotation.z = 0.1; back.add(card);
+        const tray = new THREE.Mesh(rbox(0.06, 0.03, 0.02, 0.008, 1), plastic); tray.position.set(0, 0.5, -0.1); back.add(tray);   // the tray-table latch
+        if (!broken) {
+          const head = new THREE.Mesh(rbox(0.38, 0.19, 0.1, 0.05, 4), fab); head.position.set(0, 0.77, 0.01); back.add(head);
+          const cv = new THREE.Mesh(rbox(0.39, 0.16, 0.105, 0.04, 3), cover); cv.position.set(0, 0.78, 0.012); cv.scale.set(1, 1, 1.02); back.add(cv);
+          back.rotation.x = -0.2;
+        } else {
+          back.rotation.set(0.75, 0, 0.32);                 // snapped forward and sideways at the recline joint
+          const hinge = new THREE.Mesh(new THREE.TorusGeometry(0.03, 0.01, 6, 12, Math.PI * 1.3), metal); hinge.position.set(0.23, 0.5, -0.22); hinge.rotation.y = Math.PI / 2; s.add(hinge);
+          const head = new THREE.Mesh(rbox(0.38, 0.19, 0.1, 0.05, 4), fab); head.position.set(0.55, 0.06, 0.45); head.rotation.set(0.2, 0.9, 1.4); s.add(head);   // the headrest torn off, in the silt
+        }
+        for (const sx of [-0.12, 0.12]) {                    // lap belt halves, hanging loose off the cushion, with buckles
+          const lx = sx * 1.6;
+          s.add(new THREE.Mesh(ribbon([[lx, 0.47, -0.16], [lx * 0.9, 0.52, 0.0], [lx * 0.7, 0.5, 0.2], [lx * 0.75, 0.3, 0.3], [lx * 0.8, 0.05, 0.36]], 0.045), strap));
+          const bk = new THREE.Mesh(rbox(0.06, 0.012, 0.08, 0.005, 1), metal); bk.position.set(lx * 0.8, 0.04, 0.4); bk.rotation.y = sx * 2; s.add(bk);
+        }
+        const legs = [[-0.18, -0.12], [0.18, -0.12], [-0.18, 0.14], [0.18, 0.14]];
+        for (const [lx, lz] of legs) s.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.LineCurve3(new THREE.Vector3(lx, 0.38, lz), new THREE.Vector3(lx * 1.1, 0, lz + (broken && lx > 0 ? 0.12 : 0))), 1, 0.018, 6), metal));
+        return s;
+      };
+      seat(-0.56, false); seat(0, false); const b = seat(0.56, true); b.rotation.z = -0.1;
+      for (const x of [-0.84, -0.28, 0.28]) {             // armrests with their supports
+        const arm = new THREE.Mesh(rbox(0.055, 0.06, 0.44, 0.02, 2), plastic); arm.position.set(x, 0.66, -0.02); g.add(arm);
+        g.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.LineCurve3(new THREE.Vector3(x, 0.63, -0.18), new THREE.Vector3(x, 0.45, -0.2)), 1, 0.014, 6), metal));
       }
-      for (const x of [-0.84, -0.28, 0.28, 0.84]) { const arm = new THREE.Mesh(rbox(0.05, 0.08, 0.46, 0.02), frameM); arm.position.set(x, 0.6, -0.02); g.add(arm); }
-      for (const x of [-0.6, 0.6]) g.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([new THREE.Vector3(x, 0, 0.15), new THREE.Vector3(x, 0.38, 0.1), new THREE.Vector3(x, 0.38, -0.2), new THREE.Vector3(x, 0, -0.2)]), 12, 0.025, 6), frameM));
-      const ceil = new THREE.Mesh(tornPlate(1.8, 0.7, 13, 0.03), alu); ceil.position.set(0.1, 1.48, 0.05); ceil.rotation.x = 0.25; g.add(ceil);
-      g.rotation.z = 0.12;
+      for (const z of [-0.12, 0.14]) g.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.LineCurve3(new THREE.Vector3(-0.8, 0.36, z), new THREE.Vector3(0.75, 0.36, z)), 1, 0.022, 8), metal));   // the seat track beams
+      // the oxygen mask on its hose, beside the row
+      const yellowM = siltMat(std({ color: 0xffc21a, roughness: 0.55 }));
+      const mask = new THREE.Mesh(new THREE.LatheGeometry([[0, 0], [0.05, 0.004], [0.06, 0.035], [0.05, 0.06], [0.03, 0.065]].map(([a2, b2]) => new THREE.Vector2(a2, b2)), 18), yellowM);
+      mask.position.set(1.05, 0.03, 0.45); mask.rotation.set(-1.3, 0, 0.3); g.add(mask);
+      g.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([new THREE.Vector3(1.05, 0.06, 0.4), new THREE.Vector3(1.2, 0.03, 0.15), new THREE.Vector3(1.0, 0.02, -0.15), new THREE.Vector3(1.15, 0.04, -0.45)]), 24, 0.008, 6), std({ color: 0xd8e4ea, roughness: 0.3, transparent: true, opacity: 0.75 })));
+      g.add(new THREE.Mesh(new THREE.TorusGeometry(0.06, 0.003, 4, 20), strap).translateX(1.05).translateY(0.05).translateZ(0.5));   // its elastic band
+      const bag = new THREE.Mesh(rbox(0.07, 0.05, 0.1, 0.02, 2), std({ color: 0xe0e4e2, roughness: 0.4, transparent: true, opacity: 0.6 })); bag.position.set(1.15, 0.03, -0.48); g.add(bag);
+      g.children.forEach((c) => { c.position.y -= 0.16; });        // settled: the legs half in the silt
+      g.rotation.z = 0.06;
     }, "dv_seats");
     // the flap with torn cable bundles
     mk((g) => {
