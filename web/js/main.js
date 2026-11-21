@@ -10,14 +10,18 @@ const $ = (id) => document.getElementById(id);
 async function loadFonts() {
   const sample = "ABCDEFGHIJ 0123456789 Квадрат поиска Ёё −·«»";
   await Promise.all(['400 20px "Prata"', '700 20px "Caveat"', '400 20px "Caveat"', '400 16px "Manrope"',
-                     '700 16px "Manrope"', '400 16px "PT Mono"'].map((f) => document.fonts.load(f, sample)));
+                     '700 16px "Manrope"', '400 16px "PT Mono"', 'italic 700 20px "Cormorant Garamond"', 'italic 600 20px "Cormorant Garamond"', 'italic 500 20px "Cormorant Garamond"', '700 20px "Cormorant Garamond"'].map((f) => document.fonts.load(f, sample)));
 }
 
-/** Camera per screen: the chart sits to the left, the officers' panel is on the right. */
+/** Camera per screen (CLAUDE.md v3.1, 18). */
 function aimCamera(view, w, h) {
   const r = view.rig;
-  if (w / h >= 1.15) { r.target.set(2.2, 0, 1.15); r.dist = 31.5; r.tilt = 40; r.hfov = 31; }   // chart up: tags below
-  else { r.target.set(0, 0, 0.3); r.dist = 44; r.tilt = 52; r.hfov = 34; }   // narrow screens / phones
+  // a 32° vertical lens, 41° above the horizon (the reference table view); far enough to fit the chart
+  const a = w / h, narrow = w < 980;
+  r.target.set(0.1, 0, narrow ? 2.1 : 1.1);
+  r.tilt = 41;
+  r.dist = Math.max(narrow ? 15 : 15.6, 7.0 / (Math.tan((16 * Math.PI) / 180) * a));
+  r.hfov = (2 * Math.atan(Math.tan((16 * Math.PI) / 180) * a) * 180) / Math.PI;
 }
 
 async function start() {

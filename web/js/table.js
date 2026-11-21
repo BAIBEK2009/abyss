@@ -11,7 +11,8 @@ import { createRadio } from "./ui/radio.js";
 import { createCoach } from "./ui/coach.js";
 import { showResult } from "./ui/result.js";
 import { ICONS } from "./ui/icons.js";
-import { cellName, pct, hours } from "./ui/fmt.js";
+import { pct, hours } from "./ui/fmt.js";
+import { place, cap } from "./places.js";
 import { t, plural } from "./strings.js";
 
 const AUTOPILOT_PAUSE_MS = 1300;
@@ -122,7 +123,7 @@ export function createTable(view, map, initialState) {
     hoverCell = cell;
     map.hover(cell);
     if (!cell || state.status !== "playing") { tip.hide(); return; }
-    const big = `${cellName(state.cols, cell)} ${pct(state.P[cell[1]][cell[0]])} %`;
+    const big = `${place(state, cell).name} · ${pct(state.P[cell[1]][cell[0]])} %`;
     const extra = seenEmpty(cell) ? t("tip_seen_empty") : null;
     if (isReef(cell)) return tip.show(big, [t("tip_reef")]);
     if (same(cell, state.pos)) return tip.show(big, [t("tip_here"), extra]);
@@ -156,6 +157,11 @@ export function createTable(view, map, initialState) {
   function speak(e) {
     if (e.type !== "msg" || !SPEAKER[e.key]) return;
     const params = { ...e };
+    if (typeof e.cell === "string") {            // the core names cells "E5": turn it into a place
+      const c = [state.cols.indexOf(e.cell[0]), Number(e.cell.slice(1)) - 1];
+      const pl = place(state, c);
+      Object.assign(params, pl, { At: cap(pl.at) });
+    }
     toasts.say(SPEAKER[e.key], t(`toast_${e.key}`, params));
   }
 
@@ -185,7 +191,9 @@ export function createTable(view, map, initialState) {
   /** Radio clues that arrived during the move: the captain decides (the autopilot always accepts). */
   async function handleClues() {
     for (const c of state.clues) {
+      if (c.kind === "coast") map.showBand(c.axis, c.start, c.start + 2);    // the strip is marked on the chart
       const accept = autopilot ? true : await radio.ask(c);
+      map.showBand(null);
       const res = await api.clue(c.id, accept);
       state = res.state;
       res.events.forEach(speak);

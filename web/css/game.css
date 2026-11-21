@@ -1,3 +1,27 @@
+@font-face { font-family: "Cormorant Garamond"; font-weight: 500; font-style: normal; font-display: block;
+  src: url("../fonts/cormorant-garamond-cyrillic-500-normal.woff2") format("woff2"); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
+@font-face { font-family: "Cormorant Garamond"; font-weight: 500; font-style: normal; font-display: block;
+  src: url("../fonts/cormorant-garamond-latin-500-normal.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Cormorant Garamond"; font-weight: 500; font-style: italic; font-display: block;
+  src: url("../fonts/cormorant-garamond-cyrillic-500-italic.woff2") format("woff2"); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
+@font-face { font-family: "Cormorant Garamond"; font-weight: 500; font-style: italic; font-display: block;
+  src: url("../fonts/cormorant-garamond-latin-500-italic.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Cormorant Garamond"; font-weight: 600; font-style: normal; font-display: block;
+  src: url("../fonts/cormorant-garamond-cyrillic-600-normal.woff2") format("woff2"); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
+@font-face { font-family: "Cormorant Garamond"; font-weight: 600; font-style: normal; font-display: block;
+  src: url("../fonts/cormorant-garamond-latin-600-normal.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Cormorant Garamond"; font-weight: 600; font-style: italic; font-display: block;
+  src: url("../fonts/cormorant-garamond-cyrillic-600-italic.woff2") format("woff2"); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
+@font-face { font-family: "Cormorant Garamond"; font-weight: 600; font-style: italic; font-display: block;
+  src: url("../fonts/cormorant-garamond-latin-600-italic.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Cormorant Garamond"; font-weight: 700; font-style: normal; font-display: block;
+  src: url("../fonts/cormorant-garamond-cyrillic-700-normal.woff2") format("woff2"); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
+@font-face { font-family: "Cormorant Garamond"; font-weight: 700; font-style: normal; font-display: block;
+  src: url("../fonts/cormorant-garamond-latin-700-normal.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Cormorant Garamond"; font-weight: 700; font-style: italic; font-display: block;
+  src: url("../fonts/cormorant-garamond-cyrillic-700-italic.woff2") format("woff2"); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
+@font-face { font-family: "Cormorant Garamond"; font-weight: 700; font-style: italic; font-display: block;
+  src: url("../fonts/cormorant-garamond-latin-700-italic.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
 /* ABYSS v3 · fonts are local woff2 files (works offline) */
 @font-face { font-family: "Caveat"; font-weight: 400; font-display: block;
   src: url("../fonts/caveat-cyrillic-400-normal.woff2") format("woff2"); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
@@ -50,13 +74,13 @@ html, body {
   font-family: var(--print);
 }
 
-#scene { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+#scene { position: fixed; inset: 0; width: 100%; height: 100%; display: block; filter: saturate(1.14) contrast(1.05); }
 
 .vignette {
   position: fixed;
   inset: 0;
   pointer-events: none;
-  background: radial-gradient(ellipse 72% 70% at 40% 52%, transparent 40%, rgba(10, 6, 3, 0.5) 78%, rgba(4, 2, 1, 0.92) 100%);
+  background: radial-gradient(ellipse 80% 75% at 50% 50%, transparent 55%, rgba(6, 4, 2, 0.35) 82%, rgba(0, 0, 0, 0.72) 100%);
 }
 
 #overlay { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }
@@ -65,6 +89,17 @@ html, body {
 .pinned { position: absolute; left: 0; top: 0; will-change: transform; }
 .pinned > * { position: relative; }
 .pin-at > * { translate: -50% -50%; }
+.pin-above > * { translate: -50% -100%; }
+
+/* paper name tags over the ships (CLAUDE.md v3.1, 18) */
+.ship-tag { pointer-events: none; background: linear-gradient(#f4ead2, #e8dbbb); color: #23222b; padding: 3px 9px 5px;
+  border-radius: 3px; box-shadow: 0 6px 14px #0009; text-align: center; white-space: nowrap; margin-top: -12px; }
+.ship-tag::after { content: ""; position: absolute; left: 50%; bottom: -12px; width: 1.5px; height: 12px; background: #23222baa; }
+.ship-tag b { display: block; font: 700 15px/1.15 "Cormorant Garamond", Georgia, serif; }
+.ship-tag span { font: 600 11px Manrope, sans-serif; color: #6d6858; }
+.ship-tag.you { border-top: 3px solid #f29a1c; }
+.ship-tag.rival { border-top: 3px solid #b8432f; }
+.ship-tag.rival b { color: #8e2f1f; }
 
 /* ---------- printed labels on the chart margins ---------- */
 .map-label {

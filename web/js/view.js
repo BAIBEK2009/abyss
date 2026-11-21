@@ -3,10 +3,7 @@
 import * as THREE from "three";
 import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
-import { ShaderPass } from "three/addons/postprocessing/ShaderPass.js";
 import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
-import { HorizontalTiltShiftShader } from "three/addons/shaders/HorizontalTiltShiftShader.js";
-import { VerticalTiltShiftShader } from "three/addons/shaders/VerticalTiltShiftShader.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 
 export const deg = THREE.MathUtils.degToRad;
@@ -33,46 +30,42 @@ export function createView(canvas) {
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.15;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
 
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x0e0905);
-  scene.fog = new THREE.Fog(0x0e0905, 40, 70);
+  scene.background = new THREE.Color(0x0a0807);
+  scene.fog = new THREE.Fog(0x0a0807, 26, 52);
   const pmrem = new THREE.PMREMGenerator(renderer);
   scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
   scene.environmentIntensity = 0.13;     // a hint for the brass and the table edges: the lamp does the lighting
 
   const camera = new THREE.PerspectiveCamera(22, 1, 0.1, 160);
 
-  // one warm hanging lamp, low and to the side: the paper steps cast shadows; it sways a little
-  scene.add(new THREE.HemisphereLight(0xd8c6a8, 0x2a1a10, 0.12));
-  const lamp = new THREE.SpotLight(0xFFCF98, 3.6, 0, deg(31), 0.85, 0);     // a warm pool on the chart, darker edges
+  // one warm lamp above the chart (soft shadows; it sways a little) + cold moonlight from the porthole
+  // (three r170 uses physical light units: the reference r128 values are multiplied by π, decay 0)
+  scene.add(new THREE.HemisphereLight(0x7a8fb8, 0x2a1c10, 0.95));
+  const lamp = new THREE.SpotLight(0xffd3a1, 4.6, 0, 0.8, 0.6, 0);      // a warm pool on the chart, darker edges
   const LAMP_POS = new THREE.Vector3(-5, 7, -8);      // the scene moves it to the visible lamp shade
   lamp.position.copy(LAMP_POS);
   lamp.target.position.set(0.3, 0, 0.8);
   lamp.castShadow = true;
   lamp.shadow.mapSize.set(2048, 2048);
-  lamp.shadow.bias = -0.0002;
-  lamp.shadow.normalBias = 0.015;
-  lamp.shadow.radius = 4;
+  lamp.shadow.bias = -0.00035;
+  lamp.shadow.normalBias = 0.01;
+  lamp.shadow.radius = 3;
   lamp.shadow.camera.near = 6;
-  lamp.shadow.camera.far = 40;
+  lamp.shadow.camera.far = 30;
   scene.add(lamp, lamp.target);
-  const fill = new THREE.DirectionalLight(0x9cc3d6, 0.18);   // faint cool porthole light from the right
-  fill.position.set(14, 7, -6);
-  scene.add(fill);
+  const moon = new THREE.DirectionalLight(0x86a6ff, 1.1);   // cold moonlight from the porthole, right
+  moon.position.set(19, 7, -13);
+  scene.add(moon);
 
-  // post: render -> soft tilt-shift at top and bottom -> tone map + sRGB
+  // post: render -> tone map + sRGB (no tilt-shift blur: CLAUDE.md v3.1, 18)
   const rt = new THREE.WebGLRenderTarget(1, 1, { samples: 4, type: THREE.HalfFloatType });
   const composer = new EffectComposer(renderer, rt);
   composer.addPass(new RenderPass(scene, camera));
-  const hBlur = new ShaderPass(HorizontalTiltShiftShader);
-  const vBlur = new ShaderPass(VerticalTiltShiftShader);
-  hBlur.uniforms.r.value = vBlur.uniforms.r.value = 0.5;
-  composer.addPass(hBlur);
-  composer.addPass(vBlur);
   composer.addPass(new OutputPass());
-  const BLUR = 0.35;                                        // just a hint at the very top and bottom
 
   // camera rig: look at `target` from `dist` at `tilt` degrees above the horizon.
   // hfov = horizontal field of view: a long lens (30-35°) keeps the chart from looking like a trapezoid
@@ -90,8 +83,6 @@ export function createView(canvas) {
     renderer.setSize(w, h, false);
     composer.setPixelRatio(renderer.getPixelRatio());
     composer.setSize(w, h);
-    hBlur.uniforms.h.value = BLUR / w;
-    vBlur.uniforms.v.value = BLUR / h;
     camera.aspect = w / h;
     for (const fn of resizeHooks) fn(w, h);
     camera.fov = THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(deg(rig.hfov) / 2) / camera.aspect));
@@ -122,7 +113,7 @@ export function createView(canvas) {
   function frame() {
     const dt = Math.min(0.05, clock.getDelta());
     const time = clock.elapsedTime;
-    const sway = { x: Math.sin(time * 0.55) * 0.18, z: Math.sin(time * 0.37) * 0.12 };   // a gentle swing
+    const sway = { x: Math.sin(time * 0.55) * 0.12, z: Math.sin(time * 0.37) * 0.08 };   // a gentle swing
     lamp.position.set(LAMP_POS.x + sway.x, LAMP_POS.y, LAMP_POS.z + sway.z);
     for (const fn of frameHooks) fn(dt, time, sway);
     composer.render();

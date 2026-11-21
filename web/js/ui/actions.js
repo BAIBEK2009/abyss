@@ -2,26 +2,27 @@
 // visible before pressing, the rival's forecast for those hours, red warnings, advice outlined in gold.
 // Every number comes from /api/preview (the Python core).
 import { ICONS } from "./icons.js";
-import { el, hours, pct, cellName } from "./fmt.js";
+import { el, hours, pct } from "./fmt.js";
+import { place } from "../places.js";
 import { t } from "../strings.js";
 
 /** Which tags to show: without a target — act here; with a target — go there (+ tool). */
 export function tagList(st, target) {
-  const here = cellName(st.cols, st.pos);
+  const here = place(st, st.pos);
   const atBase = st.pos[0] === st.base[0] && st.pos[1] === st.base[1];
   const tags = [];
   if (!target) {
-    tags.push({ id: "sonar_here", icon: ICONS.sonar, label: t("tag_sonar_here", { cell: here }), desc: t("desc_sonar"),
+    tags.push({ id: "sonar_here", icon: ICONS.sonar, label: t("tag_sonar_here", here), desc: t("desc_sonar"),
                 action: { type: "go", target: st.pos, tool: "sonar" } });
-    tags.push({ id: "dive_here", icon: ICONS.dive, label: t("tag_dive_here", { cell: here }), desc: t("desc_dive"),
+    tags.push({ id: "dive_here", icon: ICONS.dive, label: t("tag_dive_here", here), desc: t("desc_dive"),
                 action: { type: "go", target: st.pos, tool: "dive" } });
   } else {
-    const c = cellName(st.cols, target);
-    tags.push({ id: "go_sonar", icon: ICONS.sonar, label: t("tag_go_sonar", { cell: c }), desc: t("desc_sonar"),
+    const c = place(st, target, { pin: true });
+    tags.push({ id: "go_sonar", icon: ICONS.sonar, label: t("tag_go_sonar", c), desc: t("desc_sonar"),
                 action: { type: "go", target, tool: "sonar" } });
-    tags.push({ id: "go_dive", icon: ICONS.dive, label: t("tag_go_dive", { cell: c }), desc: t("desc_dive"),
+    tags.push({ id: "go_dive", icon: ICONS.dive, label: t("tag_go_dive", c), desc: t("desc_dive"),
                 action: { type: "go", target, tool: "dive" } });
-    tags.push({ id: "go_only", icon: ICONS.move, label: t("tag_go_only", { cell: c }), desc: t("desc_go"),
+    tags.push({ id: "go_only", icon: ICONS.move, label: t("tag_go_only", c), desc: t("desc_go"),
                 action: { type: "go", target, tool: null } });
   }
   if (!atBase) tags.push({ id: "home", icon: ICONS.home, label: t("tag_home"), desc: t("desc_home"), action: { type: "home" } });
@@ -58,10 +59,10 @@ export function createActions(root, handlers) {
       if (warns.length) foot = `<span class="tag-warn">${ICONS.warn}${warns.join(" · ")}</span>`;
       else if (pv.rival) {
         const r = pv.rival;
-        if (r.dive_done) foot = `<span class="tag-rival urgent">${t("rival_will_dive", { cell: cellName(st.cols, r.dive_done.cell) })}</span>`;
+        if (r.dive_done) foot = `<span class="tag-rival urgent">${t("rival_will_dive", place(st, r.dive_done.cell))}</span>`;
         else {
           const moved = r.pos[0] !== st.rival.pos[0] || r.pos[1] !== st.rival.pos[1];
-          foot = `<span class="tag-rival">${t(moved ? "rival_will_reach" : "rival_will_stay", { cell: cellName(st.cols, r.pos) })}</span>`;
+          foot = `<span class="tag-rival">${t(moved ? "rival_will_reach" : "rival_will_stay", place(st, r.pos))}</span>`;
         }
       }
     }
@@ -81,8 +82,8 @@ export function createActions(root, handlers) {
       bar.hidden = st.status !== "playing";
       if (bar.hidden) return;
       hint.innerHTML = target
-        ? t("hint_target", { cell: cellName(st.cols, target), p: pct(st.P[target[1]][target[0]]) })
-        : t("hint_none", { cell: cellName(st.cols, st.pos) });
+        ? t("hint_target", { ...place(st, target), p: pct(st.P[target[1]][target[0]]) })
+        : t("hint_none", place(st, st.pos));
       const tags = tagList(st, target);
       const previews = await Promise.all(tags.map((tg) => preview(tg.action).catch(() => null)));
       if (my !== seq) return;                       // a newer update replaced this one
