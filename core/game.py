@@ -13,6 +13,12 @@ Every action returns timestamped EVENTS for the frontend, e.g.
     {"type": "move", "rival": true, "t": 4.5, "cell": [8, 9]}
     {"type": "msg", "key": "sonar_echo", "cell": "E5"}
 The server never sends ready-made phrases — only message keys and numbers.
+
+A LIVE dive (CLAUDE.md v3.1, 19): act(action, live=True) with the "dive" tool stops at the dive
+and reports what lies on that seabed ({"box", "debris"}); the player searches it in first person and
+then calls dive_end(found, coverage, debris_seen). Not found: Vera recalculates by the share of the
+seabed seen, P' = P (1 - 0.97 c) / (1 - P 0.97 c). The autopilot, par and balance use the camera
+model (live=False), which is the same search with c = 1.
 """
 import random
 from dataclasses import dataclass
@@ -83,6 +89,8 @@ class Game:
         self.feed = []               # journal "records": {"t", "key", ...}
         self.turns = []              # journal "calculations", one per action
         self.beacon_warned = False
+        self.pending_dive = None      # a live dive waiting for its result from the player
+        self._live = False
 
         self.clues = [dict(c, state="future") for c in clues.make_clues(rng_clues, self.signal, self.box)]
         self.rival = Rival(self.P, random.Random(f"{self.seed}:rival")) if rival else None
@@ -141,6 +149,8 @@ class Game:
     def preview(self, action) -> dict:
         if self.status != "playing":
             raise GameError("game_over")
+        if self.pending_dive:
+            raise GameError("dive_pending")
         kind, target, tool = self._parse(action)
         if kind == "home" and self.pos == world.BASE:
             raise GameError("at_base")
@@ -170,9 +180,11 @@ class Game:
                    for p in self.probes)
 
     # ------------------------------------------------------------------ actions
-    def act(self, action) -> list:
-        """Perform one action on the shared clock. Returns events. Raises GameError if not allowed."""
+    def act(self, action, live: bool = False) -> list:
+        """Perform one action on the shared clock. Returns events. Raises GameError if not allowed.
+        live=True: a dive stops at the seabed and waits for dive_end() (the first-person search)."""
         self.preview(action)                         # all validation in one place
+        self._live = bool(live)
         kind, target, tool = self._parse(action)
         start, fuel0 = self.hours, self.fuel
         advice = agent.officers(self.P, self.pos, self.fuel)
@@ -220,9 +232,14 @@ class Game:
         record["rival"] = self.rival.plan_info() if self.rival and self.status == "playing" else None
         self.turns.append(record)
         if self.status != "playing":
-            events.append({"type": "end", "t": self.hours, "status": self.status, "reason": self.reason,
-                           "box": list(self.box), "stars": self.stars()})
+            self.pending_dive = None                 # the rival or the beacon ended it first
+            events.append(self._end_event())
+        self._live = False
         return events
+
+    def _end_event(self) -> dict:
+        return {"type": "end", "t": self.hours, "status": self.status, "reason": self.reason,
+                "box": list(self.box), "stars": self.stars()}
 
     def _do_step(self, step: Step, record) -> list:
         cell, t = step.cell, step.t
@@ -248,7 +265,13 @@ class Game:
                     {"type": "msg", "t": t, "key": "sonar_echo" if echo else "sonar_silence", "cell": name}]
         # dive
         self.counts["dive"] += 1
-        outcome = self._camera(cell)
+        outcome = self._camera(cell)                 # the same random draw in both modes: seeds stay stable
+        if self._live:
+            here = cell == self.box
+            self.pending_dive = {"cell": cell, "t": t, "box": here, "debris": (not here) and outcome == "debris",
+                                 "record": record}
+            return [{"type": "dive", "t": t, "cell": list(cell), "live": True,
+                     "scene": {"box": here, "debris": self.pending_dive["debris"]}}]
         self.probes.append({"cell": list(cell), "kind": "dive", "result": outcome, "t": t})
         self.feed.append({"t": t, "key": "feed_dive", "cell": name, "result": outcome})
         events = [{"type": "dive", "t": t, "cell": list(cell), "result": outcome}]
@@ -276,6 +299,38 @@ class Game:
                 "best": list(best), "best_prior": before[best], "best_posterior": self.P[best],
                 "best_L": (bayes.sonar_likelihood(best, cell, result == "echo") if kind == "sonar"
                            else bayes.camera_likelihood(best, cell, result))}
+
+    def dive_end(self, found: bool, coverage: float, debris_seen: bool = False) -> list:
+        """The player surfaced from a live dive: with the box, or having seen `coverage` of the seabed."""
+        d = self.pending_dive
+        if d is None:
+            raise GameError("no_dive")
+        self.pending_dive = None
+        cell, t, name = d["cell"], d["t"], world.cell_name(d["cell"])
+        c = min(1.0, max(0.0, float(coverage or 0)))
+        before = self.P
+        if found and d["box"]:
+            self.status = "won"
+            self.probes.append({"cell": list(cell), "kind": "dive", "result": "box", "t": t})
+            self.feed.append({"t": t, "key": "feed_dive", "cell": name, "result": "box"})
+            d["record"]["bayes"] = {"kind": "dive", "cell": list(cell), "result": "box", "prior": before[cell]}
+            return [{"type": "dive", "t": t, "cell": list(cell), "result": "box"}, self._end_event()]
+        result = "debris" if (debris_seen and d["debris"]) else "nothing"
+        best_before = bayes.argmax(self.P, near=cell)
+        if result == "debris":
+            self.P, Z = bayes.camera(self.P, cell, "debris")
+        else:                                        # Vera: "we saw a share c of this seabed and no box"
+            L = {k: (1 - world.CAMERA[0]["box"] * c if k == cell else 1.0) for k in world.all_cells()}
+            self.P, Z = bayes.update(self.P, L)
+        self.probes.append({"cell": list(cell), "kind": "dive", "result": result, "t": t, "coverage": round(c, 3)})
+        self.feed.append({"t": t, "key": "feed_dive", "cell": name, "result": result, "coverage": round(c, 3)})
+        rec = self._bayes_record("dive", cell, result, before, Z, best_before)
+        rec["coverage"] = round(c, 3)
+        d["record"]["bayes"] = rec
+        return [{"type": "dive", "t": t, "cell": list(cell), "result": result, "coverage": round(c, 3)},
+                {"type": "belief", "t": t, "P": self.belief_rows()},
+                {"type": "msg", "t": t, "key": "dive_debris" if result == "debris" else "dive_seen", "cell": name,
+                 "c": round(c * 100), "p0": round(before[cell] * 100), "p1": round(self.P[cell] * 100)}]
 
     def _camera(self, cell) -> str:
         r, acc = self.rng.random(), 0.0
@@ -413,6 +468,8 @@ class Game:
             "advice": self.advice() if not over else None,
             "par": self.par, "status": self.status, "reason": self.reason,
             "box": list(self.box) if over else None,      # secret until the mission ends
+            "dive": None if not self.pending_dive else {"cell": list(self.pending_dive["cell"]),
+                                                        "scene": {"box": self.pending_dive["box"], "debris": self.pending_dive["debris"]}},
             "stars": self.stars() if over else None,
             "feed": self.feed,
             "costs": {"move": [world.MOVE_HOURS, world.MOVE_FUEL], "sonar": [world.SONAR_HOURS, world.SONAR_FUEL],

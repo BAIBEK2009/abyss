@@ -15,6 +15,7 @@ export const api = {
   journal: () => call("/api/journal"),
   newGame: (seed) => call("/api/new", seed === undefined ? {} : { seed }),
   preview: (action) => call("/api/preview", { action }),
-  act: (action) => call("/api/act", { action }),
+  act: (action, live = false) => call("/api/act", { action, live }),
+  diveEnd: (found, coverage, debris) => call("/api/dive", { found, coverage, debris }),
   clue: (id, accept) => call("/api/clue", { id, accept }),
 };

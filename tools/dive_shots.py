@@ -16,7 +16,7 @@ from server import make_server  # noqa: E402
 
 ap = argparse.ArgumentParser()
 ap.add_argument("out", type=Path)
-ap.add_argument("--cell", default="1,8")
+ap.add_argument("--cell", default="1,8", help="x,y or \"box\" (the cell where the box lies)")
 ap.add_argument("--at", default="3.5,6.0,9.5,13.0")
 ap.add_argument("--prefix", default="dive")
 ap.add_argument("--keys", default="", help="key script after the last shot, e.g. 'w:2,d:1'")
@@ -35,7 +35,7 @@ with sync_playwright() as pw:
     page.goto(url)
     page.wait_for_selector("body[data-ready='1']", timeout=30000)
     page.wait_for_timeout(1200)
-    x, y = map(int, args.cell.split(","))
+    x, y = server.game.box if args.cell == "box" else map(int, args.cell.split(","))
     xy = page.evaluate(f"window.__abyss.cellScreen({x}, {y})")
     page.mouse.click(xy["x"], xy["y"]); page.wait_for_timeout(900)
     page.click(".tag-action >> nth=1")
@@ -44,9 +44,19 @@ with sync_playwright() as pw:
         page.wait_for_timeout(max(0, int((at - (time.time() - t0)) * 1000)))
         page.screenshot(path=str(args.out / f"{args.prefix}_{i + 1}.png"))
         print("shot", i + 1, f"{time.time() - t0:.1f}s")
-    for step in filter(None, args.keys.split(",")):
+    for n, step in enumerate(filter(None, args.keys.split(","))):
         k, sec = step.split(":")
+        if k == "shot":                                   # "shot:2" = wait 2 s and take a picture
+            page.wait_for_timeout(int(float(sec) * 1000))
+            page.screenshot(path=str(args.out / f"{args.prefix}_k{n}.png")); print("shot k", n)
+            continue
+        if k == "face":                                   # park in front of the box (test hook)
+            print("face box:", page.evaluate("window.__abyss.faceBox()")); page.wait_for_timeout(int(float(sec) * 1000)); continue
+        if k == "mouse":                                  # "mouse:0.3" = pointer at 30 % below the centre
+            page.mouse.move(720, 900 * (0.46 + float(sec))); continue
         page.keyboard.down(k); page.wait_for_timeout(int(float(sec) * 1000)); page.keyboard.up(k)
+    st = page.evaluate("window.__abyss.state()")
+    print("after:", st["status"], st["hours"], [(p["kind"], p["result"], p.get("coverage")) for p in st["probes"]])
     b.close()
 server.shutdown()
 print("errors:", errors or "none")

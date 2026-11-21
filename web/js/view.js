@@ -205,6 +205,8 @@ export function createView(canvas) {
     renderer, scene, camera, rig, aim, lamp, pin, toScreen, placeLamp,
     /** Fly the camera after a point (fn(vector) fills it) or back home (null). */
     follow(fn, opt = {}) { if (!fn && !follow) return; follow = fn; followOpt = { dist: 9.5, tilt: 34, ...opt }; rate = opt.rate ?? 2.2; settled = false; },
+    /** Recompute the lens for the table after another scene changed it. */
+    refit: () => resize(),
     /** Render another scene (the deep sea); the caller places the camera. null = back to the table. */
     useScene(s) {
       manual = !!s;

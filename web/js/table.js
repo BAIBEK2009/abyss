@@ -19,7 +19,7 @@ import { t, plural } from "./strings.js";
 
 const AUTOPILOT_PAUSE_MS = 1300;
 const SPEAKER = {                       // who explains which event (CLAUDE.md 6.5)
-  sonar_echo: "vera", sonar_silence: "vera", dive_debris: "vera", dive_empty: "vera",
+  sonar_echo: "vera", sonar_silence: "vera", dive_debris: "vera", dive_empty: "vera", dive_seen: "vera",
   clue_applied: "vera", clue_rejected: "vera",
   rival_dive_empty: "lev", beacon_low: "lev", reef: "lev",
   refuel: "grisha", tow: "grisha",
@@ -124,8 +124,8 @@ export function createTable(view, map, initialState, { cabin, dive } = {}) {
   async function onHoverCell(cell) {
     if (same(cell, hoverCell)) return;
     hoverCell = cell;
-    map.hover(cell);
-    if (!cell || state.status !== "playing") { tip.hide(); return; }
+    map.hover(busy ? null : cell);
+    if (!cell || busy || state.status !== "playing") { tip.hide(); return; }
     const big = `${place(state, cell).name} · ${pct(state.P[cell[1]][cell[0]])} %`;
     const extra = seenEmpty(cell) ? t("tip_seen_empty") : null;
     if (isReef(cell)) return tip.show(big, [t("tip_reef")]);
@@ -180,23 +180,26 @@ export function createTable(view, map, initialState, { cabin, dive } = {}) {
     cinema(true);
     try {
       const before = state;
-      const res = await api.act(action);
-      const diveEv = dive && !autopilot && res.events.find((e) => e.type === "dive" && !e.rival);
+      const live = !!dive && !autopilot && action.tool === "dive";
+      const res = await api.act(action, live);
+      const diveEv = live && res.state.dive && res.events.find((e) => e.type === "dive" && e.live);
       if (diveEv) {
-        // sail there (the map), then the dive itself (crane, under water), then the rest of its hours
+        // sail there (the map), the dive itself (crane, under water, the search), then the rest of its hours
         const tArr = diveEv.t - state.costs.dive[0];
         const pre = res.events.filter((e) => (e.t ?? before.hours) <= tArr + 1e-6);
         const post = res.events.filter((e) => !pre.includes(e));
         await map.play(pre, before, { onEvent: speak });
-        await diveScene();
+        const found = await diveScene(diveEv.scene);
+        const end = await api.diveEnd(found.found, found.coverage, found.debrisSeen);
         const rivalMoves = pre.filter((e) => e.rival && e.type === "move");
         const mid = { ...before, hours: tArr, pos: diveEv.cell,
                       rival: before.rival && { ...before.rival, pos: rivalMoves.length ? rivalMoves[rivalMoves.length - 1].cell : before.rival.pos } };
-        await map.play(post, mid, { onEvent: speak });
+        await map.play([...post, ...end.events], mid, { onEvent: speak });
+        state = end.state;
       } else {
         await map.play(res.events, before, { onEvent: speak });
+        state = res.state;
       }
-      state = res.state;
       map.setState(state);
       if (!autopilot || state.status !== "playing") cinema(false);
       if (state.status === "playing") await handleClues();
@@ -271,16 +274,18 @@ export function createTable(view, map, initialState, { cabin, dive } = {}) {
   }
 
   /** The dive (CLAUDE.md v3.1, 19): the crane lowers Nerpa, then the shot from under the surface. */
-  async function diveScene() {
+  async function diveScene(scene) {
     toasts.say("grisha", t("toast_crane"), 2600);
     await map.launchNerpa();
     await fade(true, "blue");
     await dive.surfaceShot(() => fade(false));
     await fade(true, "blue");
+    const result = await dive.search(scene, () => fade(false), () => fade(true, "blue"));
     dive.leave();
     map.resetNerpa();
     view.follow(map.shipPoint);              // the cinema camera goes on following the ship
     await fade(false);
+    return result;
   }
 
   /** Cinema mode during a move (CLAUDE.md v3.1, 18): the interface slides off, black bars, the camera follows the ship. */
@@ -288,6 +293,9 @@ export function createTable(view, map, initialState, { cabin, dive } = {}) {
     document.body.classList.toggle("cine", on);
     view.follow(on ? map.shipPoint : null);
   }
+
+  // a live dive left unfinished (the page was reloaded under water): surface without the box
+  if (state.dive) api.diveEnd(false, 0, false).then((r) => { state = r.state; map.setState(state); render(); }).catch(() => {});
 
   render();
   if (state.status !== "playing") finish();

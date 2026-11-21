@@ -8,6 +8,7 @@ it asks this server for state, sends the captain's decisions here and animates t
     POST /api/preview {action}           -> hours, fuel, path, chance, risky, rival forecast (changes NOTHING)
     POST /api/act     {action}           -> {events, state}
     POST /api/clue    {id, accept}       -> {events, state}
+    POST /api/dive    {found, coverage, debris}  -> {events, state}   (end of a live first-person dive)
     GET  /api/advice                     -> the three officers + joint advice
     GET  /api/journal                    -> records + calculations (professor's mode)
 
@@ -101,8 +102,13 @@ class Handler(SimpleHTTPRequestHandler):
                     return self.send_json(game.preview(body.get("action")))
                 if path == "/api/act":
                     before = len(game.turns)
-                    events = game.act(body.get("action"))
+                    events = game.act(body.get("action"), live=bool(body.get("live")))
                     self.server.print_new_turns(game, before)
+                    return self.send_json({"events": events, "state": game.state()})
+                if path == "/api/dive":
+                    before = len(game.turns)
+                    events = game.dive_end(bool(body.get("found")), body.get("coverage", 0), bool(body.get("debris")))
+                    self.server.print_new_turns(game, before - 1)      # the dive's turn now has its result
                     return self.send_json({"events": events, "state": game.state()})
                 if path == "/api/clue":
                     before = len(game.turns)

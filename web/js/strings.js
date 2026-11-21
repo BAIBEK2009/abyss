@@ -2,7 +2,23 @@
 
 const RU = {
   // ---- M8: the dive
+  ck_depth: "ГЛУБИНА, М", ck_pinger: "ПИНГЕР МАЯЧКА", ck_pinger_hint: "писк громче — ящик ближе; слышно, с какой он стороны",
+  ck_sonar: "СОНАР · ПРОБЕЛ", ck_surface: "Всплыть", ck_plate: "«НЕРПА-2» · ГЛУБОКОВОДНЫЙ АППАРАТ",
+  ck_grab: "Удерживайте E — захват манипулятором", ck_help_title: "Вы в батискафе",
+  ck_help_ws: "вперёд и назад", ck_help_ad: "поворот", ck_mouse: "мышь", ck_help_mouse: "куда светит прожектор",
+  ck_space: "Пробел", ck_help_space: "сонар (−3 с кислорода)", ck_help_e: "удерживать — манипулятор", ck_help_q: "всплыть в любой момент",
+  ck_help_note: "Кислорода мало. Слушайте писк маячка в наушниках.",
+  ck_left: "Влево", ck_right: "Вправо", ck_fwd: "Вперёд", ck_back: "Назад", ck_sonar_btn: "Сонар", ck_grab_btn: "Захват",
+  ck_n: "С", ck_e: "В", ck_s: "Ю", ck_w: "З",
+  dv_descent: "Погружение. До дна — {m} метров.", dv_light: "Прожектор включён.",
+  dv_bottom: "Дно. Ищите оранжевый корпус — слушайте писк маячка.", dv_tether: "Трос натянут — дальше «Нерпу» не пустят.",
+  dv_seen_box: "Оранжевый корпус! Это бортовой самописец. Подплывите ближе.",
+  dv_wing: "Кусок крыла с красной полосой. Мы на верном пути.", dv_fuselage: "Обломок фюзеляжа. Ящик был в хвосте — он где-то рядом.",
+  dv_seats: "Ряд пассажирских кресел. Хвост где-то рядом.", dv_flap: "Закрылок и оборванные кабели. Совсем близко.",
+  dv_surface_cmd: "Капитан: всплываем.", dv_o2_out: "Кислород на исходе — аварийное всплытие.", dv_got_box: "Ящик в манипуляторе! Всплываем.",
+  toast_dive_seen: "Осмотрели <b>{c} %</b> дна, ящика не видно. Вероятность здесь: {p0} % → <b>{p1} %</b>. Остальные места подросли.",
   nerpa_plate: "НЕРПА-2",
+  box_label1: "БОРТОВОЙ САМОПИСЕЦ", box_label2: "AQ-271 · НЕ ВСКРЫВАТЬ",
   toast_crane: "Кран готов. Спускаем «Нерпу», капитан. <b>Кислорода — на одну минуту</b>.",
   // ---- M7 part 2: things on the table
   cap_title: "ABYSS · стол капитана",
@@ -228,7 +244,23 @@ const RU = {
 
 const EN = {
   // ---- M8: the dive
+  ck_depth: "DEPTH, M", ck_pinger: "BEACON PINGER", ck_pinger_hint: "louder — the box is closer; you hear which side it is on",
+  ck_sonar: "SONAR · SPACE", ck_surface: "Surface", ck_plate: "NERPA-2 · DEEP-SEA VEHICLE",
+  ck_grab: "Hold E — grab with the manipulator", ck_help_title: "You are in the bathyscaphe",
+  ck_help_ws: "forward and back", ck_help_ad: "turn", ck_mouse: "mouse", ck_help_mouse: "where the searchlight points",
+  ck_space: "Space", ck_help_space: "sonar (−3 s of oxygen)", ck_help_e: "hold — manipulator", ck_help_q: "surface at any moment",
+  ck_help_note: "Oxygen is short. Listen to the beacon's ping in headphones.",
+  ck_left: "Left", ck_right: "Right", ck_fwd: "Forward", ck_back: "Back", ck_sonar_btn: "Sonar", ck_grab_btn: "Grab",
+  ck_n: "N", ck_e: "E", ck_s: "S", ck_w: "W",
+  dv_descent: "Diving. {m} metres to the bottom.", dv_light: "Searchlight on.",
+  dv_bottom: "The bottom. Look for an orange casing — listen to the beacon.", dv_tether: "The cable is taut — Nerpa can't go further.",
+  dv_seen_box: "An orange casing! The flight recorder. Get closer.",
+  dv_wing: "A piece of wing with a red stripe. We're on the right track.", dv_fuselage: "A piece of fuselage. The box was in the tail — it's near.",
+  dv_seats: "A row of passenger seats. The tail is near.", dv_flap: "A flap and torn cables. Very close.",
+  dv_surface_cmd: "Captain: surfacing.", dv_o2_out: "Oxygen running out — emergency ascent.", dv_got_box: "The box is in the manipulator! Surfacing.",
+  toast_dive_seen: "We saw <b>{c}%</b> of the seabed, no box. The chance here: {p0}% → <b>{p1}%</b>. Other places grew.",
   nerpa_plate: "NERPA-2",
+  box_label1: "FLIGHT RECORDER", box_label2: "AQ-271 · DO NOT OPEN",
   toast_crane: "The crane is ready. Lowering Nerpa, captain. <b>Oxygen for one minute</b>.",
   // ---- M7 part 2: things on the table
   cap_title: "ABYSS · the captain's table",

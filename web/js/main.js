@@ -23,7 +23,7 @@ function aimCamera(view, w, h) {
   // the target sits nearer than the chart centre: the chart rises in the frame, so its lower edge
   // (the base, the ships) stays clear of the hanging tags and the dock at the bottom of the screen
   r.target.set(0.45, 0, narrow ? 3.1 : 2.35);
-  r.tilt = 48;
+  r.tilt = 48; r.yaw = 0;
   r.dist = Math.max(narrow ? 18.5 : 18.8, 8.3 / (Math.tan((16 * Math.PI) / 180) * a));
   r.hfov = (2 * Math.atan(Math.tan((16 * Math.PI) / 180) * a) * 180) / Math.PI;
 }
@@ -55,7 +55,7 @@ async function start() {
     setTimeout(() => document.body.classList.remove("standing"), 2600);
   }
 
-  window.__abyss = { state: () => table.state, busy: () => table.busy, cellScreen: map.cellScreen };
+  window.__abyss = { state: () => table.state, busy: () => table.busy, cellScreen: map.cellScreen, faceBox: dive.debugFaceBox };
 }
 
 start();
