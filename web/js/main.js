@@ -11,9 +11,14 @@ import { loadStory } from "./story.js";
 const $ = (id) => document.getElementById(id);
 
 async function loadFonts() {
-  const sample = "ABCDEFGHIJ 0123456789 Квадрат поиска Ёё −·«»";
-  await Promise.all(['400 20px "Prata"', '700 20px "Caveat"', '400 20px "Caveat"', '400 16px "Manrope"',
-                     '700 16px "Manrope"', '400 16px "PT Mono"', 'italic 700 20px "Cormorant Garamond"', 'italic 600 20px "Cormorant Garamond"', 'italic 500 20px "Cormorant Garamond"', '700 20px "Cormorant Garamond"'].map((f) => document.fonts.load(f, sample)));
+  // the sample touches every subset (latin, cyrillic, cyrillic-ext with the Kazakh letters),
+  // so canvas labels never draw before their font is in (CLAUDE.md 23.1)
+  const sample = "ABCDEFGHIJ 0123456789 Ёё Әә Ғғ Ққ Ңң Өө Ұұ Үү Һһ Іі −·«»";
+  const faces = ['400 20px "Prata"', '700 20px "Caveat"', '400 20px "Caveat"', '400 16px "PT Mono"',
+    '400 16px "Onest"', '500 16px "Onest"', '600 16px "Onest"', '700 16px "Onest"', '800 16px "Onest"',
+    'italic 700 20px "Cormorant Garamond"', 'italic 600 20px "Cormorant Garamond"', 'italic 500 20px "Cormorant Garamond"',
+    '700 20px "Cormorant Garamond"', '600 20px "Cormorant Garamond"'];
+  await Promise.all(faces.map((f) => document.fonts.load(f, sample)));
 }
 
 /** Camera per screen (CLAUDE.md v3.1, 18). */

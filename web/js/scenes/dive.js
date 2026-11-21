@@ -107,7 +107,7 @@ function realNerpa() {
   const top = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.45, 0.4, 20), yel); top.position.y = 1.15; g.add(top);
   const nm = canvasTexture(256, 64, (c, w, h) => {
     c.fillStyle = "#f2b632"; c.fillRect(0, 0, w, h);
-    c.fillStyle = "#1b1b1b"; c.font = "700 40px Manrope, sans-serif"; c.textAlign = "center"; c.fillText(t("nerpa_plate"), w / 2, 46);
+    c.fillStyle = "#1b1b1b"; c.font = "700 40px Onest, sans-serif"; c.textAlign = "center"; c.fillText(t("nerpa_plate"), w / 2, 46);
   });
   const plate = new THREE.Mesh(new THREE.PlaneGeometry(0.8, 0.2), std({ map: nm, roughness: 0.5 }));
   plate.position.set(0.62, 0.5, -0.86); plate.rotation.y = 0.6; g.add(plate);
@@ -454,8 +454,8 @@ export function createDive(view) {
     const label = canvasTexture(512, 256, (c, w, h) => {
       c.fillStyle = "#e8692b"; c.fillRect(0, 0, w, h);
       c.fillStyle = "#f3efe6"; c.fillRect(0, 34, w, 22); c.fillRect(0, h - 56, w, 22);
-      c.fillStyle = "#1b1b1b"; c.font = "700 38px Manrope, sans-serif"; c.textAlign = "center";
-      c.fillText(t("box_label1"), w / 2, 122); c.font = "600 30px Manrope, sans-serif"; c.fillText(t("box_label2"), w / 2, 168);
+      c.fillStyle = "#1b1b1b"; c.font = "700 38px Onest, sans-serif"; c.textAlign = "center";
+      c.fillText(t("box_label1"), w / 2, 122); c.font = "600 30px Onest, sans-serif"; c.fillText(t("box_label2"), w / 2, 168);
     });
     const side = std({ color: 0xe8692b, roughness: 0.45, metalness: 0.2 });
     const body = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.38, 0.46), [side, side, side, side, std({ map: label, roughness: 0.45 }), side]);
@@ -476,7 +476,7 @@ export function createDive(view) {
       c.fillStyle = "#c4c9cd"; c.fillRect(0, 0, w, h);
       for (let i = 0; i < 9; i++) { c.fillStyle = "rgba(90,100,108,.35)"; c.fillRect(0, i * h / 9, w, 2); }
       c.fillStyle = "#b8432f"; c.fillRect(0, h - 46, w, 22);
-      c.fillStyle = "#1d2228"; c.font = "800 92px Manrope, sans-serif"; c.textAlign = "center"; c.fillText("AQ-271", w / 2, 132);
+      c.fillStyle = "#1d2228"; c.font = "800 92px Onest, sans-serif"; c.textAlign = "center"; c.fillText("AQ-271", w / 2, 132);
     });
     const alu = std({ color: 0xc4c9cd, roughness: 0.38, metalness: 0.7 });
     const top = std({ map: plate, roughness: 0.4, metalness: 0.55 });

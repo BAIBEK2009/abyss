@@ -1,51 +1,94 @@
+/* ABYSS · local woff2 fonts (offline). Every family has latin + cyrillic + cyrillic-ext,
+   so the Kazakh letters Әә Ғғ Ққ Ңң Өө Ұұ Үү Һһ Іі never fall back (CLAUDE.md 23.1; tests/test_fonts.py). */
+@font-face { font-family: "Cormorant Garamond"; font-weight: 500; font-style: normal; font-display: block;
+  src: url("../fonts/cormorant-garamond-cyrillic-ext-500-normal.woff2") format("woff2"); unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F; }
 @font-face { font-family: "Cormorant Garamond"; font-weight: 500; font-style: normal; font-display: block;
   src: url("../fonts/cormorant-garamond-cyrillic-500-normal.woff2") format("woff2"); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
 @font-face { font-family: "Cormorant Garamond"; font-weight: 500; font-style: normal; font-display: block;
   src: url("../fonts/cormorant-garamond-latin-500-normal.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
 @font-face { font-family: "Cormorant Garamond"; font-weight: 500; font-style: italic; font-display: block;
+  src: url("../fonts/cormorant-garamond-cyrillic-ext-500-italic.woff2") format("woff2"); unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F; }
+@font-face { font-family: "Cormorant Garamond"; font-weight: 500; font-style: italic; font-display: block;
   src: url("../fonts/cormorant-garamond-cyrillic-500-italic.woff2") format("woff2"); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
 @font-face { font-family: "Cormorant Garamond"; font-weight: 500; font-style: italic; font-display: block;
   src: url("../fonts/cormorant-garamond-latin-500-italic.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Cormorant Garamond"; font-weight: 600; font-style: normal; font-display: block;
+  src: url("../fonts/cormorant-garamond-cyrillic-ext-600-normal.woff2") format("woff2"); unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F; }
 @font-face { font-family: "Cormorant Garamond"; font-weight: 600; font-style: normal; font-display: block;
   src: url("../fonts/cormorant-garamond-cyrillic-600-normal.woff2") format("woff2"); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
 @font-face { font-family: "Cormorant Garamond"; font-weight: 600; font-style: normal; font-display: block;
   src: url("../fonts/cormorant-garamond-latin-600-normal.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
 @font-face { font-family: "Cormorant Garamond"; font-weight: 600; font-style: italic; font-display: block;
+  src: url("../fonts/cormorant-garamond-cyrillic-ext-600-italic.woff2") format("woff2"); unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F; }
+@font-face { font-family: "Cormorant Garamond"; font-weight: 600; font-style: italic; font-display: block;
   src: url("../fonts/cormorant-garamond-cyrillic-600-italic.woff2") format("woff2"); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
 @font-face { font-family: "Cormorant Garamond"; font-weight: 600; font-style: italic; font-display: block;
   src: url("../fonts/cormorant-garamond-latin-600-italic.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Cormorant Garamond"; font-weight: 700; font-style: normal; font-display: block;
+  src: url("../fonts/cormorant-garamond-cyrillic-ext-700-normal.woff2") format("woff2"); unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F; }
 @font-face { font-family: "Cormorant Garamond"; font-weight: 700; font-style: normal; font-display: block;
   src: url("../fonts/cormorant-garamond-cyrillic-700-normal.woff2") format("woff2"); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
 @font-face { font-family: "Cormorant Garamond"; font-weight: 700; font-style: normal; font-display: block;
   src: url("../fonts/cormorant-garamond-latin-700-normal.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
 @font-face { font-family: "Cormorant Garamond"; font-weight: 700; font-style: italic; font-display: block;
+  src: url("../fonts/cormorant-garamond-cyrillic-ext-700-italic.woff2") format("woff2"); unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F; }
+@font-face { font-family: "Cormorant Garamond"; font-weight: 700; font-style: italic; font-display: block;
   src: url("../fonts/cormorant-garamond-cyrillic-700-italic.woff2") format("woff2"); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
 @font-face { font-family: "Cormorant Garamond"; font-weight: 700; font-style: italic; font-display: block;
   src: url("../fonts/cormorant-garamond-latin-700-italic.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
-/* ABYSS v3 · fonts are local woff2 files (works offline) */
-@font-face { font-family: "Caveat"; font-weight: 400; font-display: block;
+@font-face { font-family: "Caveat"; font-weight: 400; font-style: normal; font-display: block;
+  src: url("../fonts/caveat-cyrillic-ext-400-normal.woff2") format("woff2"); unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F; }
+@font-face { font-family: "Caveat"; font-weight: 400; font-style: normal; font-display: block;
   src: url("../fonts/caveat-cyrillic-400-normal.woff2") format("woff2"); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
-@font-face { font-family: "Caveat"; font-weight: 400; font-display: block;
+@font-face { font-family: "Caveat"; font-weight: 400; font-style: normal; font-display: block;
   src: url("../fonts/caveat-latin-400-normal.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
-@font-face { font-family: "Caveat"; font-weight: 700; font-display: block;
+@font-face { font-family: "Caveat"; font-weight: 700; font-style: normal; font-display: block;
+  src: url("../fonts/caveat-cyrillic-ext-700-normal.woff2") format("woff2"); unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F; }
+@font-face { font-family: "Caveat"; font-weight: 700; font-style: normal; font-display: block;
   src: url("../fonts/caveat-cyrillic-700-normal.woff2") format("woff2"); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
-@font-face { font-family: "Caveat"; font-weight: 700; font-display: block;
+@font-face { font-family: "Caveat"; font-weight: 700; font-style: normal; font-display: block;
   src: url("../fonts/caveat-latin-700-normal.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
-@font-face { font-family: "Manrope"; font-weight: 400; font-display: block;
-  src: url("../fonts/manrope-cyrillic-400-normal.woff2") format("woff2"); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
-@font-face { font-family: "Manrope"; font-weight: 400; font-display: block;
-  src: url("../fonts/manrope-latin-400-normal.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
-@font-face { font-family: "Manrope"; font-weight: 700; font-display: block;
-  src: url("../fonts/manrope-cyrillic-700-normal.woff2") format("woff2"); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
-@font-face { font-family: "Manrope"; font-weight: 700; font-display: block;
-  src: url("../fonts/manrope-latin-700-normal.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
-@font-face { font-family: "Prata"; font-weight: 400; font-display: block;
+@font-face { font-family: "Onest"; font-weight: 400; font-style: normal; font-display: block;
+  src: url("../fonts/onest-cyrillic-ext-400-normal.woff2") format("woff2"); unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F; }
+@font-face { font-family: "Onest"; font-weight: 400; font-style: normal; font-display: block;
+  src: url("../fonts/onest-cyrillic-400-normal.woff2") format("woff2"); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
+@font-face { font-family: "Onest"; font-weight: 400; font-style: normal; font-display: block;
+  src: url("../fonts/onest-latin-400-normal.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Onest"; font-weight: 500; font-style: normal; font-display: block;
+  src: url("../fonts/onest-cyrillic-ext-500-normal.woff2") format("woff2"); unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F; }
+@font-face { font-family: "Onest"; font-weight: 500; font-style: normal; font-display: block;
+  src: url("../fonts/onest-cyrillic-500-normal.woff2") format("woff2"); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
+@font-face { font-family: "Onest"; font-weight: 500; font-style: normal; font-display: block;
+  src: url("../fonts/onest-latin-500-normal.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Onest"; font-weight: 600; font-style: normal; font-display: block;
+  src: url("../fonts/onest-cyrillic-ext-600-normal.woff2") format("woff2"); unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F; }
+@font-face { font-family: "Onest"; font-weight: 600; font-style: normal; font-display: block;
+  src: url("../fonts/onest-cyrillic-600-normal.woff2") format("woff2"); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
+@font-face { font-family: "Onest"; font-weight: 600; font-style: normal; font-display: block;
+  src: url("../fonts/onest-latin-600-normal.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Onest"; font-weight: 700; font-style: normal; font-display: block;
+  src: url("../fonts/onest-cyrillic-ext-700-normal.woff2") format("woff2"); unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F; }
+@font-face { font-family: "Onest"; font-weight: 700; font-style: normal; font-display: block;
+  src: url("../fonts/onest-cyrillic-700-normal.woff2") format("woff2"); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
+@font-face { font-family: "Onest"; font-weight: 700; font-style: normal; font-display: block;
+  src: url("../fonts/onest-latin-700-normal.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Onest"; font-weight: 800; font-style: normal; font-display: block;
+  src: url("../fonts/onest-cyrillic-ext-800-normal.woff2") format("woff2"); unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F; }
+@font-face { font-family: "Onest"; font-weight: 800; font-style: normal; font-display: block;
+  src: url("../fonts/onest-cyrillic-800-normal.woff2") format("woff2"); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
+@font-face { font-family: "Onest"; font-weight: 800; font-style: normal; font-display: block;
+  src: url("../fonts/onest-latin-800-normal.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Prata"; font-weight: 400; font-style: normal; font-display: block;
+  src: url("../fonts/prata-cyrillic-ext-400-normal.woff2") format("woff2"); unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F; }
+@font-face { font-family: "Prata"; font-weight: 400; font-style: normal; font-display: block;
   src: url("../fonts/prata-cyrillic-400-normal.woff2") format("woff2"); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
-@font-face { font-family: "Prata"; font-weight: 400; font-display: block;
+@font-face { font-family: "Prata"; font-weight: 400; font-style: normal; font-display: block;
   src: url("../fonts/prata-latin-400-normal.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
-@font-face { font-family: "PT Mono"; font-weight: 400; font-display: block;
+@font-face { font-family: "PT Mono"; font-weight: 400; font-style: normal; font-display: block;
+  src: url("../fonts/pt-mono-cyrillic-ext-400-normal.woff2") format("woff2"); unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F; }
+@font-face { font-family: "PT Mono"; font-weight: 400; font-style: normal; font-display: block;
   src: url("../fonts/pt-mono-cyrillic-400-normal.woff2") format("woff2"); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
-@font-face { font-family: "PT Mono"; font-weight: 400; font-display: block;
+@font-face { font-family: "PT Mono"; font-weight: 400; font-style: normal; font-display: block;
   src: url("../fonts/pt-mono-latin-400-normal.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
 
 :root {
@@ -58,7 +101,7 @@
   --teal: #2F7D86;
   --title: "Prata", Georgia, serif;
   --hand: "Caveat", "Comic Sans MS", cursive;
-  --print: "Manrope", "Helvetica Neue", Arial, sans-serif;
+  --print: "Onest", "Helvetica Neue", Arial, sans-serif;
   --mono: "PT Mono", Menlo, monospace;
 }
 
@@ -91,7 +134,7 @@ html, body {
   border-radius: 3px; box-shadow: 0 6px 14px #0009; text-align: center; white-space: nowrap; margin-top: -12px; }
 .ship-tag::after { content: ""; position: absolute; left: 50%; bottom: -12px; width: 1.5px; height: 12px; background: #23222baa; }
 .ship-tag b { display: block; font: 700 15px/1.15 "Cormorant Garamond", Georgia, serif; }
-.ship-tag span { font: 600 11px Manrope, sans-serif; color: #6d6858; }
+.ship-tag span { font: 600 11px Onest, sans-serif; color: #6d6858; }
 .ship-tag.you { border-top: 3px solid #f29a1c; }
 .ship-tag.rival { border-top: 3px solid #b8432f; }
 .ship-tag.rival b { color: #8e2f1f; }
@@ -109,7 +152,7 @@ html, body {
 /* ================================================================ M7: things on the table (v3.1, 18) */
 :root { --paper2: #e7d9b8; --brass2: #ecc983; --brassd: #6b4a1c; --navy: #1f3550; --rival: #a8392a; --serif: "Cormorant Garamond", Georgia, serif; }
 .pill { display: inline-flex; align-items: center; gap: 7px; min-height: 34px; padding: 6px 12px; border: 1px solid #c3944766; border-radius: 20px;
-  background: #1a120ccc; color: #e9dcc0; font: 600 13px Manrope, sans-serif; cursor: pointer; }
+  background: #1a120ccc; color: #e9dcc0; font: 600 13px Onest, sans-serif; cursor: pointer; }
 .pill:hover { border-color: var(--brass2); }
 .pill .icon { width: 17px; height: 17px; color: var(--brass2); }
 .pill.active { background: linear-gradient(180deg, #efd08c, #c69a4c 55%, #a27434); color: #2a1c0a; border-color: #5e4319; }
@@ -121,7 +164,7 @@ button:focus-visible { outline: 2px solid var(--brass2); outline-offset: 3px; }
 .cap { position: fixed; left: 22px; top: 14px; display: flex; flex-direction: column; align-items: flex-start; gap: 7px; max-width: 340px; }
 .cap .who { min-height: 28px; padding: 3px 11px; font-size: 12.5px; }
 .cap h1 { margin: 0; font: italic 600 22px/1 var(--serif); color: var(--brass2); }
-.cap small { display: block; margin-top: 4px; font: 600 13px Manrope, sans-serif; color: #e2d4b6; text-shadow: 0 1px 2px #000, 0 0 8px #000c; }
+.cap small { display: block; margin-top: 4px; font: 600 13px Onest, sans-serif; color: #e2d4b6; text-shadow: 0 1px 2px #000, 0 0 8px #000c; }
 .cap h1 { text-shadow: 0 1px 3px #000a; }
 .inst { position: fixed; left: 18px; top: 104px; display: flex; flex-direction: column; gap: 8px; }
 .dial { text-align: center; }
@@ -159,7 +202,7 @@ button:focus-visible { outline: 2px solid var(--brass2); outline-offset: 3px; }
   background: #c3944766; box-shadow: inset 0 1px 2px #0008; }
 body.peek .off { transform: translate(-50%, 0); transition: transform 0.6s cubic-bezier(0.18, 1.32, 0.4, 1); }
 .off h2 { position: absolute; left: 26px; top: 12px; margin: 0; font: italic 600 22px/1 var(--serif); color: var(--brass2); }
-.off h2 small { margin-left: 10px; font: 600 12px Manrope, sans-serif; font-style: normal; color: #a99d86; }
+.off h2 small { margin-left: 10px; font: 600 12px Onest, sans-serif; font-style: normal; color: #a99d86; }
 .oc { --r: 0deg; position: relative; display: grid; grid-template-columns: 72px 1fr; gap: 12px; align-items: start; cursor: pointer;
   background: linear-gradient(170deg, #f4ead2, #e8dbbb); color: var(--ink); padding: 12px 14px 12px 12px; box-shadow: 0 12px 26px #000a;
   border-radius: 2px; transform: translateY(60px) rotate(var(--r)); opacity: 0; transition: transform 0.25s ease-in, opacity 0.2s; }
@@ -168,7 +211,7 @@ body.peek .oc { transform: rotate(var(--r)); opacity: 1; transition: transform 0
 body.peek .oc:nth-of-type(2) { transition-delay: 0.06s; } body.peek .oc:nth-of-type(3) { transition-delay: 0.12s; }
 .oc .medal { width: 72px; height: 88px; }
 .oc .nm { font: 700 22px/1 var(--serif); }
-.oc .rl { margin: 3px 0 5px; font: 600 12px Manrope, sans-serif; color: #7a705c; }
+.oc .rl { margin: 3px 0 5px; font: 600 12px Onest, sans-serif; color: #7a705c; }
 .oc q { display: block; quotes: none; font: italic 500 18.5px/1.22 var(--serif); }
 .oc q b { font-style: normal; font-weight: 700; color: #8e2f1f; }
 .oc.warning { box-shadow: 0 12px 26px #000a, inset 0 0 0 2px rgba(168, 57, 42, 0.7); }
@@ -181,7 +224,7 @@ body.peek .oc:nth-of-type(2) { transition-delay: 0.06s; } body.peek .oc:nth-of-t
   background: linear-gradient(180deg, #f3d995, #b98a3e); box-shadow: 0 3px 0 #6b4a1c, inset 0 1px 0 #fff6; transition: transform 0.12s, box-shadow 0.12s; }
 body.peek .pk .kc { transform: translateY(3px); box-shadow: 0 0 0 #6b4a1c, inset 0 1px 0 #fff6; }
 .pk b { display: block; font: 700 19px/1.05 var(--serif); }
-.pk small { display: block; margin-top: 2px; font: 600 12px Manrope, sans-serif; color: #c9b99a; }
+.pk small { display: block; margin-top: 2px; font: 600 12px Onest, sans-serif; color: #c9b99a; }
 .pk .fc { display: flex; }
 .pk .face { display: block; width: 30px; height: 36px; margin-left: -8px; filter: drop-shadow(0 2px 3px #000a); }
 .pk .face .medal { width: 100%; height: 100%; }
@@ -196,7 +239,7 @@ body.peek .pk .kc { transform: translateY(3px); box-shadow: 0 0 0 #6b4a1c, inset
 .adv::before { left: 8px; } .adv::after { right: 8px; }
 .adv svg { position: absolute; left: 16px; top: 50%; transform: translateY(-50%); width: 26px; height: 26px; }
 .adv b { display: block; font: 700 23px/1.05 var(--serif); text-shadow: 0 1px 0 #f7e3b066; }
-.adv small { display: block; margin-top: 3px; font: 600 13px/1.3 Manrope, sans-serif; color: #4b3517; }
+.adv small { display: block; margin-top: 3px; font: 600 13px/1.3 Onest, sans-serif; color: #4b3517; }
 
 /* hint line + brass rail + hanging paper tags */
 .actions { position: fixed; left: 22px; bottom: 0; width: min(920px, calc(100vw - 400px)); height: 272px; }
@@ -236,7 +279,7 @@ body.peek .pk .kc { transform: translateY(3px); box-shadow: 0 0 0 #6b4a1c, inset
 .toast { display: grid; grid-template-columns: 52px 1fr; gap: 12px; align-items: center; padding: 10px 16px 10px 10px; cursor: pointer;
   background: linear-gradient(170deg, #f4ead2, #e8dbbb); color: var(--ink); box-shadow: 0 18px 40px #000c; animation: toast-in 0.45s ease-out; }
 .toast .medal { width: 52px; height: 64px; }
-.toast .tn { font: 600 12.5px Manrope, sans-serif; color: #7a705c; }
+.toast .tn { font: 600 12.5px Onest, sans-serif; color: #7a705c; }
 .toast .tt { font: italic 500 19px/1.22 var(--serif); }
 .toast .tt b { font-style: normal; color: #8e2f1f; }
 .toast.out { opacity: 0; transform: translateX(30px); transition: 0.3s; }
@@ -251,7 +294,7 @@ body.peek .pk .kc { transform: translateY(3px); box-shadow: 0 0 0 #6b4a1c, inset
 .ir i { width: 18px; height: 18px; margin-top: 3px; border-radius: 50%; box-shadow: inset 0 -2px 0 #0003; }
 .ir b { font: 700 17px var(--serif); }
 .ib .go { margin-top: 12px; min-height: 48px; padding: 10px 22px; background: linear-gradient(180deg, #efd08c, #c69a4c 55%, #a27434);
-  border: 1px solid #5e4319; color: #2a1c0a; font: 700 16px Manrope, sans-serif; border-radius: 3px; cursor: pointer; }
+  border: 1px solid #5e4319; color: #2a1c0a; font: 700 16px Onest, sans-serif; border-radius: 3px; cursor: pointer; }
 
 /* autopilot banner */
 .autopilot-banner { position: fixed; left: 50%; bottom: 14px; translate: -50% 0; z-index: 14; padding: 8px 16px; border-radius: 20px;
@@ -448,24 +491,24 @@ body.standing #overlay { opacity: 0; }
   color: #eaf6f8; text-shadow: 0 2px 10px #000, 0 0 3px #000; opacity: 0; transition: opacity 0.4s; pointer-events: none !important; }
 .ck-msg.on { opacity: 1; }
 .ck-prompt { position: absolute; left: 50%; transform: translateX(-50%); display: none; align-items: center; gap: 12px; background: rgba(4, 14, 18, 0.82);
-  border: 1px solid #9fd0dc66; border-radius: 30px; padding: 8px 16px 8px 8px; font: 600 15px Manrope, sans-serif; color: #e7f6f9; }
+  border: 1px solid #9fd0dc66; border-radius: 30px; padding: 8px 16px 8px 8px; font: 600 15px Onest, sans-serif; color: #e7f6f9; }
 .ck-prompt.on { display: flex; }
 .ck-prompt .pr { width: 38px; height: 38px; border-radius: 50%; background: conic-gradient(#f2b632 calc(var(--p, 0) * 1turn), #ffffff22 0); display: grid; place-items: center; }
-.ck-prompt .pr::after { content: "E"; width: 28px; height: 28px; border-radius: 50%; background: #071a20; display: grid; place-items: center; font: 700 14px Manrope, sans-serif; color: #f2b632; }
+.ck-prompt .pr::after { content: "E"; width: 28px; height: 28px; border-radius: 50%; background: #071a20; display: grid; place-items: center; font: 700 14px Onest, sans-serif; color: #f2b632; }
 .ck-surf { position: absolute; left: 50%; transform: translateX(-50%); display: none; align-items: center; gap: 10px; padding: 9px 16px; border-radius: 24px; cursor: pointer;
-  background: rgba(10, 14, 16, 0.88); border: 1px solid #5a6166; color: #e7f6f9; font: 700 14px Manrope, sans-serif; min-height: 44px; }
+  background: rgba(10, 14, 16, 0.88); border: 1px solid #5a6166; color: #e7f6f9; font: 700 14px Onest, sans-serif; min-height: 44px; }
 .cockpit.live .ck-surf { display: flex; }
 .ck-surf b { font: 700 12px var(--mono); color: #f2b632; background: #2a2f33; border-radius: 4px; padding: 2px 6px; }
 .ck-surf:hover { border-color: #f2b632; background: rgba(20, 30, 34, 0.95); }
 .ck-help { position: absolute; left: 18px; top: 18px; width: 300px; background: rgba(10, 12, 14, 0.88); border: 1px solid #4a5156; border-radius: 10px; padding: 12px 14px;
-  font: 13.5px/1.55 Manrope, sans-serif; color: #d7e2e5; transition: opacity 0.6s; }
+  font: 13.5px/1.55 Onest, sans-serif; color: #d7e2e5; transition: opacity 0.6s; }
 .ck-help b { font: 700 13px var(--mono); color: #f2b632; background: #2a2f33; border-radius: 4px; padding: 1px 6px; margin-right: 4px; }
 .ck-help h5 { margin: 0 0 6px; font: italic 700 20px var(--serif); color: #ecc983; }
 .ck-help-note { margin-top: 6px; color: #9fb3b8; }
 .cockpit.low .ck-panel { animation: ck-low 1s infinite; }
 @keyframes ck-low { 50% { box-shadow: inset 0 0 160px 40px rgba(170, 20, 10, 0.45); } }
 .ck-touch { position: absolute; right: 16px; bottom: 16px; display: none; grid-template-columns: repeat(3, 58px); gap: 8px; }
-.ck-touch button { height: 58px; border-radius: 12px; background: rgba(30, 34, 38, 0.9); border: 1px solid #5a6166; color: #e7f6f9; font: 700 15px Manrope, sans-serif; touch-action: none; }
+.ck-touch button { height: 58px; border-radius: 12px; background: rgba(30, 34, 38, 0.9); border: 1px solid #5a6166; color: #e7f6f9; font: 700 15px Onest, sans-serif; touch-action: none; }
 @media (pointer: coarse) { .ck-touch { display: grid; } .ck-help { display: none; } }
 .cockpit.narrow .ck-col { top: auto; bottom: 14px; transform: none; flex-direction: row; align-items: flex-end; gap: 10px; }
 .cockpit.narrow .ck-col.l { left: 14px; } .cockpit.narrow .ck-col.r { right: 14px; }
@@ -485,9 +528,9 @@ body.diving #ui > *:not(.toasts), body.diving .letterbox { opacity: 0 !important
 .goal.swap { animation: goal-swap 0.7s ease-out; }
 @keyframes goal-swap { from { opacity: 0; transform: translateY(-10px) rotate(-0.6deg); } }
 .goal-line { font: 700 19px/1.15 var(--serif); }
-.goal-pre { font: 700 12px Manrope, sans-serif; letter-spacing: 0.06em; text-transform: uppercase; color: #8e2f1f; }
+.goal-pre { font: 700 12px Onest, sans-serif; letter-spacing: 0.06em; text-transform: uppercase; color: #8e2f1f; }
 .goal-tasks { list-style: none; margin: 7px 0 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
-.goal-tasks li { display: grid; grid-template-columns: 20px 1fr; gap: 7px; align-items: start; font: 600 13px/1.3 Manrope, sans-serif; color: #3d3a40; }
+.goal-tasks li { display: grid; grid-template-columns: 20px 1fr; gap: 7px; align-items: start; font: 600 13px/1.3 Onest, sans-serif; color: #3d3a40; }
 .goal-tasks svg { width: 18px; height: 18px; margin-top: 0; }
 .goal-tasks .bx { fill: #fff8e8; stroke: #6d6858; stroke-width: 1.4; }
 .goal-tasks .ck { fill: none; stroke: #b8432f; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 1; stroke-dashoffset: 1; }
@@ -508,7 +551,7 @@ body.diving .ck-help { top: calc(var(--goal-h) + 16px); }
 .chapter.in { opacity: 1; } .chapter.out { opacity: 0; }
 .ch-in { text-align: center; padding: 0 16px; }
 .chapter h2 { margin: 18px 0 10px; font: italic 600 clamp(36px, 6vw, 64px)/1.05 var(--serif); color: #ecc983; letter-spacing: 0.01em; }
-.chapter p { margin: 0 0 18px; font: 500 clamp(16px, 2.2vw, 21px)/1.4 Manrope, sans-serif; color: #c9b99a; }
+.chapter p { margin: 0 0 18px; font: 500 clamp(16px, 2.2vw, 21px)/1.4 Onest, sans-serif; color: #c9b99a; }
 .ch-rule { width: 120px; height: 1px; margin: 0 auto; background: linear-gradient(90deg, transparent, #c39447, transparent); }
 .chapter.in h2 { animation: ch-rise 1.6s ease-out; }
 @keyframes ch-rise { from { opacity: 0; transform: translateY(10px); letter-spacing: 0.08em; } }
@@ -525,9 +568,9 @@ body.diving .ck-help { top: calc(var(--goal-h) + 16px); }
   background: radial-gradient(circle at 40% 35%, #3e6150, #1d3026); box-shadow: 0 0 0 3px #b98a3e, 0 0 0 4px #5a3c14, 0 4px 8px #0007; }
 .sp-radio .icon { width: 30px; height: 30px; }
 .sp-recorder { color: #ffd2b0; background: radial-gradient(circle at 40% 35%, #e8692b, #7a2f10); }
-.sp-who { font: 700 12.5px Manrope, sans-serif; color: #7a705c; }
+.sp-who { font: 700 12.5px Onest, sans-serif; color: #7a705c; }
 .sp-text { margin: 3px 0 4px; font: italic 500 20px/1.28 var(--serif); min-height: 2.5em; }
-.sp-next { font: 600 11px Manrope, sans-serif; color: #9a8f78; text-align: right; }
+.sp-next { font: 600 11px Onest, sans-serif; color: #9a8f78; text-align: right; }
 .speech.auto .sp-next { display: none; }
 .speech.sp-at-table { right: 22px; bottom: 196px; }
 .speech.sp-at-deck { left: 50%; bottom: 7vh; translate: -50% 0; width: min(640px, 92vw); }
@@ -550,9 +593,9 @@ body.cine .speech.sp-at-table { right: 50%; translate: 50% 0; bottom: calc(8.5vh
 @keyframes gc-in { from { opacity: 0; transform: translateY(18px); } }
 .gc .icon { width: 28px; height: 28px; color: #8e2f1f; }
 .gc b { display: block; margin: 4px 0 2px; font: 700 22px var(--serif); }
-.gc p { margin: 0; font: 500 14.5px/1.4 Manrope, sans-serif; }
+.gc p { margin: 0; font: 500 14.5px/1.4 Onest, sans-serif; }
 .gc-go { min-height: 50px; padding: 10px 26px; background: linear-gradient(180deg, #efd08c, #c69a4c 55%, #a27434); border: 1px solid #5e4319;
-  color: #2a1c0a; font: 700 17px Manrope, sans-serif; border-radius: 3px; cursor: pointer; box-shadow: 0 12px 26px #000a; }
+  color: #2a1c0a; font: 700 17px Onest, sans-serif; border-radius: 3px; cursor: pointer; box-shadow: 0 12px 26px #000a; }
 @media (max-width: 760px) {
   .goal { width: calc(100vw - 32px); left: 16px; }
   .speech.sp-at-table { left: 16px; right: 16px; width: auto; bottom: 170px; }
@@ -565,10 +608,10 @@ body.cine .speech.sp-at-table { right: 50%; translate: 50% 0; bottom: calc(8.5vh
 .brief h2 { margin: 0 0 10px; font: 700 30px/1.1 var(--serif); }
 .br-row { display: grid; grid-template-columns: 28px 1fr; gap: 12px; margin: 10px 0; }
 .br-row .icon { width: 26px; height: 26px; color: #8e2f1f; margin-top: 2px; }
-.br-row b { font: 700 12px Manrope, sans-serif; letter-spacing: 0.06em; text-transform: uppercase; color: #8e2f1f; }
-.br-row p { margin: 2px 0 0; font: 500 15px/1.4 Manrope, sans-serif; }
+.br-row b { font: 700 12px Onest, sans-serif; letter-spacing: 0.06em; text-transform: uppercase; color: #8e2f1f; }
+.br-row p { margin: 2px 0 0; font: 500 15px/1.4 Onest, sans-serif; }
 .br-go { display: inline-flex; align-items: center; gap: 10px; margin-top: 8px; min-height: 50px; padding: 10px 22px; cursor: pointer;
-  background: linear-gradient(180deg, #efd08c, #c69a4c 55%, #a27434); border: 1px solid #5e4319; color: #2a1c0a; font: 700 17px Manrope, sans-serif; border-radius: 3px; }
+  background: linear-gradient(180deg, #efd08c, #c69a4c 55%, #a27434); border: 1px solid #5e4319; color: #2a1c0a; font: 700 17px Onest, sans-serif; border-radius: 3px; }
 .br-go .icon { width: 22px; height: 22px; }
 
 /* the prologue: a night at sea behind the radio briefing (the deck in first person comes in M9c) */
@@ -599,7 +642,7 @@ body.prologue .hud-right, body.prologue .actions, body.prologue .dock, body.prol
   background: none; border: 0; padding: 0; }
 .cabin-pin .pl { padding: 7px 14px 8px; background: linear-gradient(170deg, #f4ead2, #e6d8b6); color: var(--ink); box-shadow: 0 10px 24px #000b; text-align: center; border-radius: 2px; }
 .cabin-pin b { display: block; font: 700 19px var(--serif); }
-.cabin-pin small { font: 600 12px Manrope, sans-serif; color: #6d6858; }
+.cabin-pin small { font: 600 12px Onest, sans-serif; color: #6d6858; }
 .cabin-pin .dot { width: 18px; height: 18px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #fff3c8, #e8b04a 55%, #8a5d12);
   box-shadow: 0 0 0 0 rgba(232, 176, 74, 0.8); animation: pin-pulse 1.6s ease-out infinite; }
 @keyframes pin-pulse { to { box-shadow: 0 0 0 22px rgba(232, 176, 74, 0); } }
