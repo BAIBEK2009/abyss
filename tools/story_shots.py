@@ -33,6 +33,7 @@ ap.add_argument("--size", default="1440x900")
 ap.add_argument("--act", default=None, help="start the campaign in this act (prologue beats skipped)")
 ap.add_argument("--prefix", default="story")
 ap.add_argument("--seed", type=int, default=272)
+ap.add_argument("--sep", default=",", help="step separator (use | when JS steps contain commas)")
 ap.add_argument("--lang", default="ru", help="kk | ru | en, or pick = the language screen")
 ap.add_argument("--fresh", action="store_true", help="forget the first-launch flags (who-is-who)")
 args = ap.parse_args()
@@ -40,7 +41,7 @@ args.out.mkdir(parents=True, exist_ok=True)
 
 server = make_server(0, seed=args.seed)
 g = server.game
-steps = [s for s in args.script.split(",") if s]
+steps = [s for s in args.script.split(args.sep) if s]
 if args.act:
     for ev in ("start", "radio_heard", "binoculars", "enter_cabin", "sit_at_table"):
         if g.campaign.act == args.act:
