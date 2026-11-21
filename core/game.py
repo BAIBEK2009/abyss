@@ -24,6 +24,7 @@ import random
 from dataclasses import dataclass
 
 from core import agent, bayes, clues, mdp, world
+from core.campaign import HIGH_HILL, Campaign
 from core.agent import route
 from core.rival import Rival
 
@@ -47,6 +48,10 @@ class GameError(Exception):
 # "nothing" and the box along the way. (The spec's 2012 relied on another RNG layout; 272 is the
 # first seed that gives this exact story with ours — found by searching, see the M4 report.)
 DEMO_SEED = 272
+
+# scene events the browser may report to the campaign (everything else the core sees itself)
+STORY_EVENTS = {"radio_heard", "enter_cabin", "sit_at_table", "first_dive_ready",
+                "dive:start", "dive:first_debris", "dive:signal_stronger", "dive:off_course"}
 
 
 @dataclass
@@ -72,7 +77,7 @@ def _to_cell(cell):
 
 class Game:
     def __init__(self, seed: int | None = None, lang: str = "ru", *, signal=None, box=None,
-                 rival: bool = True, compute_par: bool = True):
+                 rival: bool = True, compute_par: bool = True, campaign: bool = False):
         self.seed = seed if seed is not None else random.SystemRandom().randrange(1_000_000)
         self.lang = lang
         # separate random streams: the same seed always gives the same map, sensors and rival
@@ -99,7 +104,15 @@ class Game:
         self._live = False
 
         self.clues = [dict(c, state="future") for c in clues.make_clues(rng_clues, self.signal, self.box)]
-        self.rival = Rival(self.P, random.Random(f"{self.seed}:rival")) if rival else None
+        # the story campaign (CLAUDE.md 17, 22): acts, checklist, beats; "Poseidon-2" arrives at the end of act I
+        self.campaign = Campaign() if campaign else None
+        self._story = []             # story items for the browser since the last response
+        self._rival_wanted = rival
+        self._rival_rng = random.Random(f"{self.seed}:rival")
+        if self.campaign:
+            for c in self.clues:
+                c["hour"] = self.campaign.clue_hour({"fish": "fishermen_direction", "coast": "coastguard_band"}[c["kind"]], c["hour"])
+        self.rival = Rival(self.P, self._rival_rng) if rival and not self.campaign else None
         self.par = agent.par(self.seed, self.signal, self.box) if compute_par else None
 
     @staticmethod
@@ -234,6 +247,7 @@ class Game:
             events.append({"type": "msg", "t": self.hours, "key": "beacon_low",
                            "h": int(world.BEACON_HOURS - self.hours)})
 
+        self._after_story()
         record["t1"] = self.hours
         record["rival"] = self.rival.plan_info() if self.rival and self.status == "playing" else None
         self.turns.append(record)
@@ -266,18 +280,30 @@ class Game:
             self.probes.append({"cell": list(cell), "kind": "sonar", "result": "echo" if echo else "silence", "t": t})
             record["bayes"] = self._bayes_record("sonar", cell, "echo" if echo else "silence", before, Z, best_before)
             self.feed.append({"t": t, "key": "feed_sonar", "cell": name, "result": "echo" if echo else "silence"})
+            self._story_event("sonar")
+            self._story_event("first_sonar_echo" if echo else "first_sonar_silence", once=True)
             return [{"type": "sonar", "t": t, "cell": list(cell), "echo": echo},
                     {"type": "belief", "t": t, "P": self.belief_rows()},
                     {"type": "msg", "t": t, "key": "sonar_echo" if echo else "sonar_silence", "cell": name}]
         # dive
         self.counts["dive"] += 1
         outcome = self._camera(cell)                 # the same random draw in both modes: seeds stay stable
+        find, hidden = self._story_find(cell)
         if self._live:
-            here = cell == self.box
+            here = cell == self.box and not hidden
             self.pending_dive = {"cell": cell, "t": t, "box": here, "debris": (not here) and outcome == "debris",
-                                 "record": record}
-            return [{"type": "dive", "t": t, "cell": list(cell), "live": True,
-                     "scene": {"box": here, "debris": self.pending_dive["debris"]}}]
+                                 "find": find, "hidden": hidden, "record": record}
+            return [{"type": "dive", "t": t, "cell": list(cell), "live": True, "scene": self._scene()}]
+        if hidden:                                   # act I: the dive looks at the wreckage, the box stays unseen
+            outcome = "debris" if find else "nothing"
+            self.probes.append({"cell": list(cell), "kind": "dive", "result": outcome, "t": t})
+            self.feed.append({"t": t, "key": "feed_dive", "cell": name, "result": outcome})
+            if find:
+                self._story_event(f"find:{find}")
+            else:
+                self._story_event("dive_empty")
+            record["bayes"] = {"kind": "dive", "cell": list(cell), "result": "story", "prior": self.P[cell]}
+            return [{"type": "dive", "t": t, "cell": list(cell), "result": outcome}]
         self.probes.append({"cell": list(cell), "kind": "dive", "result": outcome, "t": t})
         self.feed.append({"t": t, "key": "feed_dive", "cell": name, "result": outcome})
         events = [{"type": "dive", "t": t, "cell": list(cell), "result": outcome}]
@@ -306,8 +332,9 @@ class Game:
                 "best_L": (bayes.sonar_likelihood(best, cell, result == "echo") if kind == "sonar"
                            else bayes.camera_likelihood(best, cell, result))}
 
-    def dive_end(self, found: bool, coverage: float, debris_seen: bool = False) -> list:
-        """The player surfaced from a live dive: with the box, or having seen `coverage` of the seabed."""
+    def dive_end(self, found: bool, coverage: float, debris_seen: bool = False, find: str | None = None) -> list:
+        """The player surfaced from a live dive: with the box, or having seen `coverage` of the seabed.
+        find = the story find picked up on this dive (act I: "act1_dive_flap")."""
         d = self.pending_dive
         if d is None:
             raise GameError("no_dive")
@@ -315,6 +342,18 @@ class Game:
         cell, t, name = d["cell"], d["t"], world.cell_name(d["cell"])
         c = min(1.0, max(0.0, float(coverage or 0)))
         before = self.P
+        if self.campaign and d.get("find") and find == d["find"]:
+            self._story_event(f"find:{find}")
+        elif self.campaign and self.campaign.act == "act1":
+            self._story_event("dive_empty")
+        if d.get("hidden"):
+            # act I (17.4): the box is not part of this dive's story, so its belief is left as it is here
+            result = "debris" if (find and find == d.get("find")) else "nothing"
+            self.probes.append({"cell": list(cell), "kind": "dive", "result": result, "t": t, "coverage": round(c, 3)})
+            self.feed.append({"t": t, "key": "feed_dive", "cell": name, "result": result, "coverage": round(c, 3)})
+            d["record"]["bayes"] = {"kind": "dive", "cell": list(cell), "result": "story", "prior": before[cell]}
+            self._after_story()
+            return [{"type": "dive", "t": t, "cell": list(cell), "result": result, "coverage": round(c, 3)}]
         if found and d["box"]:
             self.status = "won"
             self.probes.append({"cell": list(cell), "kind": "dive", "result": "box", "t": t})
@@ -333,10 +372,62 @@ class Game:
         rec = self._bayes_record("dive", cell, result, before, Z, best_before)
         rec["coverage"] = round(c, 3)
         d["record"]["bayes"] = rec
+        self._after_story()
         return [{"type": "dive", "t": t, "cell": list(cell), "result": result, "coverage": round(c, 3)},
                 {"type": "belief", "t": t, "P": self.belief_rows()},
                 {"type": "msg", "t": t, "key": "dive_debris" if result == "debris" else "dive_seen", "cell": name,
                  "c": round(c * 100), "p0": _pct(before[cell]), "p1": _pct(self.P[cell])}]
+
+    # ------------------------------------------------------------------ the story campaign
+    def _story_event(self, name: str, once: bool = False):
+        if not self.campaign or (once and not self.campaign.first(name)):
+            return
+        self._story += self.campaign.event(name)
+
+    def _story_find(self, cell):
+        """Act I (17.4): a dive where the hill is highest finds the flap with the flight number; the box is not
+        part of act I, so the dive never shows it. Returns (story find or None, box hidden?)."""
+        if not self.campaign or self.campaign.act != "act1":
+            return None, False
+        top = max(self.P.values())
+        high = self.P[cell] >= HIGH_HILL * top
+        if high:
+            self._story_event("dive_high")
+        return ("act1_dive_flap" if high and 1 not in self.campaign.mystery else None), True
+
+    def _scene(self) -> dict:
+        d = self.pending_dive
+        return {"box": d["box"], "debris": d["debris"], "find": d.get("find")}
+
+    def _after_story(self):
+        """After a turn: "hour>=N" beats, and "Poseidon-2" comes into the square once act I is over."""
+        if not self.campaign or self.status != "playing":
+            return
+        self._story += self.campaign.hour(self.hours)
+        if self.campaign.rival_active and self.rival is None and self._rival_wanted:
+            P = world.prior(self.signal)
+            for c in self.clues:                     # it heard the same radio on its way here
+                if c["state"] != "future":
+                    P, _ = bayes.update(P, clues.likelihoods(c, P, self.signal))
+            self.rival = Rival(P, self._rival_rng, now=self.hours)
+            self._story.append({"rival_arrives": True})
+
+    def story_event(self, name: str) -> list:
+        """A scene event from the browser (entering the cabin, sitting at the table, inside the dive)."""
+        if not self.campaign:
+            raise GameError("no_campaign")
+        if name == "start":
+            self._story += self.campaign.start()
+        elif name in STORY_EVENTS:
+            self._story += self.campaign.event(name)
+        else:
+            raise GameError("bad_event")
+        self._after_story()
+        return self.pop_story()
+
+    def pop_story(self) -> list:
+        out, self._story = self._story, []
+        return out
 
     def _camera(self, cell) -> str:
         r, acc = self.rng.random(), 0.0
@@ -474,8 +565,8 @@ class Game:
             "advice": self.advice() if not over else None,
             "par": self.par, "status": self.status, "reason": self.reason,
             "box": list(self.box) if over else None,      # secret until the mission ends
-            "dive": None if not self.pending_dive else {"cell": list(self.pending_dive["cell"]),
-                                                        "scene": {"box": self.pending_dive["box"], "debris": self.pending_dive["debris"]}},
+            "dive": None if not self.pending_dive else {"cell": list(self.pending_dive["cell"]), "scene": self._scene()},
+            "campaign": self.campaign.state() if self.campaign else None,
             "stars": self.stars() if over else None,
             "feed": self.feed,
             "costs": {"move": [world.MOVE_HOURS, world.MOVE_FUEL], "sonar": [world.SONAR_HOURS, world.SONAR_FUEL],

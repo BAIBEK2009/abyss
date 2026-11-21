@@ -42,7 +42,7 @@ def main() -> None:
     ap.add_argument("--ai-turns", type=int, default=0, help="let the AI crew make N moves before the shot")
     args = ap.parse_args()
 
-    server = make_server(0, seed=args.seed)  # port 0 = any free port
+    server = make_server(0, seed=args.seed, campaign=False)  # port 0 = any free port
     port = server.server_address[1]
     for _ in range(args.ai_turns):          # advance the game, e.g. to show a grown hill
         if server.game.status != "playing":

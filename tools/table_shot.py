@@ -24,9 +24,10 @@ ap.add_argument("--hover", default=None, help="cell x,y to hover before the shot
 ap.add_argument("--wait", type=int, default=2500, help="ms after load")
 ap.add_argument("--intro", action="store_true", help="keep the opening camera flight")
 ap.add_argument("--keys", default="", help="keys to hold during the shot, e.g. b")
+ap.add_argument("--campaign", action="store_true", help="the story campaign (default: v3 free search)")
 args = ap.parse_args()
 
-server = make_server(0, seed=args.seed)
+server = make_server(0, seed=args.seed, campaign=args.campaign)
 for _ in range(args.ai_turns):
     if server.game.status != "playing":
         break

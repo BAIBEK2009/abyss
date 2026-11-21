@@ -17,7 +17,7 @@ from server import make_server  # noqa: E402
 
 out = Path(sys.argv[1])
 out.mkdir(parents=True, exist_ok=True)
-server = make_server(0)
+server = make_server(0, campaign=False)
 threading.Thread(target=server.serve_forever, daemon=True).start()
 url = f"http://127.0.0.1:{server.server_address[1]}/?lang=ru"
 errors = []

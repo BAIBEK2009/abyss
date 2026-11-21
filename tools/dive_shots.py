@@ -22,7 +22,7 @@ ap.add_argument("--prefix", default="dive")
 ap.add_argument("--keys", default="", help="key script after the last shot, e.g. 'w:2,d:1'")
 args = ap.parse_args()
 args.out.mkdir(parents=True, exist_ok=True)
-server = make_server(0)
+server = make_server(0, campaign=False)
 threading.Thread(target=server.serve_forever, daemon=True).start()
 url = f"http://127.0.0.1:{server.server_address[1]}/?lang=ru&nointro=1"
 errors = []

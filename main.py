@@ -24,9 +24,10 @@ def main() -> None:
     parser.add_argument("--lang", choices=["ru", "en"], default="ru")
     parser.add_argument("--exam", action="store_true", help="print every turn (Bayes, A*, MDP, rival) here")
     parser.add_argument("--no-browser", action="store_true", help="do not open the browser")
+    parser.add_argument("--free", action="store_true", help="free search without the story campaign (v3 rules)")
     args = parser.parse_args()
 
-    server = make_server(args.port, seed=args.seed, lang=args.lang, exam=args.exam)
+    server = make_server(args.port, seed=args.seed, lang=args.lang, exam=args.exam, campaign=not args.free)
     url = f"http://127.0.0.1:{args.port}/?lang={args.lang}"
     print(f"ABYSS: {url}  (Ctrl+C to quit)" + ("  · exam mode: turns are printed below" if args.exam else ""))
     if not args.no_browser:

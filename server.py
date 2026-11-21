@@ -8,7 +8,8 @@ it asks this server for state, sends the captain's decisions here and animates t
     POST /api/preview {action}           -> hours, fuel, path, chance, risky, rival forecast (changes NOTHING)
     POST /api/act     {action}           -> {events, state}
     POST /api/clue    {id, accept}       -> {events, state}
-    POST /api/dive    {found, coverage, debris}  -> {events, state}   (end of a live first-person dive)
+    POST /api/dive    {found, coverage, debris, find?}  -> {events, story, state}   (end of a live first-person dive)
+    POST /api/story   {event}            -> {story, state}  (campaign scene events: enter_cabin, sit_at_table, dive:start…)
     GET  /api/advice                     -> the three officers + joint advice
     GET  /api/journal                    -> records + calculations (professor's mode)
 
@@ -34,12 +35,14 @@ class GameServer(ThreadingHTTPServer):
 
     daemon_threads = True
 
-    def __init__(self, port: int, seed: int | None = DEMO_SEED, lang: str = "ru", exam: bool = False):
+    def __init__(self, port: int, seed: int | None = DEMO_SEED, lang: str = "ru", exam: bool = False,
+                 campaign: bool = True):
         super().__init__(("127.0.0.1", port), Handler)  # localhost only
         self.lock = threading.Lock()
         self.exam = exam
         self.lang = lang
-        self.game = Game(seed=seed, lang=lang)
+        self.campaign = campaign
+        self.game = Game(seed=seed, lang=lang, campaign=campaign)
 
     def print_new_turns(self, game, before: int):
         """Exam mode: every turn of the three algorithms goes to this terminal."""
@@ -96,7 +99,8 @@ class Handler(SimpleHTTPRequestHandler):
                     seed = body.get("seed", DEMO_SEED)
                     if seed is not None and (not isinstance(seed, int) or isinstance(seed, bool)):
                         raise GameError("bad_seed")
-                    self.server.game = Game(seed=seed, lang=body.get("lang") or self.server.lang)
+                    campaign = body.get("campaign", self.server.campaign)
+                    self.server.game = Game(seed=seed, lang=body.get("lang") or self.server.lang, campaign=bool(campaign))
                     return self.send_json(self.server.game.state())
                 if path == "/api/preview":
                     return self.send_json(game.preview(body.get("action")))
@@ -104,17 +108,21 @@ class Handler(SimpleHTTPRequestHandler):
                     before = len(game.turns)
                     events = game.act(body.get("action"), live=bool(body.get("live")))
                     self.server.print_new_turns(game, before)
-                    return self.send_json({"events": events, "state": game.state()})
+                    return self.send_json({"events": events, "story": game.pop_story(), "state": game.state()})
                 if path == "/api/dive":
                     before = len(game.turns)
-                    events = game.dive_end(bool(body.get("found")), body.get("coverage", 0), bool(body.get("debris")))
+                    find = body.get("find") if isinstance(body.get("find"), str) else None
+                    events = game.dive_end(bool(body.get("found")), body.get("coverage", 0), bool(body.get("debris")), find)
                     self.server.print_new_turns(game, before - 1)      # the dive's turn now has its result
-                    return self.send_json({"events": events, "state": game.state()})
+                    return self.send_json({"events": events, "story": game.pop_story(), "state": game.state()})
+                if path == "/api/story":
+                    story = game.story_event(str(body.get("event", "")))
+                    return self.send_json({"story": story, "state": game.state()})
                 if path == "/api/clue":
                     before = len(game.turns)
                     events = game.clue(body.get("id"), bool(body.get("accept")))
                     self.server.print_new_turns(game, before)
-                    return self.send_json({"events": events, "state": game.state()})
+                    return self.send_json({"events": events, "story": game.pop_story(), "state": game.state()})
             except GameError as e:
                 return self.send_json({"error": e.key, "params": e.params}, 400)
         return self.send_json({"error": "unknown_endpoint"}, 404)
@@ -146,5 +154,6 @@ class Handler(SimpleHTTPRequestHandler):
         pass  # keep the terminal clean: it is reserved for exam-mode output
 
 
-def make_server(port: int, seed: int | None = DEMO_SEED, lang: str = "ru", exam: bool = False) -> GameServer:
-    return GameServer(port, seed=seed, lang=lang, exam=exam)
+def make_server(port: int, seed: int | None = DEMO_SEED, lang: str = "ru", exam: bool = False,
+                campaign: bool = True) -> GameServer:
+    return GameServer(port, seed=seed, lang=lang, exam=exam, campaign=campaign)

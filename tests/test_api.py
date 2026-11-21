@@ -12,7 +12,7 @@ from server import make_server
 
 @pytest.fixture()
 def api():
-    server = make_server(0)
+    server = make_server(0, campaign=False)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     base = f"http://127.0.0.1:{server.server_address[1]}"
 
