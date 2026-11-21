@@ -7,6 +7,7 @@ import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
 import { ShaderPass } from "three/addons/postprocessing/ShaderPass.js";
 import { GTAOPass } from "three/addons/postprocessing/GTAOPass.js";
 import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
+import { OutlinePass } from "three/addons/postprocessing/OutlinePass.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 
 export const deg = THREE.MathUtils.degToRad;
@@ -84,6 +85,12 @@ export function createView(canvas) {
   composer.addPass(gtao);
   const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.45, 0.5, 2.6);   // HDR threshold: only emitters (lit paper stays below)
   composer.addPass(bloom);
+  // a soft warm outline on the thing the captain looks at in first person (CLAUDE.md 23.2: "[E] ...")
+  const outline = new OutlinePass(new THREE.Vector2(1, 1), scene, camera, []);
+  outline.edgeStrength = 3.2; outline.edgeGlow = 0.6; outline.edgeThickness = 1.6; outline.pulsePeriod = 2.4;
+  outline.visibleEdgeColor.set(0xffd27a); outline.hiddenEdgeColor.set(0x6a4a1a);
+  outline.enabled = false;
+  composer.addPass(outline);
   // under water (CLAUDE.md v3.1, 21.1 p. 7): colour absorption by distance (red dies first, so the orange
   // box looks brown far away and flares up close) + the porthole glass: slight barrel distortion and a
   // colour fringe towards its rim. Only during the first-person search.
@@ -145,9 +152,11 @@ export function createView(canvas) {
   const home = { target: new THREE.Vector3(), dist: 36, tilt: 40, yaw: 0 };
   let follow = null, followOpt = { dist: 9.5, tilt: 34 }, pose = null, settled = true, rate = 2.2;
   let manual = false;                 // another scene drives the camera itself (the dive)
+  let driven = false;                 // first person drives the camera in the cabin
+  let fovOverride = null;             // first person sets its own lens
   const goal = new THREE.Vector3();
   function steer(dt) {
-    if (manual || (!follow && !pose && settled)) return;
+    if (manual || driven || (!follow && !pose && settled)) return;
     const k = 1 - Math.exp(-dt * rate);
     let gd, gt, gy;
     if (follow) { follow(goal); gd = followOpt.dist; gt = followOpt.tilt; gy = followOpt.yaw ?? 0; }
@@ -181,9 +190,10 @@ export function createView(canvas) {
     for (const fn of resizeHooks) fn(w, h);                  // the screen sets the resting camera
     home.target.copy(rig.target); home.dist = rig.dist; home.tilt = rig.tilt; home.yaw = rig.yaw;
     if (!settled) { rig.target.copy(cur.target); rig.dist = cur.dist; rig.tilt = cur.tilt; rig.yaw = cur.yaw; }   // mid-flight: keep going
-    camera.fov = THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(deg(rig.hfov) / 2) / camera.aspect));
+    camera.fov = fovOverride ?? THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(deg(rig.hfov) / 2) / camera.aspect));
     camera.updateProjectionMatrix();
-    aim();
+    outline.setSize(w * renderer.getPixelRatio(), h * renderer.getPixelRatio());
+    if (!manual && !driven) aim();
   }
   window.addEventListener("resize", resize);
 
@@ -248,14 +258,14 @@ export function createView(canvas) {
       water.uniforms.uNear.value = camera.near; water.uniforms.uFar.value = camera.far;
     },
     /** Render another scene (the deep sea); the caller places the camera. null = back to the table. */
-    useScene(s) {
+    useScene(s, { bloom: keepBloom = false } = {}) {
       manual = !!s;
-      renderPass.scene = gtao.scene = s || scene;
+      renderPass.scene = gtao.scene = outline.renderScene = s || scene;
       // GTAO only at the table (paper joints, under ships): objects floating in open water have the far
       // plane behind them and come out fully 'occluded' (black)
       gtao.enabled = !s;
       // bloom breaks on the dark deep scene with the additive jellyfish (the frame goes black): only at the table
-      bloom.enabled = !s;
+      bloom.enabled = !s || keepBloom;
       document.body.classList.toggle("other-scene", !!s);
       if (!s) aim();
     },
@@ -266,6 +276,13 @@ export function createView(canvas) {
       rig.target.copy(p.target); rig.dist = p.dist; rig.tilt = p.tilt; rig.yaw = p.yaw ?? 0;
       settled = false; rate = speed; aim();
     },
+    /** First person in the cabin: the caller places the camera (the table's rig stops). */
+    drive(on) { driven = on; if (!on) { settled = false; } },
+    /** A fixed vertical field of view (first person), null = the table's lens. */
+    setFov(f) { fovOverride = f; camera.fov = f ?? camera.fov; camera.updateProjectionMatrix(); if (f === null) resize(); },
+    /** Outline these objects (empty = none). */
+    outline(objs) { outline.selectedObjects = objs; outline.enabled = objs.length > 0; },
+    get mainScene() { return scene; },
     onFrame: (fn) => frameHooks.push(fn),
     onResize: (fn) => resizeHooks.push(fn),
     start() { resize(); requestAnimationFrame(frame); },
