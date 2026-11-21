@@ -121,7 +121,7 @@ export function createCockpit(root, handlers) {
     },
     set({ o2, max, depth, heading, fog, low }) {
       if (o2 !== undefined) $(".ck-o2").innerHTML = o2Dial(o2, max);
-      if (depth !== undefined) $(".ck-nixie").textContent = String(Math.round(depth)).replace(/(\d)(\d{3})$/, "$1 $2");
+      if (depth !== undefined) $(".ck-nixie").textContent = String(Math.max(0, Math.round(depth))).padStart(4, "0");
       if (heading !== undefined) $(".ck-tape").style.transform = `translateX(${160 - ((((-heading * 180) / Math.PI) % 360 + 360) % 360 + 30) / 15 * 40 - 20}px)`;
       if (fog !== undefined) $(".ck-glass").style.setProperty("--fog", fog.toFixed(2));
       if (low !== undefined) ck.classList.toggle("low", low);

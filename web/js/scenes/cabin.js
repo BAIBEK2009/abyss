@@ -1,6 +1,6 @@
 // The captain's cabin around the chart table (CLAUDE.md v3.1, 21.1 p. 6; v3 4.3): the table does not
 // hang in emptiness. Plank floor and walls, ceiling beams, two portholes with the night sea and the
-// moon, a green radio on a cabinet, the ship's wheel and a chart of the Atlantic on the walls,
+// moon, a green radio on a cabinet, the ship's wheel and a chart of the Caspian on the walls,
 // a barrel, the brass lamp over the table with dust floating in its light.
 // Scale: the chart sheet (12 units) is about a metre, so the room is about 5 x 5.5 m.
 import * as THREE from "three";
@@ -41,7 +41,7 @@ function nightSea(seed) {
   });
 }
 
-function atlanticChart() {
+function caspianChart() {
   return canvasTexture(512, 360, (g, w, h) => {
     g.fillStyle = "#e6d6b0"; g.fillRect(0, 0, w, h);
     const r = rng(77);
@@ -49,16 +49,19 @@ function atlanticChart() {
     g.strokeStyle = "rgba(60,45,30,.35)"; g.lineWidth = 1;
     for (let i = 1; i < 8; i++) { g.beginPath(); g.moveTo(i * w / 8, 0); g.lineTo(i * w / 8, h); g.stroke(); }
     for (let i = 1; i < 6; i++) { g.beginPath(); g.moveTo(0, i * h / 6); g.lineTo(w, i * h / 6); g.stroke(); }
-    g.fillStyle = "#c9b48a"; g.strokeStyle = "#5a4630"; g.lineWidth = 2;
-    const coast = (pts) => { g.beginPath(); pts.forEach(([x, y], i) => (i ? g.lineTo(x * w, y * h) : g.moveTo(x * w, y * h))); g.closePath(); g.fill(); g.stroke(); };
-    coast([[0, 0.05], [0.18, 0.1], [0.24, 0.3], [0.17, 0.5], [0.22, 0.72], [0.12, 1], [0, 1]]);          // the Americas
-    coast([[1, 0], [0.78, 0.06], [0.72, 0.22], [0.8, 0.34], [0.74, 0.5], [0.84, 0.76], [0.9, 1], [1, 1]]);  // Europe and Africa
+    // land all round, the Caspian Sea in the middle (CLAUDE.md 22.1): the flight path Astana -> Tbilisi
+    g.fillStyle = "rgba(201,180,138,.85)"; g.fillRect(0, 0, w, h);
+    g.fillStyle = "#d9e2d6"; g.strokeStyle = "#5a4630"; g.lineWidth = 2;
+    const sea = [[0.42, 0.06], [0.5, 0.1], [0.58, 0.16], [0.6, 0.27], [0.55, 0.33], [0.62, 0.42], [0.66, 0.55], [0.6, 0.6],
+                 [0.62, 0.74], [0.6, 0.88], [0.52, 0.96], [0.44, 0.94], [0.42, 0.8], [0.38, 0.66], [0.43, 0.55], [0.4, 0.44],
+                 [0.36, 0.33], [0.33, 0.2], [0.37, 0.1]];
+    g.beginPath(); sea.forEach(([x, y], i) => (i ? g.lineTo(x * w, y * h) : g.moveTo(x * w, y * h))); g.closePath(); g.fill(); g.stroke();
     g.strokeStyle = "#a8392a"; g.lineWidth = 3; g.setLineDash([8, 6]);
-    g.beginPath(); g.moveTo(0.2 * w, 0.32 * h); g.quadraticCurveTo(0.45 * w, 0.18 * h, 0.52 * w, 0.4 * h); g.stroke();
+    g.beginPath(); g.moveTo(0.92 * w, 0.08 * h); g.quadraticCurveTo(0.7 * w, 0.4 * h, 0.52 * w, 0.78 * h); g.stroke();
     g.setLineDash([]);
-    g.beginPath(); g.arc(0.52 * w, 0.4 * h, 9, 0, 7); g.stroke();
+    g.beginPath(); g.arc(0.52 * w, 0.78 * h, 9, 0, 7); g.stroke();
     g.fillStyle = "#3a2c1c"; g.font = 'italic 700 26px "Cormorant Garamond", Georgia, serif'; g.textAlign = "center";
-    g.fillText("Atlanticus", w / 2, 34);
+    g.fillText("Mare Caspium", w / 2, 34);
   });
 }
 
@@ -135,7 +138,7 @@ export function createCabin(scene) {
     lampR.position.set(X0 + 6, FLOOR_Y + 12, Z0 + 7); group.add(lampR);
   }
 
-  // the ship's wheel on the left wall, the Atlantic chart on the right wall, a barrel
+  // the ship's wheel on the left wall, the Caspian chart on the right wall, a barrel
   {
     const wheel = new THREE.Group();
     const wood = std({ color: 0x5a3820, roughness: 0.6 });
@@ -148,7 +151,7 @@ export function createCabin(scene) {
     }
     wheel.position.set(X0 + 0.9, 5, -12); wheel.rotation.y = Math.PI / 2;
     group.add(wheel);
-    const chartW = new THREE.Mesh(new THREE.PlaneGeometry(14, 10), std({ map: atlanticChart(), roughness: 0.9 }));
+    const chartW = new THREE.Mesh(new THREE.PlaneGeometry(14, 10), std({ map: caspianChart(), roughness: 0.9 }));
     chartW.position.set(X1 - 0.1, 5, -14); chartW.rotation.y = -Math.PI / 2; group.add(chartW);
     const barrel = new THREE.Group();
     const staves = mesh(new THREE.CylinderGeometry(3, 3, 8, 24), std({ color: 0x6a4428, roughness: 0.75 }));

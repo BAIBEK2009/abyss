@@ -22,7 +22,7 @@ function vnoise(x, y) {
 const fbm = (x, y) => vnoise(x, y) * 0.55 + vnoise(x * 2.1, y * 2.1) * 0.3 + vnoise(x * 4.3, y * 4.3) * 0.15;
 /** Seabed height around the dive spot (gentle dunes and ripples). */
 export const bedH = (x, z) => (fbm(x * 0.07 + 3.1, z * 0.07 + 1.7) - 0.5) * 3.4 + Math.sin(x * 0.9 + z * 0.35) * 0.06 + Math.sin(x * 0.37 - z * 0.83) * 0.05;
-const O2_MAX = 60, SEARCH_R = 17, TETHER = 24, CINE_S = 2;
+const BED_M = 950, O2_MAX = 60, SEARCH_R = 17, TETHER = 24, CINE_S = 2;
 
 const std = (o) => new THREE.MeshStandardMaterial(o);
 const soft = canvasTexture(64, 64, (g) => {
@@ -389,7 +389,7 @@ export function createDive(view) {
     surf.add(m); shafts.push(m);
   }
 
-  // ---- the seabed at 3 400 m
+  // ---- the seabed of the South Caspian Basin, ~950 m (CLAUDE.md 22.1)
   const bedGroup = new THREE.Group();
   deep.add(bedGroup);
   {
@@ -578,13 +578,13 @@ export function createDive(view) {
     spot.intensity = 0; cone.visible = false; D.desc = 1;
     cockpit.show(); document.body.classList.add("diving");
     sfx.underwater(true);
-    cockpit.msg(t("dv_descent", { m: "3 400" }), 2600);
+    cockpit.msg(t("dv_descent", { m: String(BED_M) }), 2600);
     setTimeout(() => { sfx.clack(); spot.intensity = 60; cone.visible = true; cockpit.msg(t("dv_light"), 1600); }, 1500);
     const y0 = D.y, y1 = bedH(0, 0) + 1.8;
     await anim(5.5, (k) => {
       D.y = y0 + (y1 - y0) * ease(k); top.intensity = 1.8 * (1 - k);
       D.shake = 0.03 * (1 - k) + (k > 0.92 ? (1 - k) * 0.4 : 0); D.desc = 1 - k;
-      cockpit.set({ depth: 3400 - (D.y - bedH(0, 0)) * 9 - (1 - k) * 2400 });
+      cockpit.set({ depth: BED_M - (D.y - bedH(0, 0)) * 9 - (1 - k) * 700 });
       if (Math.random() < 0.02) sfx.bubbles(2);
     });
     D.shake = 0; D.desc = 0;
@@ -613,7 +613,7 @@ export function createDive(view) {
     D.o2 -= dt; D.pingCD -= dt;
     if ((D.tick += dt) > 0.25) {
       D.tick = 0;
-      cockpit.set({ o2: D.o2, max: O2_MAX, fog: clamp((16 - D.o2) / 16, 0, 0.85), depth: 3400 - bedH(D.x, D.z) * 9, low: D.o2 < 12 });
+      cockpit.set({ o2: D.o2, max: O2_MAX, fog: clamp((16 - D.o2) / 16, 0, 0.85), depth: BED_M - bedH(D.x, D.z) * 9, low: D.o2 < 12 });
     }
     if (D.o2 < 12 && (D.heartT -= dt) <= 0) { D.heartT = 0.85; sfx.heart(); }
     if ((D.creakT -= dt) <= 0) { D.creakT = 6 + Math.random() * 7; sfx.creak(); }

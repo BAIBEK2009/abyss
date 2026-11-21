@@ -6,6 +6,7 @@ import { createDive } from "./scenes/dive.js";
 import { createTable } from "./table.js";
 import { api } from "./api.js";
 import { setLang } from "./strings.js";
+import { loadStory } from "./story.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -32,7 +33,7 @@ async function start() {
   await loadFonts();
   let state;
   try {
-    state = await api.state();
+    [state] = await Promise.all([api.state(), loadStory()]);
   } catch {
     $("status").textContent = "Сервер не отвечает — запусти python main.py";
     $("status").hidden = false;

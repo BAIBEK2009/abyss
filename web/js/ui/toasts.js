@@ -3,7 +3,7 @@
 // a click closes it. Several in a row are queued.
 import { portrait } from "./art.js";
 import { el } from "./fmt.js";
-import { t } from "../strings.js";
+import { officer } from "../story.js";
 
 export function createToasts(root) {
   const box = el("div", "toasts");
@@ -15,7 +15,7 @@ export function createToasts(root) {
     if (showing || !queue.length) return;
     showing = true;
     const { who, html, ms } = queue.shift();
-    const toast = el("div", `toast toast-${who}`, `${portrait(who)}<div><div class="tn">${t(`${who}_toast`)}</div><div class="tt">${html}</div></div>`);
+    const toast = el("div", `toast toast-${who}`, `${portrait(who)}<div><div class="tn">${officer(who).name} · ${officer(who).role}</div><div class="tt">${html}</div></div>`);
     box.append(toast);
     const close = () => {
       if (!toast.isConnected) return;

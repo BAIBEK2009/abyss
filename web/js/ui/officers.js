@@ -6,6 +6,7 @@ import { el, pct } from "./fmt.js";
 import { portrait, TAG_ICONS } from "./art.js";
 import { place } from "../places.js";
 import { t, plural } from "../strings.js";
+import { officer } from "../story.js";
 
 const OFFICERS = ["vera", "lev", "grisha"];
 
@@ -24,7 +25,7 @@ export function createOfficers(root, handlers) {
   const cards = {};
   for (const id of OFFICERS) {
     const c = el("div", `oc officer officer-${id}`);
-    c.innerHTML = `${portrait(id)}<div><div class="nm">${t(`${id}_name`)}</div><div class="rl">${t(`${id}_role`)}</div><q class="officer-line"></q></div>`;
+    c.innerHTML = `${portrait(id)}<div><div class="nm">${officer(id).name}</div><div class="rl">${officer(id).role}</div><q class="officer-line"></q></div>`;
     c.addEventListener("click", () => handlers.onOfficer(id));
     cards[id] = c;
     drawer.append(c);

@@ -5,6 +5,7 @@
 // The chart is printed paper, so its words live in the texture; all interface text stays HTML.
 import { chartLandmarks } from "../places.js";
 import { getLang } from "../strings.js";
+import { mapName } from "../story.js";
 
 export const CH0 = -1.05, CHS = 12.1;        // chart sheet in map units: [-1.05, 11.05]
 
@@ -25,22 +26,22 @@ export function depthAt(x, y, reefs) {
   d -= 0.5 * g2(x, y, 0.5, 9.5, 0.9, 0.9);
   return clamp(d, 0, 1);
 }
-export const metres = (d) => Math.round(2400 + d * 1300);
+export const metres = (d) => Math.round(870 + d * 140);     // the South Caspian Basin, ~950 m (CLAUDE.md 22.1)
 
-const TEXT = {
-  ru: { title: "Северная Атлантика", sub: "район поиска рейса AQ-271 · глубины в метрах", sheet: "лист 7", miles: "20 морских миль",
-        legend: "калька: нижний лист — 2 %, золотые — от 16 %", base: "База", north: "С",
+const TEXT = () => ({
+  ru: { title: mapName("Северная Атлантика"), sub: "район поиска рейса AQ-271 · глубины в метрах", sheet: "лист 7", miles: "20 морских миль",
+        legend: "калька: нижний лист — 2 %, золотые — от 16 %", base: mapName("База"), north: "С",
         checked: "проверено 19.11 — пусто", seen: "«Посейдон» замечен 13:50", current: "течение 1,5 уз",
         signal: "последний сигнал 02:14", fuel: "заправка" },
-  en: { title: "North Atlantic", sub: "search area of flight AQ-271 · depths in metres", sheet: "sheet 7", miles: "20 nautical miles",
-        legend: "tracing paper: lowest sheet — 2 %, gold — from 16 %", base: "Base", north: "N",
+  en: { title: "Caspian Sea", sub: "search area of flight AQ-271 · depths in metres", sheet: "sheet 7", miles: "20 nautical miles",
+        legend: "tracing paper: lowest sheet — 2 %, gold — from 16 %", base: "Base · Aktau", north: "N",
         checked: "checked 19.11 — empty", seen: "Poseidon seen 13:50", current: "current 1.5 kn",
         signal: "last signal 02:14", fuel: "refuel" },
-};
+});
 
 /** Draw the chart into a W x W canvas context. signal = [u, v] of the last signal. */
 export function drawChart(g, W, { reefs, signal }) {
-  const L = TEXT[getLang()] || TEXT.ru;
+  const L = TEXT()[getLang()] || TEXT().ru;
   const S = W / CHS;
   const px = (u) => (u - CH0) / CHS * W;
   const serif = (weight, size, italic = true) => `${italic ? "italic " : ""}${weight} ${size}px "Cormorant Garamond", Georgia, serif`;
@@ -93,7 +94,7 @@ export function drawChart(g, W, { reefs, signal }) {
       }
       g.strokeStyle = "rgba(24,52,84,.34)"; g.lineWidth = 1.4; g.stroke();
       g.fillStyle = "rgba(24,52,84,.7)"; g.font = serif(700, S * 0.15); g.textAlign = "center";
-      for (const [lx, ly] of labs.slice(0, 4)) g.fillText(String(Math.round((2400 + th * 1300) / 100) * 100), px(lx), px(ly) + S * 0.05);
+      for (const [lx, ly] of labs.slice(0, 4)) g.fillText(String(Math.round((870 + th * 140) / 10) * 10), px(lx), px(ly) + S * 0.05);
     }
   }
 
