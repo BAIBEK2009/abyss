@@ -604,10 +604,10 @@ export function createDive(view) {
   // ONE silt shader for everything on the bottom (23.3-G): where the world normal looks up (y > ~0.6) the surface
   // fades into silt with a patchy noise, matte and non-metallic; under water every colour is a little muted
   // (the red falls off with distance in the water pass, view.js). Works for instanced meshes too.
-  const siltShader = (mat, hex = 0x756d5f, amount = 0.85, tri = null) => {
+  const siltShader = (mat, hex = 0x756d5f, amount = 0.85, tri = null, mute = 0.14) => {
     if (tri) { mat.map = tri.map; mat.normalMap = tri.normalMap; mat.roughnessMap = tri.roughnessMap; }   // (defines USE_MAP etc.; sampled triplanar below)
     mat.onBeforeCompile = (sh) => {
-      sh.uniforms.uSilt = { value: new THREE.Color(hex) }; sh.uniforms.uSiltK = { value: amount };
+      sh.uniforms.uSilt = { value: new THREE.Color(hex) }; sh.uniforms.uSiltK = { value: amount }; sh.uniforms.uMute = { value: mute };
       if (tri) {
         sh.uniforms.uTriScale = { value: tri.scale };
         sh.vertexShader = sh.vertexShader.replace("#include <common>", "#include <common>\nvarying vec3 vTriN;")
@@ -649,7 +649,7 @@ export function createDive(view) {
           #endif
           vSiltW = (modelMatrix * siltW).xyz;`);
       sh.fragmentShader = sh.fragmentShader.replace("#include <common>", `#include <common>
-          varying vec3 vSiltW; uniform vec3 uSilt; uniform float uSiltK;
+          varying vec3 vSiltW; uniform vec3 uSilt; uniform float uSiltK; uniform float uMute;
           float sH(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
           float sN(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
             return mix(mix(sH(i), sH(i + vec2(1, 0)), f.x), mix(sH(i + vec2(0, 1)), sH(i + vec2(1, 1)), f.x), f.y); }`)
@@ -660,7 +660,7 @@ export function createDive(view) {
             float k = smoothstep(0.42 + 0.3 * n, 0.85 + 0.1 * n, wn.y) * uSiltK;
             diffuseColor.rgb = mix(diffuseColor.rgb, uSilt * (0.82 + 0.36 * n), k);
             float lum = dot(diffuseColor.rgb, vec3(0.299, 0.587, 0.114));
-            diffuseColor.rgb = mix(diffuseColor.rgb, vec3(lum), 0.14);
+            diffuseColor.rgb = mix(diffuseColor.rgb, vec3(lum), uMute);
             roughnessFactor = mix(roughnessFactor, 1.0, k);
             metalnessFactor = mix(metalnessFactor, 0.0, k);
           }`);
@@ -782,14 +782,14 @@ export function createDive(view) {
   const recorder = new THREE.Group();
   let box = recorder;                   // the dive's main find: the recorder, or a story find (act I: the flap)
   {
-    const orange = siltMat(std({ color: 0xff6a1a, roughness: 0.42, metalness: 0.15 }), 0x9a8c74);
-    const white = std({ color: 0xf2f2ee, roughness: 0.3, metalness: 0.2 });
+    const orange = siltShader(std({ color: 0xff4f00, roughness: 0.5, metalness: 0 }), 0x8a7f6c, 0.4, null, 0);      // international orange, a thin film of silt on top
+    const white = siltShader(std({ color: 0xd9d9d2, roughness: 0.45, metalness: 0 }), 0x8a7f6c, 0.4);
     const dark = std({ color: 0x2a2d30, roughness: 0.5, metalness: 0.6 });
     const body = new THREE.Mesh(rbox(0.5, 0.26, 0.34, 0.035), orange); body.position.y = 0.17; recorder.add(body);
     for (const x of [-0.17, 0.17]) { const band = new THREE.Mesh(rbox(0.05, 0.268, 0.348, 0.03), white); band.position.set(x, 0.17, 0); recorder.add(band); }
     const label = new THREE.Mesh(new THREE.PlaneGeometry(0.26, 0.15), new THREE.MeshStandardMaterial({ roughness: 0.4, polygonOffset: true, polygonOffsetFactor: -2,
       map: canvasTexture(512, 300, (c, w, h) => {
-        c.fillStyle = "#ff6a1a"; c.fillRect(0, 0, w, h);
+        c.fillStyle = "#ff4f00"; c.fillRect(0, 0, w, h);
         c.fillStyle = "#151515"; c.textAlign = "center";
         c.font = "800 50px Onest, sans-serif"; c.fillText("FLIGHT RECORDER", w / 2, 80);
         c.font = "700 40px Onest, sans-serif"; c.fillText("DO NOT OPEN", w / 2, 140);
@@ -1149,6 +1149,8 @@ export function createDive(view) {
       camera.rotation.x += (Math.atan2(box.position.y - D.y, Math.hypot(box.position.x - D.x, box.position.z - D.z)) - camera.rotation.x) * ease(k);
     }
     spot.target.position.copy(spot.position).addScaledVector(aimDir, 10);
+    // the camera's exposure: close to the box the lamp is dimmed, as an auto-iris would, so the orange stays orange
+    if (spot.intensity > 0 && mode === "dive") spot.intensity = SPOT_I * (box.visible ? clamp(spot.position.distanceTo(box.position) / 6, 0.26, 1) : 1);
     cone.position.copy(spot.position); cone.lookAt(spot.target.position);
     snow.mat.uniforms.uLP.value.copy(spot.position); snow.mat.uniforms.uLD.value.copy(aimDir);
     const flare = D.cine !== null && D.cine !== undefined && D.cine > CINE_S * 0.5;      // the beacon LED flashes during the find
