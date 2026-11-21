@@ -67,18 +67,22 @@ with sync_playwright() as pw:
     # fixed views on the seabed (CLAUDE.md 23.3-E): rocks, the mud volcano, a piece of debris, the find
     page.evaluate("window.__abyss.diveLook(-6, 6, 2.4, 0.15)"); page.wait_for_timeout(1500)
     page.screenshot(path=str(args.out / "bed_rocks.png"))
-    page.evaluate("window.__abyss.diveLook(5.2, -4.2, -0.785, 0.05)"); page.wait_for_timeout(1500)
+    page.evaluate("window.__abyss.diveLook(3.0, -4.6, 0.08, 0.02)"); page.wait_for_timeout(1500)
     page.screenshot(path=str(args.out / "bed_volcano.png"))
     where = page.evaluate("window.__abyss.diveWhere()")
     def face(p, dist, down):
+        """Look at a point the way Nerpa comes to it: from the landing spot (the origin), dist metres short of it."""
         import math
-        x, z = p[0], p[2]
-        page.evaluate(f"window.__abyss.diveLook({x + dist}, {z + dist * 0.3}, {math.atan2(dist, dist * 0.3)}, {down})")
+        tx, tz = p[0], p[2]
+        L = math.hypot(tx, tz) or 1
+        cx, cz = tx - tx / L * dist, tz - tz / L * dist
+        page.evaluate(f"window.__abyss.diveLook({cx}, {cz}, {math.atan2(-(tx - cx), -(tz - cz))}, {down})")
     if where["debris"]:
-        face(where["debris"][0], 2.6, 0.75); page.wait_for_timeout(1500)
+        face(where["debris"][-1], 3.4, 0.45); page.wait_for_timeout(1500)
         page.screenshot(path=str(args.out / "debris_close.png"))
     if where["box"]:
-        face(where["box"], 2.2, 0.8); page.wait_for_timeout(1500)
+        page.evaluate("window.__abyss.diveLook(0, 0, 0, 0.3)")
+        page.evaluate("window.__abyss.faceBox()"); page.wait_for_timeout(1800)
         page.screenshot(path=str(args.out / "find_close.png"))
     b.close()
 server.shutdown()

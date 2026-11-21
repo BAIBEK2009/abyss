@@ -42,3 +42,10 @@ python3 -m venv .venv
 ```
 
 Если `.venv` есть, `ABYSS.command` запускает игру из него, иначе — системным `python3`.
+
+## Чужие ресурсы и лицензии
+
+- **three.js r170** (MIT) — `web/vendor/three/`, вместе с аддонами (OutlinePass, RoundedBoxGeometry, BufferGeometryUtils, GTAO, bloom).
+- **Шрифты** (SIL Open Font License) — Prata, Onest, Caveat, PT Mono, Cormorant Garamond в `web/fonts/`, тексты лицензий рядом (`OFL-*.txt`).
+- **Текстуры дна** (CC0, Poly Haven) — «Coast Sand 02», цвет, нормали и шероховатость 1k в `web/assets/seabed/` (<https://polyhaven.com/a/coast_sand_02>). CC0 не требует указания авторства, указываем из уважения.
+- Всё остальное (модели, текстуры судов и аппарата, звук, музыка) сделано в коде проекта.

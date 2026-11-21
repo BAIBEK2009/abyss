@@ -13,6 +13,7 @@ import { t } from "../i18n.js";
 import { createNerpa } from "./nerpa.js";
 import { HULL } from "./deck.js";
 import { mergeVertices } from "three/addons/utils/BufferGeometryUtils.js";
+import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import { sfx } from "../audio.js";
 import { createCockpit } from "../ui/cockpit.js";
 
@@ -288,6 +289,48 @@ function createLife(deep, lampPos) {
   };
 }
 
+const rbox = (w, h, d, r = 0.03, seg = 3) => new RoundedBoxGeometry(w, h, d, seg, Math.min(r, w / 2.01, h / 2.01, d / 2.01));
+/** Aircraft skin: aluminium with rows of rivets and panel seams in a normal map; an optional livery stripe
+ *  (fictional: teal on white, no real airline). */
+function aluSkin({ stripe = false, base = "#c9ced1", seed = 1 } = {}) {
+  const S = 512;
+  const hc = document.createElement("canvas"); hc.width = hc.height = S;
+  const hg = hc.getContext("2d");
+  hg.fillStyle = "#808080"; hg.fillRect(0, 0, S, S);
+  hg.fillStyle = "#585858"; for (const y of [0, S / 2]) hg.fillRect(0, y, S, 3); for (const x of [0, S / 3, (2 * S) / 3]) hg.fillRect(x, 0, 3, S);
+  for (const y of [10, S / 2 + 10, S / 2 - 8, S - 8]) for (let x = 6; x < S; x += 14) { const gr = hg.createRadialGradient(x, y, 0, x, y, 3.5); gr.addColorStop(0, "#d8d8d8"); gr.addColorStop(1, "rgba(128,128,128,0)"); hg.fillStyle = gr; hg.fillRect(x - 4, y - 4, 8, 8); }
+  const d = hg.getImageData(0, 0, S, S).data, out = new Uint8ClampedArray(d.length);
+  const H = (x, y) => d[(((y + S) % S) * S + ((x + S) % S)) * 4] / 255;
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+    const dx = (H(x + 1, y) - H(x - 1, y)) * 3, dy = (H(x, y + 1) - H(x, y - 1)) * 3, l = Math.hypot(dx, dy, 1), k = (y * S + x) * 4;
+    out[k] = (-dx / l * 0.5 + 0.5) * 255; out[k + 1] = (dy / l * 0.5 + 0.5) * 255; out[k + 2] = (1 / l * 0.5 + 0.5) * 255; out[k + 3] = 255;
+  }
+  const nc = document.createElement("canvas"); nc.width = nc.height = S; nc.getContext("2d").putImageData(new ImageData(out, S, S), 0, 0);
+  const normalMap = new THREE.CanvasTexture(nc);
+  const map = canvasTexture(S, S, (g, w, h) => {
+    g.fillStyle = base; g.fillRect(0, 0, w, h);
+    for (let i = 0; i < 5000; i++) { g.fillStyle = `rgba(60,60,55,${hash(i, seed) * 0.08})`; g.fillRect(hash(i, seed + 1) * w, hash(i, seed + 2) * h, 2, 2); }
+    if (stripe) { g.fillStyle = "#1f7a86"; g.fillRect(0, h * 0.58, w, h * 0.12); g.fillStyle = "#e8b04a"; g.fillRect(0, h * 0.72, w, h * 0.025); }
+    for (let i = 0; i < 18; i++) { g.strokeStyle = `rgba(90,85,75,${0.15 + hash(i, seed + 3) * 0.2})`; g.lineWidth = 1 + hash(i, seed + 4) * 2; g.beginPath(); const x = hash(i, seed + 5) * w, y = hash(i, seed + 6) * h; g.moveTo(x, y); g.lineTo(x + (hash(i, seed + 7) - 0.5) * 140, y + (hash(i, seed + 8) - 0.5) * 30); g.stroke(); }
+  });
+  return { map, normalMap };
+}
+/** A torn plate: a noisy outline extruded thin with a bevel (aircraft skin ripped off the frame). */
+function tornPlate(w, h, seed, depth = 0.025) {
+  const pts = [], N = 26;
+  for (let k = 0; k < N; k++) {
+    const a = (k / N) * Math.PI * 2, c = Math.cos(a), s2 = Math.sin(a);
+    const sq = Math.pow(Math.abs(c), 0.35) * Math.sign(c), sz = Math.pow(Math.abs(s2), 0.35) * Math.sign(s2);   // squarish
+    const jag = 1 - 0.18 * hash(k, seed) - (k % 3 === 0 ? 0.12 * hash(k, seed + 9) : 0);
+    pts.push(new THREE.Vector2(sq * w / 2 * jag, sz * h / 2 * jag));
+  }
+  const geo = new THREE.ExtrudeGeometry(new THREE.Shape(pts), { depth, bevelEnabled: true, bevelThickness: 0.006, bevelSize: 0.006, bevelSegments: 1 });
+  geo.rotateX(-Math.PI / 2);
+  const uv = geo.attributes.uv, pp = geo.attributes.position;
+  for (let k = 0; k < uv.count; k++) uv.setXY(k, pp.getX(k) / w + 0.5, pp.getZ(k) / h + 0.5);
+  return geo;
+}
+
 export function createDive(view) {
   const camera = view.camera;
   const deep = new THREE.Scene();
@@ -495,7 +538,7 @@ export function createDive(view) {
     shells.receiveShadow = true; bedGroup.add(shells);
   }
   // the mud volcano: a low cone of grey mud with a crater, gas bubbles rising from it in a column
-  const MV = new THREE.Vector3(9.5, 0, -8.5);
+  const MV = new THREE.Vector3(3.5, 0, -10.5);
   const bubbleCol = (() => {
     const mud = siltOnTop(std({ color: 0x5a554a, roughness: 1 }), 0x7a7262);
     const cone = new THREE.Mesh(new THREE.LatheGeometry([[0, 1.05], [0.3, 1.1], [0.55, 1.55], [0.75, 1.62], [1.0, 1.45], [1.8, 0.95], [2.8, 0.45], [4.0, 0.08], [4.6, -0.3]].map(([a, b]) => new THREE.Vector2(a, b)), 64), mud);   // a cone with a crater
@@ -517,24 +560,48 @@ export function createDive(view) {
   cone.visible = false;
   deep.add(cone);
 
-  // the flight recorder: orange casing with a label and a blinking beacon
+  // silt settles on the upward faces of everything on the bottom
+  const siltMat = (m, hex = 0x8a8170) => {
+    m.onBeforeCompile = (sh) => {
+      sh.uniforms.uSilt = { value: new THREE.Color(hex) };
+      sh.vertexShader = sh.vertexShader.replace("#include <common>", "#include <common>\nvarying vec3 vWN;")
+        .replace("#include <beginnormal_vertex>", "#include <beginnormal_vertex>\nvWN = normalize(mat3(modelMatrix) * objectNormal);");
+      sh.fragmentShader = sh.fragmentShader.replace("#include <common>", "#include <common>\nvarying vec3 vWN; uniform vec3 uSilt;")
+        .replace("#include <color_fragment>", "#include <color_fragment>\n diffuseColor.rgb = mix(diffuseColor.rgb, uSilt, 0.65 * smoothstep(0.6, 0.92, vWN.y));");
+    };
+    return m;
+  };
+  // the flight recorder, as real ones: orange, white reflective bands, "FLIGHT RECORDER — DO NOT OPEN", the
+  // underwater locator beacon (a cylinder with a blinking light) on the front, a handle, the mounting tray
   const recorder = new THREE.Group();
   let box = recorder;                   // the dive's main find: the recorder, or a story find (act I: the flap)
   {
-    const label = canvasTexture(512, 256, (c, w, h) => {
-      c.fillStyle = "#e8692b"; c.fillRect(0, 0, w, h);
-      c.fillStyle = "#f3efe6"; c.fillRect(0, 34, w, 22); c.fillRect(0, h - 56, w, 22);
-      c.fillStyle = "#1b1b1b"; c.font = "700 38px Onest, sans-serif"; c.textAlign = "center";
-      c.fillText(t("box_label1"), w / 2, 122); c.font = "600 30px Onest, sans-serif"; c.fillText(t("box_label2"), w / 2, 168);
-    });
-    const side = std({ color: 0xe8692b, roughness: 0.45, metalness: 0.2 });
-    const body = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.38, 0.46), [side, side, side, side, std({ map: label, roughness: 0.45 }), side]);
-    body.castShadow = true; recorder.add(body);
-    const ulb = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.32, 16), std({ color: 0x8e9296, metalness: 0.9, roughness: 0.3 }));
-    ulb.rotation.z = Math.PI / 2; ulb.position.set(0.46, -0.08, 0); recorder.add(ulb);
-    const led = new THREE.Mesh(new THREE.SphereGeometry(0.03, 8, 6), new THREE.MeshBasicMaterial({ color: new THREE.Color(0xff3020).multiplyScalar(5) }));
-    led.position.set(0.63, -0.08, 0); recorder.add(led);
+    const orange = siltMat(std({ color: 0xff6a1a, roughness: 0.42, metalness: 0.15 }), 0x9a8c74);
+    const white = std({ color: 0xf2f2ee, roughness: 0.3, metalness: 0.2 });
+    const dark = std({ color: 0x2a2d30, roughness: 0.5, metalness: 0.6 });
+    const body = new THREE.Mesh(rbox(0.5, 0.26, 0.34, 0.035), orange); body.position.y = 0.17; recorder.add(body);
+    for (const x of [-0.17, 0.17]) { const band = new THREE.Mesh(rbox(0.05, 0.268, 0.348, 0.03), white); band.position.set(x, 0.17, 0); recorder.add(band); }
+    const label = new THREE.Mesh(new THREE.PlaneGeometry(0.26, 0.15), new THREE.MeshStandardMaterial({ roughness: 0.4, polygonOffset: true, polygonOffsetFactor: -2,
+      map: canvasTexture(512, 300, (c, w, h) => {
+        c.fillStyle = "#ff6a1a"; c.fillRect(0, 0, w, h);
+        c.fillStyle = "#151515"; c.textAlign = "center";
+        c.font = "800 50px Onest, sans-serif"; c.fillText("FLIGHT RECORDER", w / 2, 80);
+        c.font = "700 40px Onest, sans-serif"; c.fillText("DO NOT OPEN", w / 2, 140);
+        c.font = "600 30px Onest, sans-serif"; c.fillText("ENREGISTREUR DE VOL · NE PAS OUVRIR", w / 2, 192);
+        c.font = "800 44px PT Mono, monospace"; c.fillText("AQ-271", w / 2, 258);
+      }) }));
+    label.position.set(0, 0.17, 0.171); recorder.add(label);
+    const label2 = label.clone(); label2.rotation.y = Math.PI; label2.position.z = -0.171; recorder.add(label2);
+    const tray = new THREE.Mesh(rbox(0.58, 0.04, 0.4, 0.015), siltMat(dark)); tray.position.y = 0.02; recorder.add(tray);
+    const handle = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([new THREE.Vector3(-0.12, 0.3, 0), new THREE.Vector3(-0.1, 0.36, 0), new THREE.Vector3(0.1, 0.36, 0), new THREE.Vector3(0.12, 0.3, 0)]), 12, 0.012, 6), dark);
+    recorder.add(handle);
+    const ulb = new THREE.Mesh(new THREE.LatheGeometry([[0, -0.15], [0.045, -0.145], [0.05, -0.12], [0.05, 0.11], [0.045, 0.14], [0.02, 0.15], [0, 0.15]].map(([a, b]) => new THREE.Vector2(a, b)), 20), std({ color: 0x8e9296, metalness: 0.9, roughness: 0.3 }));
+    ulb.rotation.z = Math.PI / 2; ulb.position.set(0.4, 0.12, 0); recorder.add(ulb);
+    const led = new THREE.Mesh(new THREE.SphereGeometry(0.022, 10, 8), new THREE.MeshBasicMaterial({ color: new THREE.Color(0xff3020).multiplyScalar(5) }));
+    led.position.set(0.56, 0.12, 0); recorder.add(led);
     const ll = new THREE.PointLight(0xff3020, 0, 3.5, 2); ll.position.copy(led.position); recorder.add(ll);
+    recorder.scale.setScalar(1.15);
+    recorder.traverse((o) => { if (o.isMesh) o.castShadow = true; });
     recorder.userData = { led, ll };
   }
   recorder.visible = false;
@@ -542,18 +609,15 @@ export function createDive(view) {
   // act I's find (CLAUDE.md 17.4, story.json act1_dive_flap): a whole flap with the flight number, no scorch marks
   const flapFind = new THREE.Group();
   {
-    const plate = canvasTexture(512, 256, (c, w, h) => {
-      c.fillStyle = "#c4c9cd"; c.fillRect(0, 0, w, h);
-      for (let i = 0; i < 9; i++) { c.fillStyle = "rgba(90,100,108,.35)"; c.fillRect(0, i * h / 9, w, 2); }
-      c.fillStyle = "#b8432f"; c.fillRect(0, h - 46, w, 22);
-      c.fillStyle = "#1d2228"; c.font = "800 92px Onest, sans-serif"; c.textAlign = "center"; c.fillText("AQ-271", w / 2, 132);
-    });
-    const alu = std({ color: 0xc4c9cd, roughness: 0.38, metalness: 0.7 });
-    const top = std({ map: plate, roughness: 0.4, metalness: 0.55 });
-    const slab = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.07, 0.95), [alu, alu, top, alu, alu, alu]);
-    slab.castShadow = true; flapFind.add(slab);
-    const c = new THREE.CatmullRomCurve3([new THREE.Vector3(-0.9, 0, 0.2), new THREE.Vector3(-1.6, 0.25, 0.7), new THREE.Vector3(-2.5, 0, 0.3)]);
-    flapFind.add(new THREE.Mesh(new THREE.TubeGeometry(c, 20, 0.03, 6), std({ color: 0x222222, roughness: 0.6 })));
+    const sk = aluSkin({ seed: 31 });
+    const plate = new THREE.Mesh(tornPlate(1.9, 0.9, 7, 0.06), siltMat(std({ map: sk.map, normalMap: sk.normalMap, roughness: 0.38, metalness: 0.7 })));
+    flapFind.add(plate);
+    const num = new THREE.Mesh(new THREE.PlaneGeometry(1.0, 0.3), new THREE.MeshStandardMaterial({ transparent: true, roughness: 0.4, polygonOffset: true, polygonOffsetFactor: -2,
+      map: canvasTexture(512, 160, (c, w, h) => { c.clearRect(0, 0, w, h); c.fillStyle = "#1d2228"; c.font = "800 120px Onest, sans-serif"; c.textAlign = "center"; c.fillText("AQ-271", w / 2, 125); }) }));
+    num.rotation.x = -Math.PI / 2; num.position.set(0, 0.075, 0.05); flapFind.add(num);
+    const wire = std({ color: 0x222222, roughness: 0.6 });
+    for (let k = 0; k < 3; k++) flapFind.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([new THREE.Vector3(-0.9, 0.03, 0.2 + k * 0.05), new THREE.Vector3(-1.5, 0.22 + k * 0.05, 0.6), new THREE.Vector3(-2.3, 0.0, 0.25 + k * 0.1)]), 20, 0.018, 6), wire));
+    flapFind.traverse((o) => { if (o.isMesh) o.castShadow = true; });
   }
   flapFind.visible = false;
   deep.add(flapFind);
@@ -569,30 +633,68 @@ export function createDive(view) {
     claw.userData = { fL, fR };
   }
   const CLAW_REST = new THREE.Vector3(0.42, -0.62, -0.1);
-  // wreckage (aircraft parts only, never people)
+  // wreckage (aircraft parts only, never people), 23.3-G: aluminium skin with rivet rows and torn edges, a fuselage
+  // section with ribs and windows, a row of seats with oxygen masks hanging, the flap with cable bundles; around
+  // them a suitcase, a yellow life vest, an overhead bin, a wire bundle. Silt on all the tops. Fictional livery.
   const debris = [];
+  const props = [];
   {
-    const alu = std({ color: 0xc4c9cd, roughness: 0.35, metalness: 0.75 }), fab = std({ color: 0x2d4a7a, roughness: 0.9 }), red = std({ color: 0xb8432f, roughness: 0.5 });
-    const mk = (fn, key) => { const g = new THREE.Group(); fn(g); g.userData.key = key; g.visible = false; g.traverse((o) => { o.castShadow = true; }); deep.add(g); debris.push(g); };
-    mk((g) => { g.add(new THREE.Mesh(new THREE.BoxGeometry(3.6, 0.08, 1.3), alu)); const st = new THREE.Mesh(new THREE.BoxGeometry(3.62, 0.085, 0.18), red); st.position.z = 0.4; g.add(st); }, "dv_wing");
+    const skinA = aluSkin({ stripe: true, base: "#e7eaeb", seed: 11 }), skinB = aluSkin({ seed: 21 });
+    const alu = siltMat(std({ map: skinB.map, normalMap: skinB.normalMap, roughness: 0.36, metalness: 0.72, side: THREE.DoubleSide }));
+    const livery = siltMat(std({ map: skinA.map, normalMap: skinA.normalMap, roughness: 0.34, metalness: 0.5, side: THREE.DoubleSide }));
+    const fab = siltMat(std({ color: 0x2d4a7a, roughness: 0.9 })), frameM = siltMat(std({ color: 0x9aa2a8, metalness: 0.8, roughness: 0.4 }));
+    const yellow = std({ color: 0xffc21a, roughness: 0.6 }), wireM = std({ color: 0x202020, roughness: 0.6 });
+    const mk = (fn, key) => { const g = new THREE.Group(); fn(g); g.userData.key = key; g.visible = false; g.traverse((o) => { if (o.isMesh) o.castShadow = true; }); deep.add(g); debris.push(g); };
+    // a big piece of skin with the livery stripe
+    mk((g) => { const pl = new THREE.Mesh(tornPlate(3.2, 1.4, 3, 0.03), livery); pl.rotation.z = 0.06; g.add(pl);
+      const bend = new THREE.Mesh(tornPlate(1.1, 0.8, 5, 0.03), alu); bend.position.set(1.7, 0.18, 0.2); bend.rotation.z = -0.5; g.add(bend); }, "dv_wing");
+    // a fuselage section: a bent shell with frames and a row of windows
     mk((g) => {
-      g.add(new THREE.Mesh(new THREE.TorusGeometry(1.5, 0.1, 8, 30, Math.PI * 0.8), alu));
-      for (let i = 0; i < 5; i++) { const rib = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.06, 1.6), alu); const a = (i / 4) * Math.PI * 0.8; rib.position.set(Math.cos(a) * 1.5, Math.sin(a) * 1.5, -0.8); g.add(rib); }
+      const R = 1.5, shell = new THREE.Shape();
+      shell.absarc(0, 0, R + 0.04, 0.15, Math.PI * 0.85, false); shell.absarc(0, 0, R, Math.PI * 0.85, 0.15, true);
+      const sg = new THREE.ExtrudeGeometry(shell, { depth: 2.2, bevelEnabled: true, bevelThickness: 0.01, bevelSize: 0.01, bevelSegments: 1, curveSegments: 32 });
+      const uv = sg.attributes.uv, pp = sg.attributes.position; for (let k = 0; k < uv.count; k++) uv.setXY(k, Math.atan2(pp.getY(k), pp.getX(k)) / 2.2, pp.getZ(k) / 2.2);
+      const sh = new THREE.Mesh(sg, livery); sh.position.z = -1.1; g.add(sh);
+      for (let k = 0; k < 4; k++) { const fr = new THREE.Mesh(new THREE.TorusGeometry(R - 0.03, 0.035, 6, 32, Math.PI * 0.7), frameM); fr.rotation.z = 0.15 + Math.PI * 0.075; fr.position.z = -1 + k * 0.66; g.add(fr); }
+      for (let k = 0; k < 4; k++) { const a = Math.PI * 0.3, w = new THREE.Mesh(new THREE.CircleGeometry(0.12, 18), std({ color: 0x0b1418, roughness: 0.15, metalness: 0.6 })); w.scale.y = 1.4;
+        w.position.set(Math.cos(a) * (R + 0.05), Math.sin(a) * (R + 0.05), -0.9 + k * 0.55); w.lookAt(w.position.clone().multiplyScalar(2)); g.add(w); }
+      g.rotation.x = 0;
+      g.children.forEach((c) => { c.position.y -= R * 0.55; });
     }, "dv_fuselage");
+    // a row of three seats, the masks hanging from a piece of the ceiling panel
     mk((g) => {
       for (let i = 0; i < 3; i++) {
-        const seat = new THREE.Group(); seat.position.x = i * 0.55 - 0.55;
-        const a = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.12, 0.5), fab), b = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.7, 0.1), fab);
-        b.position.set(0, 0.35, -0.22); seat.add(a, b); g.add(seat);
+        const x = i * 0.56 - 0.56;
+        const seat = new THREE.Mesh(rbox(0.48, 0.12, 0.5, 0.05), fab); seat.position.set(x, 0.42, 0); g.add(seat);
+        const back = new THREE.Mesh(rbox(0.48, 0.72, 0.11, 0.05), fab); back.position.set(x, 0.78, -0.24); back.rotation.x = -0.18; g.add(back);
+        const head = new THREE.Mesh(rbox(0.4, 0.2, 0.04, 0.015), std({ color: 0xe8e2d0, roughness: 0.8 })); head.position.set(x, 1.05, -0.3); head.rotation.x = -0.18; g.add(head);
+        const mask = new THREE.Mesh(new THREE.LatheGeometry([[0, 0], [0.05, 0.005], [0.055, 0.04], [0.04, 0.06], [0, 0.06]].map(([a, b]) => new THREE.Vector2(a, b)), 12), yellow);
+        mask.position.set(x + 0.1, 0.95, 0.15); g.add(mask);
+        g.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([new THREE.Vector3(x + 0.1, 1.01, 0.15), new THREE.Vector3(x + 0.12, 1.25, 0.12), new THREE.Vector3(x + 0.1, 1.45, 0.05)]), 10, 0.006, 4), std({ color: 0xd8e4ea, roughness: 0.4, transparent: true, opacity: 0.8 })));
       }
+      for (const x of [-0.84, -0.28, 0.28, 0.84]) { const arm = new THREE.Mesh(rbox(0.05, 0.08, 0.46, 0.02), frameM); arm.position.set(x, 0.6, -0.02); g.add(arm); }
+      for (const x of [-0.6, 0.6]) g.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([new THREE.Vector3(x, 0, 0.15), new THREE.Vector3(x, 0.38, 0.1), new THREE.Vector3(x, 0.38, -0.2), new THREE.Vector3(x, 0, -0.2)]), 12, 0.025, 6), frameM));
+      const ceil = new THREE.Mesh(tornPlate(1.8, 0.7, 13, 0.03), alu); ceil.position.set(0.1, 1.48, 0.05); ceil.rotation.x = 0.25; g.add(ceil);
+      g.rotation.z = 0.12;
     }, "dv_seats");
+    // the flap with torn cable bundles
     mk((g) => {
-      g.add(new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.06, 0.55), alu));
-      const c = new THREE.CatmullRomCurve3([new THREE.Vector3(-0.6, 0, 0), new THREE.Vector3(-1.4, 0.3, 0.6), new THREE.Vector3(-2.4, 0, 0.2)]);
-      g.add(new THREE.Mesh(new THREE.TubeGeometry(c, 20, 0.03, 6), std({ color: 0x222222, roughness: 0.6 })));
+      g.add(new THREE.Mesh(tornPlate(1.4, 0.6, 17, 0.05), alu));
+      for (let k = 0; k < 4; k++) g.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([new THREE.Vector3(-0.6, 0.03, 0.05 * k), new THREE.Vector3(-1.3, 0.25 + 0.04 * k, 0.5 - 0.05 * k), new THREE.Vector3(-2.2, 0.0, 0.2 + 0.08 * k)]), 20, 0.014 + 0.004 * k, 6), k === 2 ? std({ color: 0xb8432f, roughness: 0.6 }) : wireM));
     }, "dv_flap");
+    // the small things that lie around the debris and the box
+    const mkProp = (fn) => { const g = new THREE.Group(); fn(g); g.visible = false; g.traverse((o) => { if (o.isMesh) o.castShadow = true; }); deep.add(g); props.push(g); };
+    mkProp((g) => { g.add(new THREE.Mesh(rbox(0.66, 0.24, 0.44, 0.06), siltMat(std({ color: 0x5a2a33, roughness: 0.5 }))));
+      g.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([new THREE.Vector3(-0.1, 0.12, -0.22), new THREE.Vector3(-0.08, 0.12, -0.28), new THREE.Vector3(0.08, 0.12, -0.28), new THREE.Vector3(0.1, 0.12, -0.22)]), 10, 0.014, 6), wireM));
+      for (const z of [-0.12, 0.12]) { const zip = new THREE.Mesh(rbox(0.67, 0.012, 0.012, 0.004), frameM); zip.position.set(0, 0.0, z); g.add(zip); } });
+    mkProp((g) => { const vest = std({ color: 0xffc21a, roughness: 0.55 });
+      for (const sx of [-0.18, 0.18]) { const half = new THREE.Mesh(rbox(0.3, 0.1, 0.5, 0.05), vest); half.position.x = sx; half.rotation.y = sx * 0.6; g.add(half); }
+      const collar = new THREE.Mesh(new THREE.TorusGeometry(0.12, 0.05, 8, 16, Math.PI), vest); collar.rotation.x = -Math.PI / 2; collar.position.z = -0.25; g.add(collar);
+      g.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([new THREE.Vector3(-0.3, 0.05, 0.1), new THREE.Vector3(0, 0.06, 0.32), new THREE.Vector3(0.35, 0.05, 0.15)]), 12, 0.01, 4), std({ color: 0x1b1b1b }))); });
+    mkProp((g) => { const bin = new THREE.Mesh(rbox(1.2, 0.36, 0.5, 0.06), siltMat(std({ color: 0xd6d8d6, roughness: 0.5 }))); g.add(bin);
+      const lid = new THREE.Mesh(rbox(1.2, 0.04, 0.48, 0.02), siltMat(std({ color: 0xc8cbc9, roughness: 0.5 }))); lid.position.set(0, 0.33, 0.32); lid.rotation.x = -0.9; g.add(lid); });
+    mkProp((g) => { for (let k = 0; k < 7; k++) g.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([new THREE.Vector3(-0.8, 0.02, k * 0.025), new THREE.Vector3(-0.2, 0.12 + Math.sin(k) * 0.05, 0.1 + k * 0.02), new THREE.Vector3(0.5, 0.02, -0.05 + k * 0.03), new THREE.Vector3(1.0, 0.1, 0.1)]), 24, 0.008, 4), k % 3 ? wireM : std({ color: 0x2f6aa0, roughness: 0.5 }))); });
   }
-
   // ---- deep-sea life (CLAUDE.md v3.1, 19 p. 7)
   const life = createLife(deep, () => spot.position);
 
@@ -636,17 +738,24 @@ export function createDive(view) {
     const bx = -Math.sin(a) * d, bz = -Math.cos(a) * d;
     box.visible = D.hasBox;
     if (box.parent !== deep) deep.attach(box);
-    box.position.set(bx, bedH(bx, bz) + 0.1, bz); box.rotation.set(0.18, Math.random() * 6, -0.22);
+    box.position.set(bx, bedH(bx, bz) + 0.02, bz); box.rotation.set(0.08, Math.atan2(-bx, -bz) + (Math.random() - 0.5) * 0.6, -0.1);   // the label towards where Nerpa comes from
     // with the box: two pieces lie along the way to it; with debris only: all four, scattered
     const fr = [0.3, 0.48, 0.66, 0.84];
     debris.forEach((g, i) => {
-      g.visible = D.hasDebris || (D.hasBox && i % 2 === 1);
+      g.visible = D.hasDebris || (D.hasBox && i % 2 === 0);          // the skin with the livery and the seats on the way to the box
       const side = (i % 2 ? 1 : -1) * (1.6 + Math.random() * 1.6);
       let px, pz;
       if (D.hasDebris) { const aa = Math.random() * Math.PI * 2, dd = 5 + Math.random() * 10; px = Math.cos(aa) * dd; pz = Math.sin(aa) * dd; }
       else { px = bx * fr[i] + Math.cos(a) * side; pz = bz * fr[i] - Math.sin(a) * side; }
-      g.position.set(px, bedH(px, pz) - 0.02, pz);
-      g.rotation.set((Math.random() - 0.5) * 0.3, Math.random() * 6, (Math.random() - 0.5) * 0.3);
+      g.position.set(px, bedH(px, pz) + 0.08, pz);               // half settled, one edge up: not swallowed by the ripples
+      g.rotation.set((Math.random() - 0.5) * 0.35, Math.random() * 6, 0.12 + Math.random() * 0.2);
+    });
+    // the small things: near the box (or the debris), as if they fell out of the same section
+    props.forEach((g, i) => {
+      g.visible = D.hasBox || D.hasDebris;
+      const near = D.hasBox ? { x: bx, z: bz } : debris[i % debris.length].position;
+      const aa = Math.random() * Math.PI * 2, dd = 1.6 + Math.random() * 3.2, px = near.x + Math.cos(aa) * dd, pz = near.z + Math.sin(aa) * dd;
+      g.position.set(px, bedH(px, pz) + 0.02, pz); g.rotation.set((Math.random() - 0.5) * 0.2, Math.random() * 6, (Math.random() - 0.5) * 0.2);
     });
     cockpit.set({ o2: D.o2, max: D.max, fog: 0, low: false, depth: 0 });
   }
