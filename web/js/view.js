@@ -70,6 +70,23 @@ export function createView(canvas) {
   // camera rig: look at `target` from `dist` at `tilt` degrees above the horizon.
   // hfov = horizontal field of view: a long lens (30-35°) keeps the chart from looking like a trapezoid
   const rig = { target: new THREE.Vector3(), dist: 36, tilt: 40, yaw: 0, hfov: 33 };
+  // `home` is where the camera rests (set on resize); `follow` = a function filling a point to fly after
+  const home = { target: new THREE.Vector3(), dist: 36, tilt: 40 };
+  let follow = null, settled = true;
+  const goal = new THREE.Vector3();
+  function steer(dt) {
+    if (!follow && settled) return;
+    const k = 1 - Math.exp(-dt * 2.2);
+    if (follow) follow(goal); else goal.copy(home.target);
+    const gd = follow ? 9.5 : home.dist, gt = follow ? 34 : home.tilt;
+    rig.target.lerp(goal, k);
+    rig.dist += (gd - rig.dist) * k;
+    rig.tilt += (gt - rig.tilt) * k;
+    if (!follow && rig.target.distanceTo(home.target) < 0.002 && Math.abs(rig.dist - home.dist) < 0.002) {
+      rig.target.copy(home.target); rig.dist = home.dist; rig.tilt = home.tilt; settled = true;
+    }
+    aim();
+  }
   function aim() {
     const t = deg(rig.tilt), y = deg(rig.yaw);
     camera.position.set(rig.target.x + Math.sin(y) * Math.cos(t) * rig.dist,
@@ -84,7 +101,10 @@ export function createView(canvas) {
     composer.setPixelRatio(renderer.getPixelRatio());
     composer.setSize(w, h);
     camera.aspect = w / h;
-    for (const fn of resizeHooks) fn(w, h);
+    const cur = { target: rig.target.clone(), dist: rig.dist, tilt: rig.tilt };
+    for (const fn of resizeHooks) fn(w, h);                  // the screen sets the resting camera
+    home.target.copy(rig.target); home.dist = rig.dist; home.tilt = rig.tilt;
+    if (!settled) { rig.target.copy(cur.target); rig.dist = cur.dist; rig.tilt = cur.tilt; }   // mid-flight: keep going
     camera.fov = THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(deg(rig.hfov) / 2) / camera.aspect));
     camera.updateProjectionMatrix();
     aim();
@@ -116,6 +136,7 @@ export function createView(canvas) {
     const sway = { x: Math.sin(time * 0.55) * 0.12, z: Math.sin(time * 0.37) * 0.08 };   // a gentle swing
     lamp.position.set(LAMP_POS.x + sway.x, LAMP_POS.y, LAMP_POS.z + sway.z);
     for (const fn of frameHooks) fn(dt, time, sway);
+    steer(dt);
     composer.render();
     for (const p of pins) {
       const s = toScreen(p.anchor);
@@ -135,6 +156,8 @@ export function createView(canvas) {
 
   return {
     renderer, scene, camera, rig, aim, lamp, pin, toScreen, placeLamp,
+    /** Fly the camera after a point (fn(vector) fills it) or back home (null). */
+    follow(fn) { if (!fn && !follow) return; follow = fn; settled = false; },
     onFrame: (fn) => frameHooks.push(fn),
     onResize: (fn) => resizeHooks.push(fn),
     start() { resize(); requestAnimationFrame(frame); },

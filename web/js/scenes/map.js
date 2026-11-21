@@ -377,7 +377,7 @@ export function createMap(view, state) {
     [mug(), [-7.1, 0, -7.0], 0],
     [dividers(), [5.2, 0.03, -5.35], 0.6],
     [pencil(), [7.1, 0.07, 1.6], 1.25],
-    [magnifier(), [-7.6, 0.05, 1.2], -0.5],
+    [magnifier(), [-9.4, 0.05, 2.6], -0.5],
   ];
   for (const [obj, p, ry] of props) { obj.position.set(p[0], p[1], p[2]); obj.rotation.y = ry; root.add(obj); }
   const steam = emitter(root, puffTex, 0xffffff, 10, (v) => v.set(-7.1 + (Math.random() - 0.5) * 0.2, 0.9, -7.0 + (Math.random() - 0.5) * 0.2));
@@ -609,6 +609,8 @@ export function createMap(view, state) {
   return {
     setState, play, cellAt, setRoute,
     hover: kalka.hover, target: kalka.target,
+    /** World point of our ship (the cinema camera follows it). */
+    shipPoint: (v) => v.copy(aurora.group.position),
     showAdvice(on) { adviceShown = on; showPlans(shown); },
     showForecast(cell) {
       forecastGhost.group.visible = !!cell;

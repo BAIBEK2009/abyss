@@ -18,9 +18,11 @@ function aimCamera(view, w, h) {
   const r = view.rig;
   // a 32° vertical lens, 41° above the horizon (the reference table view); far enough to fit the chart
   const a = w / h, narrow = w < 980;
-  r.target.set(0.1, 0, narrow ? 2.1 : 1.1);
-  r.tilt = 41;
-  r.dist = Math.max(narrow ? 15 : 15.6, 7.0 / (Math.tan((16 * Math.PI) / 180) * a));
+  // the target sits nearer than the chart centre: the chart rises in the frame, so its lower edge
+  // (the base, the ships) stays clear of the hanging tags and the dock at the bottom of the screen
+  r.target.set(0.45, 0, narrow ? 3.1 : 2.35);
+  r.tilt = 48;
+  r.dist = Math.max(narrow ? 18.5 : 18.8, 8.3 / (Math.tan((16 * Math.PI) / 180) * a));
   r.hfov = (2 * Math.atan(Math.tan((16 * Math.PI) / 180) * a) * 180) / Math.PI;
 }
 

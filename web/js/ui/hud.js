@@ -1,58 +1,55 @@
-// HUD: mission goal + "Beacon" and "Fuel" gauges (top left), the table buttons (top right).
-import { ICONS } from "./icons.js";
+// HUD as things on the table (CLAUDE.md v3.1, 18 / 4.4): top left the caption with the mission goal
+// (always on screen) and "Кто есть кто", under it two brass instruments, "Маячок" and "Топливо";
+// top right the table buttons with an icon and a label each.
 import { el, hours } from "./fmt.js";
+import { dialSvg, dialAngle } from "./art.js";
 import { t } from "../strings.js";
 
-const BEACON_MAX = 120, FUEL_MAX = 100;
-
-function gauge(icon, label) {
-  const g = el("div", "gauge");
-  g.innerHTML = `<div class="gauge-head">${icon}<span class="gauge-label">${label}</span><span class="gauge-value"></span></div>
-                 <div class="gauge-bar"><div class="gauge-fill"></div></div>`;
+function instrument(kind, label) {
+  const d = el("div", `dial dial-${kind}`, `${dialSvg(kind)}<span>${label}</span>`);
+  const needle = d.querySelector(".needle"), value = d.querySelector(".dial-value");
   return {
-    el: g,
-    set(value, max, text, low) {
-      g.querySelector(".gauge-value").textContent = text;
-      g.querySelector(".gauge-fill").style.width = `${Math.max(0, Math.min(1, value / max)) * 100}%`;
-      g.classList.toggle("low", low);
+    el: d,
+    set(v, text, low) {
+      needle.style.transform = `rotate(${dialAngle(kind, v)}deg)`;
+      value.textContent = text;
+      d.classList.toggle("low", low);
     },
   };
 }
 
-/**
- * buttons: [{id, icon, label, onClick, soon}] — `soon` = the milestone that brings it (disabled until then).
- */
-export function createHud(root, buttons) {
-  const left = el("div", "hud hud-left");
-  left.append(el("div", "hud-goal", `${ICONS.target}<span>${t("goal")}</span>`));
-  const beacon = gauge(ICONS.clock, t("beacon"));
-  const fuel = gauge(ICONS.fuel, t("fuel_label"));
-  const gauges = el("div", "hud-gauges");
-  gauges.append(beacon.el, fuel.el);
-  left.append(gauges);
+/** buttons: [{id, icon, label, onClick, soon}] — `soon` = the milestone that brings it (disabled until then). */
+export function createHud(root, buttons, { onWho }) {
+  const cap = el("div", "cap");
+  cap.innerHTML = `<div><h1>${t("cap_title")}</h1><small>${t("goal")}</small></div>`;
+  const who = el("button", "pill who", t("btn_who"));
+  who.addEventListener("click", onWho);
+  cap.append(who);
 
-  const right = el("div", "hud hud-right");
+  const inst = el("div", "inst");
+  const beacon = instrument("beacon", t("beacon"));
+  const fuel = instrument("fuel", t("fuel_label"));
+  inst.append(beacon.el, fuel.el);
+
+  const right = el("div", "hud-right");
   const btns = {};
   for (const b of buttons) {
-    const btn = el("button", "hud-btn", `${b.icon}<span>${b.label}</span>`);
+    const btn = el("button", "pill hud-btn", `${b.icon}<span>${b.label}</span>`);
     if (b.soon) {
       btn.classList.add("soon");
       btn.title = t("soon", { m: b.soon });
       btn.setAttribute("aria-disabled", "true");
-    } else {
-      btn.addEventListener("click", b.onClick);
-    }
+    } else btn.addEventListener("click", b.onClick);
     btns[b.id] = btn;
     right.append(btn);
   }
-  root.append(left, right);
+  root.append(cap, inst, right);
 
   return {
     buttons: btns,
     update(st) {
-      const left_h = st.beacon_left;
-      beacon.set(left_h, BEACON_MAX, t("beacon_value", { h: hours(left_h) }), left_h < 30);
-      fuel.set(st.fuel, FUEL_MAX, t("fuel_value", { f: st.fuel }), st.fuel < 35);
+      beacon.set(st.beacon_left, t("beacon_value", { h: hours(Math.max(0, st.beacon_left)) }), st.beacon_left < 30);
+      fuel.set(st.fuel, String(Math.max(0, st.fuel)), st.fuel < 35);
     },
     setActive(id, on) { btns[id]?.classList.toggle("active", on); },
   };

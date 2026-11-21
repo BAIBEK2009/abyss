@@ -1,6 +1,6 @@
 """Table smoke test in real Chrome (Playwright, dev tool only).
 
-Tutorial on first visit -> hover a cell -> choose it -> hover / press an action tag -> radio clue
+"Who is who" + tutorial on first visit -> hover a cell -> choose it -> officers' drawer -> press an action tag (cinema mode) -> radio clue
 window -> accept advice -> autopilot to the end -> results card. Fails on any JS error.
 
     python tools/map_smoke.py OUT_DIR
@@ -41,13 +41,17 @@ def settle(page):
 
 
 with sync_playwright() as pw:
-    b = pw.chromium.launch(channel="chrome", headless=True, args=["--use-angle=swiftshader", "--enable-unsafe-swiftshader"])
+    b = pw.chromium.launch(channel="chrome", headless=True, args=["--use-angle=metal", "--enable-gpu"])
     page = b.new_page(viewport={"width": 1440, "height": 900})
     page.on("pageerror", lambda e: errors.append(str(e)))
     page.on("console", lambda m: m.type == "error" and errors.append(m.text))
     page.goto(url)
     page.wait_for_selector("body[data-ready='1']", timeout=30000)
-    page.wait_for_selector(".coach:not([hidden])", timeout=10000)   # the tutorial opens on the first visit
+    page.wait_for_selector(".intro:not([hidden])", timeout=10000)   # "who is who" opens on the first visit
+    page.wait_for_timeout(400)
+    shot(page, "smoke_intro")
+    page.click(".intro .go")
+    page.wait_for_selector(".coach:not([hidden])", timeout=10000)   # then the tutorial
     page.wait_for_timeout(500)
     shot(page, "smoke_coach1")
     page.click(".coach-next"); page.wait_for_timeout(400)
@@ -62,7 +66,12 @@ with sync_playwright() as pw:
     page.mouse.click(xy["x"], xy["y"]); page.wait_for_timeout(1200)
     page.hover(".tag-action >> nth=1"); page.wait_for_timeout(700)
     shot(page, "smoke_tag_hover")
+    page.keyboard.down("b"); page.wait_for_timeout(1000)
+    shot(page, "smoke_drawer")
+    page.keyboard.up("b"); page.wait_for_timeout(500)
     page.click(".tag-action >> nth=0")
+    page.wait_for_timeout(1500)
+    shot(page, "smoke_cinema")
     page.wait_for_selector(".toast", timeout=30000); page.wait_for_timeout(200)
     shot(page, "smoke_toast")
     settle(page)

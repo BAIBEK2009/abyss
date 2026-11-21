@@ -35,7 +35,7 @@ url = f"http://127.0.0.1:{server.server_address[1]}/?lang=ru"
 w, h = map(int, args.size.lower().split("x"))
 errors = []
 with sync_playwright() as pw:
-    b = pw.chromium.launch(channel="chrome", headless=True, args=["--use-angle=swiftshader", "--enable-unsafe-swiftshader"])
+    b = pw.chromium.launch(channel="chrome", headless=True, args=["--use-angle=metal", "--enable-gpu"])
     page = b.new_page(viewport={"width": w, "height": h})
     page.on("pageerror", lambda e: errors.append(str(e)))
     page.on("console", lambda m: m.type == "error" and errors.append(m.text))

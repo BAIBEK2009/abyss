@@ -9,6 +9,7 @@ import { createCellTip } from "./ui/celltip.js";
 import { createToasts } from "./ui/toasts.js";
 import { createRadio } from "./ui/radio.js";
 import { createCoach } from "./ui/coach.js";
+import { createIntro } from "./ui/intro.js";
 import { showResult } from "./ui/result.js";
 import { ICONS } from "./ui/icons.js";
 import { pct, hours } from "./ui/fmt.js";
@@ -33,13 +34,13 @@ export function createTable(view, map, initialState) {
 
   // ------------------------------------------------------------------ widgets
   const hud = createHud(ui, [
-    { id: "stand", icon: ICONS.stand, label: t("btn_stand"), soon: "M7" },
+    { id: "stand", icon: ICONS.stand, label: t("btn_stand"), soon: "M7.3" },
     { id: "autopilot", icon: ICONS.autopilot, label: t("btn_autopilot"), onClick: () => toggleAutopilot() },
     { id: "journal", icon: ICONS.journal, label: t("btn_journal_top"), soon: "M8" },
     { id: "hints", icon: ICONS.hints, label: t("btn_hints"), onClick: () => coach.start() },
-    { id: "music", icon: ICONS.music, label: t("btn_music"), soon: "M8" },
-    { id: "sound", icon: ICONS.sound, label: t("btn_sound"), soon: "M8" },
-  ]);
+    { id: "music", icon: ICONS.music, label: t("btn_music"), soon: "M11" },
+    { id: "sound", icon: ICONS.sound, label: t("btn_sound"), soon: "M11" },
+  ], { onWho: () => intro.show() });
   const rival = createRivalBanner(ui);
   const officers = createOfficers(ui, {
     onAccept: () => acceptAdvice(),
@@ -64,11 +65,12 @@ export function createTable(view, map, initialState) {
   };
   const coach = createCoach(ui, [
     { title: t("coach1_t"), text: t("coach1"), rect: chartRect },
-    { title: t("coach2_t"), text: t("coach2"), rect: rectOf(".officers") },
-    { title: t("coach3_t"), text: t("coach3"), rect: rectOf(".actions") },
-    { title: t("coach4_t"), text: t("coach4"), rect: rectOf(".rival-banner") },
-    { title: t("coach5_t"), text: t("coach5"), rect: rectOf(".hud-left") },
+    { title: t("coach2_t"), text: t("coach2"), rect: rectOf(".dock") },
+    { title: t("coach3_t"), text: t("coach3"), rect: rectOf(".actions-row") },
+    { title: t("coach4_t"), text: t("coach4"), rect: rectOf(".tg") },
+    { title: t("coach5_t"), text: t("coach5"), rect: rectOf(".inst") },
   ]);
+  const intro = createIntro(ui, { onClose: (first) => { if (first) setTimeout(() => coach.startIfFirstTime(), 300); } });
   const banner = document.getElementById("autopilot-banner");
   banner.textContent = t("autopilot_on");
 
@@ -171,15 +173,19 @@ export function createTable(view, map, initialState) {
     target = null;
     map.showAdvice(false); map.showZone(null); map.showForecast(null); map.target(null); map.setRoute("ours", null);
     tip.hide();
+    officers.peek(false);
     render();
+    cinema(true);
     try {
       const before = state;
       const res = await api.act(action);
       await map.play(res.events, before, { onEvent: speak });
       state = res.state;
       map.setState(state);
+      if (!autopilot || state.status !== "playing") cinema(false);
       if (state.status === "playing") await handleClues();
     } catch (err) {
+      cinema(false);
       if (err.key === "reef") toasts.say("lev", t("toast_reef"));
     } finally {
       busy = false;
@@ -230,6 +236,7 @@ export function createTable(view, map, initialState) {
   function toggleAutopilot(on = !autopilot) {
     if (on && state.status !== "playing") return;
     autopilot = on;
+    if (!on && !busy) cinema(false);
     hud.setActive("autopilot", on);
     banner.hidden = !on;
     if (on) setTarget(null);
@@ -237,9 +244,15 @@ export function createTable(view, map, initialState) {
     if (on) autopilotLoop();
   }
 
+  /** Cinema mode during a move (CLAUDE.md v3.1, 18): the interface slides off, black bars, the camera follows the ship. */
+  function cinema(on) {
+    document.body.classList.toggle("cine", on);
+    view.follow(on ? map.shipPoint : null);
+  }
+
   render();
   if (state.status !== "playing") finish();
-  else setTimeout(() => coach.startIfFirstTime(), 600);
+  else setTimeout(() => { if (!intro.showIfFirstTime()) coach.startIfFirstTime(); }, 600);
   return {
     get state() { return state; },
     get busy() { return busy; },
