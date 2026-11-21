@@ -1,11 +1,11 @@
 // Action tags hanging from a brass rail (CLAUDE.md v3.1, 18; v3 7 / 8): verb + object + place, icon,
 // cost and chance visible before pressing, the rival's forecast for those hours, red warnings;
-// the officers' choice carries a wax seal «совет». Every number comes from /api/preview (Python).
+// the officers' choice carries a wax seal "advice". Every number comes from /api/preview (Python).
 import { ICONS } from "./icons.js";
 import { TAG_ICONS } from "./art.js";
 import { el, hours, pct } from "./fmt.js";
 import { place } from "../places.js";
-import { t } from "../strings.js";
+import { t } from "../i18n.js";
 
 /** Which tags to show: without a target — act here; with a target — go there (+ tool). */
 export function tagList(st, target) {

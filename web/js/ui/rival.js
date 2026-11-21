@@ -1,9 +1,9 @@
 // The rival's plan as an intercepted telegram pinned to the table (CLAUDE.md v3.1, 18; v3 5.6 / 6.6):
-// an honest forecast, typed out when it changes. A dive that ends within 8 h gets the "МОЛНИЯ" stamp
+// an honest forecast, typed out when it changes. A dive that ends within 8 h gets the "urgent" stamp
 // and the telegram pulses.
 import { el, hours } from "./fmt.js";
 import { place } from "../places.js";
-import { t } from "../strings.js";
+import { t } from "../i18n.js";
 
 export function createRivalBanner(root) {
   const b = el("div", "tg rival-banner");

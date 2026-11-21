@@ -1,7 +1,7 @@
-// "Кто есть кто" (CLAUDE.md v3.1, 18): on the first launch and from the caption button — who the
+// "Who is who" (CLAUDE.md v3.1, 18): on the first launch and from the caption button — who the
 // Aurora is, who Poseidon-2 is and what it wants, what the hills and the gold pin mean, the goal.
 import { el } from "./fmt.js";
-import { t } from "../strings.js";
+import { t } from "../i18n.js";
 
 const KEY = "abyss.introDone";
 const store = {

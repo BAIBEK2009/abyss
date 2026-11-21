@@ -1,0 +1,12 @@
+{
+ "_readme": "Landmark id (web/js/places.js, scenes/chart.js) -> its key in story*.json map_names. The keys are the old chart names and are the same in all three story files.",
+ "ridge": "Северная гряда",
+ "twins": "Близнецы",
+ "gull": "Скалы Чайки",
+ "raven": "Камень Ворона",
+ "quiet": "Банка Тихая",
+ "teeth": "Южные зубья",
+ "west": "Западная котловина",
+ "base": "База",
+ "sea": "Северная Атлантика"
+}

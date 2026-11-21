@@ -1,17 +1,22 @@
-// All story texts live in web/data/story.json (CLAUDE.md 22.1): the engine only shows them.
-// loadStory() is awaited once at start-up; after that the helpers are synchronous.
+// All story texts live in web/data/story.json (ru), story.kk.json, story.en.json (CLAUDE.md 22.1, 23.1):
+// the engine only shows them. loadStory(lang) is awaited once at start-up; after that the helpers are
+// synchronous.
 let S = null;
+let KEYS = {};
 
-export async function loadStory() {
-  const res = await fetch("data/story.json");
-  S = await res.json();
+export async function loadStory(lang) {
+  const [story, keys] = await Promise.all([
+    fetch(`/api/story?lang=${encodeURIComponent(lang)}`).then((r) => r.json()),
+    fetch("data/map_keys.json").then((r) => r.json()),
+  ]);
+  S = story; KEYS = keys;
   return S;
 }
 
 export const story = () => S;
 
-/** A chart name by its old (Atlantic) key: map_names["Западная котловина"] -> "Южно-Каспийская котловина". */
-export const mapName = (key) => S?.map_names?.[key] ?? key;
+/** A chart name by landmark id (data/map_keys.json -> map_names): chartName("west") -> the basin's name. */
+export const chartName = (id) => (KEYS[id] ? S?.map_names?.[KEYS[id]] : undefined);
 
 /** A character: {name, role, portrait?, channel?}. */
 export const who = (id) => S?.characters?.[id] ?? { name: id, role: "" };

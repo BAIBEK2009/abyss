@@ -9,6 +9,7 @@ it asks this server for state, sends the captain's decisions here and animates t
     POST /api/act     {action}           -> {events, state}
     POST /api/clue    {id, accept}       -> {events, state}
     POST /api/dive    {found, coverage, debris, find?}  -> {events, story, state}   (end of a live first-person dive)
+    GET  /api/story?lang=kk|ru|en        -> the story texts in that language (web/data/story[.kk|.en].json)
     POST /api/story   {event}            -> {story, state}  (campaign scene events: enter_cabin, sit_at_table, dive:start…)
     GET  /api/advice                     -> the three officers + joint advice
     GET  /api/journal                    -> records + calculations (professor's mode)
@@ -21,13 +22,19 @@ import json
 import threading
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlsplit
 
 from core.exam import format_turn
 from core.game import DEMO_SEED, Game, GameError
 
 WEB_DIR = Path(__file__).resolve().parent / "web"
 MAX_BODY = 64 * 1024
+# the three story files have the same structure (CLAUDE.md 23.1); ru is the original
+STORY_FILES = {"ru": "story.json", "kk": "story.kk.json", "en": "story.en.json"}
+
+
+def story_file(lang: str | None) -> Path:
+    return WEB_DIR / "data" / STORY_FILES.get(lang or "ru", STORY_FILES["ru"])
 
 
 class GameServer(ThreadingHTTPServer):
@@ -70,9 +77,13 @@ class Handler(SimpleHTTPRequestHandler):
 
     # ------------------------------------------------------------------ routing
     def do_GET(self):
-        path = urlsplit(self.path).path
+        url = urlsplit(self.path)
+        path = url.path
         if not path.startswith("/api/"):
             return super().do_GET()
+        if path == "/api/story":
+            lang = (parse_qs(url.query).get("lang") or ["ru"])[0]
+            return self.send_json(json.loads(story_file(lang).read_text(encoding="utf-8")))
         with self.server.lock:
             game = self.server.game
             if path == "/api/state":

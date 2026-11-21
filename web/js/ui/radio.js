@@ -2,7 +2,7 @@
 // "Poseidon hears this too", buttons "Put it on the chart" (Bayes update) / "Don't trust it".
 import { ICONS } from "./icons.js";
 import { el } from "./fmt.js";
-import { t } from "../strings.js";
+import { t } from "../i18n.js";
 
 function clueText(c) {
   if (c.kind === "fish") return t("clue_fish", { dir: t(`dir_${c.sector}`) });

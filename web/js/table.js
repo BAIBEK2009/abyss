@@ -19,7 +19,7 @@ import { ICONS } from "./ui/icons.js";
 import { pct, hours } from "./ui/fmt.js";
 import { place, cap } from "./places.js";
 import { fade } from "./anim.js";
-import { t, plural } from "./strings.js";
+import { t, plural } from "./i18n.js";
 
 const AUTOPILOT_PAUSE_MS = 1300;
 const SPEAKER = {                       // who explains which event (CLAUDE.md 6.5)
@@ -45,6 +45,7 @@ export function createTable(view, map, initialState, { cabin, dive } = {}) {
     { id: "hints", icon: ICONS.hints, label: t("btn_hints"), onClick: () => coach.start() },
     { id: "music", icon: ICONS.music, label: t("btn_music"), soon: "M11" },
     { id: "sound", icon: ICONS.sound, label: t("btn_sound"), soon: "M11" },
+    { id: "menu", icon: ICONS.menu, label: t("btn_menu"), onClick: () => dispatchEvent(new CustomEvent("abyss:menu")) },
   ], { onWho: () => intro.show() });
   const rival = createRivalBanner(ui);
   const officers = createOfficers(ui, {

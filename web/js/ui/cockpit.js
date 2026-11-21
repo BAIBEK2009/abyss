@@ -3,7 +3,7 @@
 // sonar screen, the pinger LED, a help card, "Surface (Q)", messages and the "hold E" prompt.
 // On touch screens the same actions are on-screen buttons.
 import { el } from "./fmt.js";
-import { t } from "../strings.js";
+import { t } from "../i18n.js";
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 

@@ -10,7 +10,7 @@ import { showBrief } from "./ui/brief.js";
 import { el } from "./ui/fmt.js";
 import { fade, sleep } from "./anim.js";
 import { sfx } from "./audio.js";
-import { t } from "./strings.js";
+import { t } from "./i18n.js";
 
 /**
  * ctx: { view, cabin, ui, speech, chapter, toasts, intro, goal,
@@ -97,7 +97,7 @@ export function createStoryFlow(ctx) {
     tablePin(true);
   }
 
-  // the golden pin over the chart table: "Штурманский стол — Карта поиска. Начните отсюда"
+  // the golden pin over the chart table: pin_table + pin_table_sub
   let pin = null, pinHook = false;
   const PIN_AT = new THREE.Vector3(0.6, 1.4, 2.6);
   function tablePin(on) {
@@ -150,7 +150,7 @@ export function createStoryFlow(ctx) {
   }
 
   // ------------------------------------------------------------------ the dive
-  /** Before a live dive: Murat's "Нерпа готова" (the first time) and the briefing card. Returns the briefing. */
+  /** Before a live dive: Murat's "Nerpa is ready" (the first time) and the briefing card. Returns the briefing. */
   async function beforeDive() {
     const c = camp();
     if (!c) return null;
@@ -177,7 +177,8 @@ export function createStoryFlow(ctx) {
     if (!b) return null;
     const p = who(b.speaker);
     let text = b.text;
-    if (clue.kind === "fish") text = text.replace("северо-восточнее", t(`dir_${clue.sector}`));
+    // the story says "northeast" (dir_1 in each language); the core knows the real direction
+    if (clue.kind === "fish") text = text.replace(t("dir_1"), t(`dir_${clue.sector}`));
     return { text, src: `${p.name} · ${p.role}` };
   }
 

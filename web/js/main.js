@@ -5,7 +5,9 @@ import { createCabin } from "./scenes/cabin.js";
 import { createDive } from "./scenes/dive.js";
 import { createTable } from "./table.js";
 import { api } from "./api.js";
-import { setLang } from "./strings.js";
+import { chosenLang, loadAll, loadLang, saveLang, t } from "./i18n.js";
+import { pickLanguage } from "./ui/language.js";
+import { createMenu } from "./ui/menu.js";
 import { loadStory } from "./story.js";
 
 const $ = (id) => document.getElementById(id);
@@ -13,7 +15,7 @@ const $ = (id) => document.getElementById(id);
 async function loadFonts() {
   // the sample touches every subset (latin, cyrillic, cyrillic-ext with the Kazakh letters),
   // so canvas labels never draw before their font is in (CLAUDE.md 23.1)
-  const sample = "ABCDEFGHIJ 0123456789 Ёё Әә Ғғ Ққ Ңң Өө Ұұ Үү Һһ Іі −·«»";
+  const sample = "ABCDEFGHIJ 0123456789 \u0401\u0451 \u04D8\u04D9 \u0492\u0493 \u049A\u049B \u04A2\u04A3 \u04E8\u04E9 \u04B0\u04B1 \u04AE\u04AF \u04BA\u04BB \u0406\u0456 \u2212\u00B7\u00AB\u00BB";
   const faces = ['400 20px "Prata"', '700 20px "Caveat"', '400 20px "Caveat"', '400 16px "PT Mono"',
     '400 16px "Onest"', '500 16px "Onest"', '600 16px "Onest"', '700 16px "Onest"', '800 16px "Onest"',
     'italic 700 20px "Cormorant Garamond"', 'italic 600 20px "Cormorant Garamond"', 'italic 500 20px "Cormorant Garamond"',
@@ -34,17 +36,30 @@ function aimCamera(view, w, h) {
   r.hfov = (2 * Math.atan(Math.tan((16 * Math.PI) / 180) * a) * 180) / Math.PI;
 }
 
+/** ?lang= or the saved choice; on the very first launch, the language screen (CLAUDE.md 23.1). */
+async function chooseLanguage() {
+  const tables = await loadAll();
+  let lang = chosenLang();
+  if (!lang) {
+    lang = await pickLanguage(tables);
+    saveLang(lang);
+  }
+  await loadLang(lang);
+  return { lang, selfNames: Object.fromEntries(Object.entries(tables).map(([l, d]) => [l, d.lang_self])) };
+}
+
 async function start() {
   await loadFonts();
+  const { lang, selfNames } = await chooseLanguage();
   let state;
   try {
-    [state] = await Promise.all([api.state(), loadStory()]);
+    [state] = await Promise.all([api.state(), loadStory(lang)]);
   } catch {
-    $("status").textContent = "Сервер не отвечает — запусти python main.py";
+    $("status").textContent = t("status_no_server");
     $("status").hidden = false;
     return;
   }
-  setLang(new URLSearchParams(location.search).get("lang") || state.lang);
+  createMenu({ selfNames, onNewGame: () => api.newGame() });
 
   const view = createView($("scene"));
   view.onResize((w, h) => aimCamera(view, w, h));

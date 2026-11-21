@@ -2,7 +2,7 @@
 // three numbers and two buttons.
 import { el, hours } from "./fmt.js";
 import { place } from "../places.js";
-import { t } from "../strings.js";
+import { t } from "../i18n.js";
 
 function lessonFor(st) {
   if (st.status === "won") return st.counts.sonar === 0 ? t("lesson_sonar") : t("lesson_good");

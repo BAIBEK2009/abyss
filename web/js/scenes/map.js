@@ -12,7 +12,7 @@ import { createKalka, withOverlay } from "./kalka.js";
 import { drawChart, CH0, CHS } from "./chart.js";
 import { canvasTexture, deg, rng } from "../view.js";
 import { walnut, brass, glass, paperFibres, contactShadow } from "./materials.js";
-import { t } from "../strings.js";
+import { t } from "../i18n.js";
 import { anim, ease, sleep } from "../anim.js";
 
 const SEC_PER_HOUR = 0.16;                               // playback speed of the shared clock

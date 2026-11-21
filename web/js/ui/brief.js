@@ -1,8 +1,8 @@
-// The briefing before each dive (CLAUDE.md 22.2): story.json acts[].dive_brief — "Задача / Как искать /
-// Кислород" — and the "Начать погружение" button.
+// The briefing before each dive (CLAUDE.md 22.2): story.json acts[].dive_brief — task / how to search /
+// oxygen — and the "Start the dive" button.
 import { el } from "./fmt.js";
 import { ICONS } from "./icons.js";
-import { t } from "../strings.js";
+import { t } from "../i18n.js";
 import { sfx } from "../audio.js";
 
 export function showBrief(root, brief) {

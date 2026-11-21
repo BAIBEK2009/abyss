@@ -1,7 +1,7 @@
 // Tutorial (CLAUDE.md v3, 11): 5 steps, dimmed screen with a highlighted area, a card with
 // "Next" / "Skip" and a "2 of 5" counter. Shown on the first visit; the "Hints" button replays it.
 import { el } from "./fmt.js";
-import { t } from "../strings.js";
+import { t } from "../i18n.js";
 
 const KEY = "abyss.coachDone";
 const store = {

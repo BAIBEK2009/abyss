@@ -76,3 +76,11 @@ def test_new_mission_and_errors(api):
     assert api("/api/new", {"seed": "x"})[0] == 400
     assert api("/api/clue", {"id": "nope", "accept": True})[1]["error"] == "no_clue"
     assert api("/api/nope")[0] == 404
+
+
+def test_story_in_three_languages(api):
+    for lang in ("kk", "ru", "en"):
+        status, s = api(f"/api/story?lang={lang}")
+        assert status == 200 and s["lang"] == lang and s["acts"][0]["id"] == "prologue"
+    status, s = api("/api/story?lang=xx")       # unknown -> the original (ru)
+    assert status == 200 and s["lang"] == "ru"

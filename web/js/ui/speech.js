@@ -10,7 +10,7 @@ import { ICONS } from "./icons.js";
 import { beat, who, PORTRAIT } from "../story.js";
 import { sfx } from "../audio.js";
 import { sleep } from "../anim.js";
-import { t } from "../strings.js";
+import { t } from "../i18n.js";
 
 function medal(id) {
   if (PORTRAIT[id]) return portrait(PORTRAIT[id]);

@@ -4,8 +4,8 @@
 // a latitude band on the frame, a scale bar, current arrows and pencil notes of a working chart.
 // The chart is printed paper, so its words live in the texture; all interface text stays HTML.
 import { chartLandmarks } from "../places.js";
-import { getLang } from "../strings.js";
-import { mapName } from "../story.js";
+import { t } from "../i18n.js";
+import { chartName } from "../story.js";
 
 export const CH0 = -1.05, CHS = 12.1;        // chart sheet in map units: [-1.05, 11.05]
 
@@ -28,20 +28,16 @@ export function depthAt(x, y, reefs) {
 }
 export const metres = (d) => Math.round(870 + d * 140);     // the South Caspian Basin, ~950 m (CLAUDE.md 22.1)
 
+// the pencil notes of the working chart, in the player's language (web/i18n ch_*)
 const TEXT = () => ({
-  ru: { title: mapName("Северная Атлантика"), sub: "район поиска рейса AQ-271 · глубины в метрах", sheet: "лист 7", miles: "20 морских миль",
-        legend: "калька: нижний лист — 2 %, золотые — от 16 %", base: mapName("База"), north: "С",
-        checked: "проверено 19.11 — пусто", seen: "«Посейдон» замечен 13:50", current: "течение 1,5 уз",
-        signal: "последний сигнал 02:14", fuel: "заправка" },
-  en: { title: "Caspian Sea", sub: "search area of flight AQ-271 · depths in metres", sheet: "sheet 7", miles: "20 nautical miles",
-        legend: "tracing paper: lowest sheet — 2 %, gold — from 16 %", base: "Base · Aktau", north: "N",
-        checked: "checked 19.11 — empty", seen: "Poseidon seen 13:50", current: "current 1.5 kn",
-        signal: "last signal 02:14", fuel: "refuel" },
+  title: chartName("sea"), sub: t("ch_sub"), sheet: t("ch_sheet"), miles: t("ch_miles"), legend: t("ch_legend"),
+  base: chartName("base"), north: t("ck_n"), checked: t("ch_checked"), seen: t("ch_seen"), current: t("ch_current"),
+  signal: t("ch_signal"), fuel: t("ch_fuel"),
 });
 
 /** Draw the chart into a W x W canvas context. signal = [u, v] of the last signal. */
 export function drawChart(g, W, { reefs, signal }) {
-  const L = TEXT()[getLang()] || TEXT().ru;
+  const L = TEXT();
   const S = W / CHS;
   const px = (u) => (u - CH0) / CHS * W;
   const serif = (weight, size, italic = true) => `${italic ? "italic " : ""}${weight} ${size}px "Cormorant Garamond", Georgia, serif`;

@@ -1,11 +1,11 @@
-// The three officers (CLAUDE.md v3.1, 18; v3 6) live in a drawer: hold «Б» (or B, or the button)
+// The three officers (CLAUDE.md v3.1, 18; v3 6) live in a drawer: hold B (or the Cyrillic B key, or the button)
 // and the drawer springs up from the bottom; let go and it slides back. Each card is a paper note:
 // an engraved portrait, name, role · algorithm and a handwritten line with the key part in red.
-// "Принять совет" stays on screen at all times, next to the drawer button.
+// "Accept advice" stays on screen at all times, next to the drawer button.
 import { el, pct } from "./fmt.js";
 import { portrait, TAG_ICONS } from "./art.js";
 import { place } from "../places.js";
-import { t, plural } from "../strings.js";
+import { t, plural } from "../i18n.js";
 import { officer } from "../story.js";
 
 const OFFICERS = ["vera", "lev", "grisha"];
@@ -44,14 +44,14 @@ export function createOfficers(root, handlers) {
   dock.append(peekBtn, accept);
   root.append(drawer, dock);
 
-  // hold to look: keyboard Б / B (on a Russian layout Б is the comma key) or the button
+  // hold to look: keyboard B (on the Russian and Kazakh layouts the Cyrillic B is the comma key) or the button
   let peekOn = false;
   function peek(on) {
     if (on === peekOn) return;
     peekOn = on;
     document.body.classList.toggle("peek", on);
   }
-  const isB = (e) => e.code === "KeyB" || e.code === "Comma" || e.key === "б" || e.key === "Б" || e.key === "b" || e.key === "B";
+  const isB = (e) => e.code === "KeyB" || e.code === "Comma" || ["b", t("officers_key").toLowerCase()].includes(e.key?.toLowerCase());
   addEventListener("keydown", (e) => {
     if (!isB(e) || e.repeat || e.target.closest?.("input, textarea")) return;
     e.preventDefault(); peek(true);

@@ -1,9 +1,9 @@
 // HUD as things on the table (CLAUDE.md v3.1, 18 / 4.4): top left the caption with the mission goal
-// (always on screen) and "Кто есть кто", under it two brass instruments, "Маячок" and "Топливо";
+// (always on screen) and "Who is who", under it two brass instruments, the beacon and the fuel;
 // top right the table buttons with an icon and a label each.
 import { el, hours } from "./fmt.js";
 import { dialSvg, dialAngle } from "./art.js";
-import { t } from "../strings.js";
+import { t } from "../i18n.js";
 
 function instrument(kind, label) {
   const d = el("div", `dial dial-${kind}`, `${dialSvg(kind)}<span>${label}</span>`);
@@ -35,6 +35,7 @@ export function createHud(root, buttons, { onWho }) {
   const btns = {};
   for (const b of buttons) {
     const btn = el("button", "pill hud-btn", `${b.icon}<span>${b.label}</span>`);
+    btn.dataset.id = b.id;
     if (b.soon) {
       btn.classList.add("soon");
       btn.title = t("soon", { m: b.soon });

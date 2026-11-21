@@ -9,7 +9,7 @@
 import * as THREE from "three";
 import { canvasTexture } from "../view.js";
 import { anim, ease, sleep } from "../anim.js";
-import { t } from "../strings.js";
+import { t } from "../i18n.js";
 import { sfx } from "../audio.js";
 import { createCockpit } from "../ui/cockpit.js";
 

@@ -1,5 +1,5 @@
 // The player always knows the goal (CLAUDE.md 22.2): top left on every screen (the table, the cabin,
-// the cockpit) — "Цель: …" from story.json acts[].goal and the act's checklist acts[].tasks.
+// the cockpit) — "Goal: …" from story.json acts[].goal and the act's checklist acts[].tasks.
 // A task gets its tick with a pencil stroke and a sound. The block's height goes into --goal-h,
 // so the brass instruments (and the cockpit's help card) sit right under it.
 import { el } from "./fmt.js";
