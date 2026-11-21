@@ -9,3 +9,6 @@ __pycache__/
 
 # local Claude Code settings
 .claude/
+
+# screenshots are made by the tools and never committed (they stay on disk)
+screenshots/
