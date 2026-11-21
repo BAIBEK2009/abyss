@@ -271,8 +271,8 @@ export function createNerpa({ lights = false } = {}) {
   const strobeGlow = new THREE.Sprite(new THREE.SpriteMaterial({ map: SOFT, color: 0xeaf6ff, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
   strobeGlow.scale.setScalar(0.5); strobeGlow.position.copy(strobe.position); root.add(strobeGlow);
   const lamps = lampAt.map((p) => {
-    const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: SOFT, color: new THREE.Color(0xdff2ff).multiplyScalar(4), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0 }));
-    glow.scale.setScalar(1.0); glow.position.copy(p); root.add(glow);
+    const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: SOFT, color: new THREE.Color(0xdff2ff).multiplyScalar(2.2), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0 }));
+    glow.scale.setScalar(0.42); glow.position.copy(p); root.add(glow);
     let sl = { intensity: 0 };
     if (lights) { sl = new THREE.SpotLight(0xdff2ff, 0, 22, 0.45, 0.5, 1.3); sl.position.copy(p); sl.target.position.set(p.x * 0.4, -2.5, p.z + 8); root.add(sl, sl.target); }
     return { glow, sl, at: p };

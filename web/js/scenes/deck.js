@@ -933,9 +933,85 @@ export function createDeck(view, { lifeLabel = "" } = {}) {
   }
   update(0, 0);
 
+  // ---------------- the launch, shots 1-2 of the descent (CLAUDE.md 23.3-B): the A-frame lifts Nerpa by her ring,
+  // swings her out over the stern on a swaying cable, then lowers her into the sea with a splash
+  const wire = new THREE.Mesh(new THREE.TubeGeometry(new THREE.LineCurve3(new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, -1, 0)), 1, 0.016, 6),
+                              std({ color: 0x2a2a2a, metalness: 0.6, roughness: 0.4 }));
+  wire.visible = false; ship.add(wire);
+  const SPL = 360, splP = new Float32Array(SPL * 3), splV = new Float32Array(SPL * 3), splL = new Float32Array(SPL).fill(-1);
+  const splG = new THREE.BufferGeometry(); splG.setAttribute("position", new THREE.BufferAttribute(splP, 3));
+  const splash = new THREE.Points(splG, new THREE.PointsMaterial({ map: SOFT, color: 0xdfeef6, size: 0.22, transparent: true, opacity: 0.85, depthWrite: false }));
+  splash.frustumCulled = false; scene.add(splash);
+  for (let i = 0; i < SPL; i++) splP[i * 3 + 1] = -100;
+  const home = { pos: nerpa.position.clone(), rot: nerpa.rotation.clone() };
+  const sheaveLocal = new THREE.Vector3(), v1 = new THREE.Vector3(), up = new THREE.Vector3();
+  let splashed = false, lastT = 0;
+  function hang(theta, len, swing) {
+    aframe.rotation.x = theta;
+    aframe.updateMatrix(); sheave.updateMatrix();
+    sheaveLocal.copy(sheave.position).applyMatrix4(aframe.matrix);          // the sheave in ship-local coordinates
+    const eyeY = nerpa.userData.eye.y;
+    nerpa.position.set(sheaveLocal.x + 0.6 * 0, sheaveLocal.y - len - eyeY, sheaveLocal.z + swing);
+    nerpa.position.x = 0.0;
+    nerpa.rotation.set(swing * 0.25, 0, Math.sin(lastT * 1.3) * 0.03);
+    const eyeL = v1.copy(nerpa.userData.eye).add(nerpa.position);
+    const d = eyeL.clone().sub(sheaveLocal);
+    wire.position.copy(sheaveLocal); wire.scale.set(1, d.length(), 1);
+    wire.quaternion.setFromUnitVectors(up.set(0, -1, 0), d.normalize());
+  }
+  function burst(at) {
+    let n = 0;
+    for (let i = 0; i < SPL && n < 300; i++) if (splL[i] < 0) {
+      const a = Math.random() * Math.PI * 2, r = Math.random() * 1.6, sp = 1.5 + Math.random() * 4;
+      splP.set([at.x + Math.cos(a) * r, at.y, at.z + Math.sin(a) * r], i * 3);
+      splV.set([Math.cos(a) * sp * 0.5, 2 + Math.random() * 5.5, Math.sin(a) * sp * 0.5], i * 3);
+      splL[i] = 1.4 + Math.random(); n++;
+    }
+  }
+  function stepSplash(dt) {
+    for (let i = 0; i < SPL; i++) if (splL[i] >= 0) {
+      splL[i] -= dt; splV[i * 3 + 1] -= 9.8 * dt;
+      for (let k = 0; k < 3; k++) splP[i * 3 + k] += splV[i * 3 + k] * dt;
+      if (splL[i] < 0 || splP[i * 3 + 1] < -0.3) { splL[i] = -1; splP[i * 3 + 1] = -100; }
+    }
+    splG.attributes.position.needsUpdate = true;
+  }
+  const look = (cam, from, to) => {
+    deckSpace.toWorld(from[0], from[1], from[2], cam.position);
+    cam.up.copy(up.set(0, 1, 0).applyQuaternion(ship.quaternion));
+    cam.lookAt(deckSpace.toWorld(to[0], to[1], to[2], v1));
+  };
+  const deckSpace = { toWorld: (x, y, z, out) => out.set(x, y, z).applyMatrix4(ship.matrixWorld) };
+  const launch = {
+    start() { cable.visible = false; wire.visible = true; splashed = false; hang(0.5, 1.0, 0); },
+    /** Shot 1 (k 0..1): the A-frame swings out from inboard, Nerpa sways on the cable. */
+    lift(k, dt, time, cam) {
+      lastT = time;
+      const e = k * k * (3 - 2 * k);
+      hang(0.5 - 1.12 * e, 1.0 + 0.3 * e, Math.sin(k * 9) * 0.35 * (1 - k * 0.5));
+      stepSplash(dt);
+      look(cam, [3.3, 1.72, -6.0], [0.0, 3.0 + e * 0.5, -13.5 - e * 2.5]);
+    },
+    /** Shot 2 (k 0..1): down she goes; the camera sits on the water line. Returns her world position. */
+    lower(k, dt, time, cam) {
+      lastT = time;
+      const len = 1.3 + k * 6.5;
+      hang(-0.62, len, Math.sin(time * 2.1) * 0.08);
+      const w = nerpa.getWorldPosition(new THREE.Vector3());
+      if (!splashed && w.y < seaHeight(w.x, w.z, time) + 0.3) { splashed = true; burst(new THREE.Vector3(w.x, seaHeight(w.x, w.z, time), w.z)); this.onSplash?.(); }
+      stepSplash(dt);
+      cam.up.set(0, 1, 0);
+      cam.position.set(w.x + 3.6, 0.02, w.z - 5.8);
+      cam.lookAt(w.x - 0.4, 0.02, w.z + 1.5);
+      return w;
+    },
+    end() { aframe.rotation.x = 0; nerpa.position.copy(home.pos); nerpa.rotation.copy(home.rot); cable.visible = true; wire.visible = false;
+            for (let i = 0; i < SPL; i++) { splL[i] = -1; splP[i * 3 + 1] = -100; } splG.attributes.position.needsUpdate = true; },
+  };
+
   const local = new THREE.Vector3(), q = new THREE.Quaternion(), e = new THREE.Euler();
   return {
-    scene, ship, objects, update,
+    scene, ship, objects, update, launch,
     /** The first-person space (fp.js): metres, ship-local, the camera rolls with the ship. */
     space: {
       scale: 1, eye: 1.65, poly: WALK, colliders, step: "metal",

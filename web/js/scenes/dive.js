@@ -11,6 +11,7 @@ import { canvasTexture } from "../view.js";
 import { anim, ease, sleep } from "../anim.js";
 import { t } from "../i18n.js";
 import { createNerpa } from "./nerpa.js";
+import { HULL } from "./deck.js";
 import { sfx } from "../audio.js";
 import { createCockpit } from "../ui/cockpit.js";
 
@@ -86,12 +87,63 @@ export function marineSnow(count = 2800) {
   };
 }
 
+/** A volumetric beam: additive, soft at the rim, fading with distance, with slowly drifting particles of murk. */
+const beamUniforms = { uT: { value: 0 } };
+function beamMat(k = 1) {
+  return new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, fog: false,
+    uniforms: { uT: beamUniforms.uT, uK: { value: k } },
+    vertexShader: `varying vec2 vUv; varying vec3 vN; varying vec3 vV; varying vec3 vL;
+      void main() { vUv = uv; vL = position; vec4 mv = modelViewMatrix * vec4(position, 1.0); vV = normalize(-mv.xyz); vN = normalize(normalMatrix * normal); gl_Position = projectionMatrix * mv; }`,
+    fragmentShader: `uniform float uT; uniform float uK; varying vec2 vUv; varying vec3 vN; varying vec3 vV; varying vec3 vL;
+      float h(vec3 p) { return fract(sin(dot(p, vec3(12.9898, 78.233, 37.719))) * 43758.5453); }
+      float n3(vec3 p) { vec3 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+        return mix(mix(mix(h(i), h(i + vec3(1,0,0)), f.x), mix(h(i + vec3(0,1,0)), h(i + vec3(1,1,0)), f.x), f.y),
+                   mix(mix(h(i + vec3(0,0,1)), h(i + vec3(1,0,1)), f.x), mix(h(i + vec3(0,1,1)), h(i + vec3(1,1,1)), f.x), f.y), f.z); }
+      void main() {
+        float edge = pow(abs(dot(vN, vV)), 1.7);
+        float along = clamp(vUv.y, 0.0, 1.0);                       // 1 at the lamp, 0 at the far end
+        float murk = 0.65 + 0.7 * n3(vL * 1.3 + vec3(0.0, uT * 0.25, uT * 0.1));
+        float a = 0.09 * uK * pow(along, 1.4) * edge * murk;
+        gl_FragColor = vec4(0.72, 0.9, 1.0, a);
+      }`,
+  });
+}
+
+/** Mnemiopsis, the Caspian comb jelly: a clear oval body; rainbow light runs down its eight comb rows. */
+function ctenophore(size) {
+  const pts = [];
+  for (let i = 0; i <= 16; i++) { const f = i / 16; pts.push(new THREE.Vector2(Math.sin(f * Math.PI) * size * 0.42 * (1 - f * 0.25), (f - 0.5) * size)); }
+  const body = new THREE.Mesh(new THREE.LatheGeometry(pts, 40), new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, fog: false,
+    uniforms: { uT: { value: 0 }, uLit: { value: 0 } },
+    vertexShader: "varying vec3 vL; varying vec3 vN; varying vec3 vV; void main() { vL = position; vec4 mv = modelViewMatrix * vec4(position, 1.0); vV = normalize(-mv.xyz); vN = normalize(normalMatrix * normal); gl_Position = projectionMatrix * mv; }",
+    fragmentShader: `uniform float uT; uniform float uLit; varying vec3 vL; varying vec3 vN; varying vec3 vV;
+      void main() {
+        float fr = pow(1.0 - abs(dot(vN, vV)), 2.0);
+        float ang = atan(vL.z, vL.x);
+        float row = pow(0.5 + 0.5 * cos(ang * 8.0), 18.0);                 // eight comb rows
+        float wave = 0.5 + 0.5 * sin(vL.y * 60.0 - uT * 9.0);               // the beat running down them
+        vec3 rainbow = 0.5 + 0.5 * cos(6.2831 * (vL.y * 6.0 - uT * 0.8 + vec3(0.0, 0.33, 0.67)));
+        vec3 c = vec3(0.55, 0.7, 0.8) * fr * 0.35 + rainbow * row * wave * (0.4 + 1.6 * uLit);
+        gl_FragColor = vec4(c * (0.25 + uLit), 1.0);
+      }`,
+  }));
+  const g = new THREE.Group(); g.add(body);
+  for (const sx of [-1, 1]) {        // the two oral lobes
+    const lobe = new THREE.Mesh(new THREE.SphereGeometry(size * 0.28, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2), body.material);
+    lobe.position.set(sx * size * 0.16, -size * 0.45, 0); lobe.scale.set(1, 1.4, 0.6); lobe.rotation.x = Math.PI; g.add(lobe);
+  }
+  g.userData.mat = body.material;
+  return g;
+}
+
 /** The real "Nerpa-2" at full size: the same model as on the deck (scenes/nerpa.js), with lit lamps.
  *  The group's origin is the middle of the sphere (the descent shot aims at it). */
 function realNerpa() {
   const g = new THREE.Group();
   const n = createNerpa({ lights: true });
-  n.position.y = -1.05; n.rotation.y = Math.PI;      // the sphere looks the way she sinks past the camera
+  n.position.y = -1.05;                               // the group's origin: the middle of the vehicle
   g.add(n);
   const lamps = n.userData.lamps;
   const cable = new THREE.Mesh(new THREE.TubeGeometry(new THREE.LineCurve3(new THREE.Vector3(0, 1.75, 0.72), new THREE.Vector3(0, 41.7, 0.72)), 1, 0.02, 6), std({ color: 0x111111, metalness: 0.5, roughness: 0.5 }));
@@ -102,7 +154,17 @@ function realNerpa() {
   const bg = new THREE.BufferGeometry(); bg.setAttribute("position", new THREE.BufferAttribute(bp, 3));
   const bubbles = new THREE.Points(bg, new THREE.PointsMaterial({ map: soft, color: 0xcfefff, size: 0.14, transparent: true, opacity: 0.75, depthWrite: false, blending: THREE.AdditiveBlending }));
   bubbles.frustumCulled = false; g.add(bubbles);
-  g.userData = { lamps, bp, bg, model: n };
+  // the lamps' cones of light in the water (volumetric look: additive, soft rim, drifting noise)
+  const cones = lamps.map((l) => {
+    const L = 9, geo = new THREE.ConeGeometry(Math.tan(0.4) * L, L, 48, 1, true).translate(0, -L / 2, 0);
+    const m = new THREE.Mesh(geo, beamMat(0.55));
+    m.position.copy(l.at);
+    const dir = new THREE.Vector3(l.at.x * 0.4, -2.5, l.at.z + 8).sub(l.at).normalize();
+    m.quaternion.setFromUnitVectors(new THREE.Vector3(0, -1, 0), dir);
+    m.visible = false; n.add(m);
+    return m;
+  });
+  g.userData = { lamps, bp, bg, model: n, cones };
   return g;
 }
 
@@ -329,22 +391,96 @@ export function createDive(view) {
   surf.visible = false;
   deep.add(surf);
   const nerpa = realNerpa();
-  surf.add(nerpa);
+  nerpa.visible = false; deep.add(nerpa);
+  // the surface from below (shot 3): Snell's window — inside a cone of ~48.6 deg the sky shows, bright and broken
+  // by the ripples; outside it the surface is a dark mirror
   const surfPlane = new THREE.Mesh(new THREE.PlaneGeometry(240, 240), new THREE.ShaderMaterial({
-    side: THREE.DoubleSide, fog: false, uniforms: { uT: { value: 0 } },
+    side: THREE.DoubleSide, fog: false, uniforms: { uT: { value: 0 }, uCam: { value: new THREE.Vector3() }, uSurf: { value: 74 }, uOrg: { value: new THREE.Vector2() } },
     vertexShader: "varying vec2 vP; void main() { vP = position.xy; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }",
     fragmentShader: /* glsl */`
-      uniform float uT; varying vec2 vP;
+      uniform float uT; uniform vec3 uCam; uniform float uSurf; uniform vec2 uOrg; varying vec2 vP;
       float hh(vec2 p) { return sin(p.x * 0.9 + uT * 1.3) * sin(p.y * 0.8 - uT * 1.1) + 0.5 * sin(p.x * 2.1 - uT * 2.0 + p.y * 1.7); }
       void main() {
-        float r = length(vP); float flood = exp(-r * r * 0.0035); float rip = 0.5 + 0.5 * hh(vP * 0.6);
-        vec3 c = mix(vec3(0.015, 0.07, 0.1), vec3(0.5, 0.72, 0.78), flood * (0.5 + 0.5 * rip));
-        c += vec3(0.9, 0.96, 1.0) * pow(rip, 6.0) * flood * 0.7;
+        vec2 w = vP + uOrg;
+        float depth = max(0.5, uSurf - uCam.y);
+        float rr = length(w - uCam.xz) / depth;                       // tan of the angle from straight up
+        float rip = 0.5 + 0.5 * hh(w * 0.7);
+        float win = 1.0 - smoothstep(1.02, 1.18, rr + (rip - 0.5) * 0.12);
+        vec3 sky = mix(vec3(0.42, 0.62, 0.72), vec3(0.75, 0.88, 0.93), rip);
+        vec3 mirror = vec3(0.01, 0.05, 0.075) + vec3(0.03, 0.08, 0.1) * rip;
+        vec3 c = mix(mirror, sky, win);
+        c += vec3(0.9, 0.97, 1.0) * pow(rip, 8.0) * win * 0.9;          // glitter of the swell in the window
+        c += vec3(0.5, 0.7, 0.8) * exp(-pow((rr - 1.1) / 0.05, 2.0)) * 0.35;   // the bright rim of the window
         gl_FragColor = vec4(c, 1.0);
       }`,
   }));
   surfPlane.rotation.x = Math.PI / 2; surfPlane.position.y = 14;
   surf.add(surfPlane);
+  // the underside of «Tulpar» at the surface: her hull, the propeller turning, the rudder
+  const hullUnder = new THREE.Group(); surf.add(hullUnder);
+  {
+    const shape = new THREE.Shape(HULL.map(([x, z]) => new THREE.Vector2(x, z)));
+    const hg = new THREE.ExtrudeGeometry(shape, { depth: 3.4, bevelEnabled: true, bevelThickness: 0.3, bevelSize: 0.3, bevelSegments: 4, curveSegments: 12 });
+    hg.rotateX(Math.PI / 2);
+    const hm = new THREE.Mesh(hg, std({ color: 0x1c2a30, roughness: 0.8, metalness: 0.2 }));
+    hm.position.y = 14.2; hullUnder.add(hm);
+    const keel = new THREE.Mesh(new THREE.ExtrudeGeometry(new THREE.Shape([new THREE.Vector2(-0.15, -14), new THREE.Vector2(0.15, -14), new THREE.Vector2(0.15, 26), new THREE.Vector2(-0.15, 26)]),
+      { depth: 0.5, bevelEnabled: true, bevelThickness: 0.1, bevelSize: 0.08, bevelSegments: 2 }).rotateX(Math.PI / 2), hm.material);
+    keel.position.y = 14.2 - 3.6; hullUnder.add(keel);
+    const prop = new THREE.Group(); prop.position.set(0, 14.2 - 2.4, -14.2); hullUnder.add(prop);
+    const bronze = std({ color: 0x8a6a3a, metalness: 0.85, roughness: 0.35 });
+    prop.add(new THREE.Mesh(new THREE.LatheGeometry([[0, -0.3], [0.22, -0.25], [0.25, 0.2], [0.1, 0.4], [0, 0.42]].map(([a, b]) => new THREE.Vector2(a, b)), 20).rotateX(Math.PI / 2), bronze));
+    for (let i = 0; i < 4; i++) {
+      const bl = new THREE.Mesh(new THREE.SphereGeometry(0.6, 16, 8), bronze);
+      bl.scale.set(1, 0.18, 0.06); bl.position.set(Math.cos((i * Math.PI) / 2) * 0.6, Math.sin((i * Math.PI) / 2) * 0.6, 0);
+      bl.rotation.z = (i * Math.PI) / 2; bl.rotation.x = 0.4; prop.add(bl);
+    }
+    const rudder = new THREE.Mesh(new THREE.ExtrudeGeometry(new THREE.Shape([new THREE.Vector2(0, 0), new THREE.Vector2(1.2, 0), new THREE.Vector2(1.0, -2.0), new THREE.Vector2(0, -2.2)]),
+      { depth: 0.12, bevelEnabled: true, bevelThickness: 0.04, bevelSize: 0.04, bevelSegments: 2 }).rotateY(Math.PI / 2), hm.material);
+    rudder.position.set(-0.06, 14.2 - 1.4, -15.0); hullUnder.add(rudder);
+    hullUnder.userData.prop = prop;
+    hullUnder.position.set(-6.5, 0, 19);         // her stern off to one side, over the spot where Nerpa went in
+  }
+  // a Caspian seal near the surface (only in these shots, CLAUDE.md 23.3-G)
+  const seal = new THREE.Group(); surf.add(seal);
+  {
+    const fur = std({ color: 0x5a564e, roughness: 0.7 });
+    const body = new THREE.Mesh(new THREE.LatheGeometry([[0, -0.6], [0.12, -0.52], [0.2, -0.3], [0.22, 0], [0.18, 0.3], [0.1, 0.48], [0.07, 0.56], [0, 0.6]].map(([a, b]) => new THREE.Vector2(a, b)), 20), fur);
+    body.rotation.x = Math.PI / 2; seal.add(body);
+    for (const sx of [-1, 1]) { const f = new THREE.Mesh(new THREE.SphereGeometry(0.12, 10, 6), fur); f.scale.set(1, 0.2, 0.6); f.position.set(sx * 0.2, -0.05, 0.25); f.rotation.z = sx * 0.5; seal.add(f); }
+    const tail = new THREE.Mesh(new THREE.SphereGeometry(0.14, 10, 6), fur); tail.scale.set(1.2, 0.15, 0.6); tail.position.z = -0.62; seal.add(tail);
+    seal.userData.tail = tail;
+  }
+  // mnemiopsis comb jellies that drift past the camera in the twilight zone (shot 4)
+  const combs = [ctenophore(0.16), ctenophore(0.11), ctenophore(0.13)];
+  combs.forEach((c) => { c.visible = false; deep.add(c); });
+  // silt thrown up when the skids touch the bottom (shot 5)
+  const puffTex = soft2("150,140,118"), puffs = [];
+  for (let i = 0; i < 40; i++) { const pf = new THREE.Sprite(new THREE.SpriteMaterial({ map: puffTex, transparent: true, depthWrite: false, opacity: 0 })); pf.userData.life = -1; deep.add(pf); puffs.push(pf); }
+  function puffBurst(x, z) {
+    for (const pf of puffs) {
+      const a = Math.random() * Math.PI * 2, r = 0.4 + Math.random() * 1.2;
+      pf.position.set(x + Math.cos(a) * r, bedH(x, z) + 0.1, z + Math.sin(a) * r);
+      pf.userData.life = 0; pf.userData.v = new THREE.Vector3(Math.cos(a) * (0.5 + Math.random()), 0.15 + Math.random() * 0.4, Math.sin(a) * (0.5 + Math.random()));
+    }
+  }
+  function stepPuffs(dt) {
+    for (const pf of puffs) {
+      if (pf.userData.life < 0) continue;
+      pf.userData.life += dt;
+      const L = pf.userData.life / 5;
+      if (L >= 1) { pf.userData.life = -1; pf.material.opacity = 0; continue; }
+      pf.position.addScaledVector(pf.userData.v, dt); pf.userData.v.multiplyScalar(Math.exp(-0.7 * dt));
+      const sc = 0.6 + L * 3.0; pf.scale.set(sc, sc * 0.7, 1);
+      pf.material.opacity = 0.5 * (1 - L) * Math.min(1, pf.userData.life * 3);
+    }
+  }
+  // the depth counter over the film (shots 3-5)
+  const depthBox = document.createElement("div");
+  depthBox.className = "cine-depth"; depthBox.hidden = true;
+  depthBox.innerHTML = `<small>${t("ck_depth")}</small><b>0000</b>`;
+  document.body.append(depthBox);
+  const setDepth = (m) => { depthBox.querySelector("b").textContent = String(Math.round(Math.max(0, m))).padStart(4, "0"); };
   const shaftTex = canvasTexture(64, 256, (g, w, h) => {
     const gr = g.createLinearGradient(0, 0, 0, h);
     gr.addColorStop(0, "rgba(200,232,242,.6)"); gr.addColorStop(1, "rgba(200,232,242,0)");
@@ -565,19 +701,20 @@ export function createDive(view) {
     }).filter((b) => b.r < 1), T);
   }
 
-  async function descend() {
+  async function descend(quick = false) {
     mode = "descent";
-    D.y = bedH(0, 0) + 22;
+    D.y = bedH(0, 0) + (quick ? 2.6 : 22);
     top.intensity = 1.8; top.color.set(0x3f86a8);
     deep.fog.color.set(0x02161f); deep.fog.density = 0.082; deep.background.set(0x010a10);
     snow.mat.uniforms.uAmb.value = 0.045; snow.mat.uniforms.uOn.value = 1;
     spot.intensity = 0; cone.visible = false; D.desc = 1;
     cockpit.show(); document.body.classList.add("diving");
     sfx.underwater(true);
-    cockpit.msg(t("dv_descent", { m: String(BED_M) }), 2600);
-    setTimeout(() => { sfx.clack(); spot.intensity = 60; cone.visible = true; cockpit.msg(t("dv_light"), 1600); }, 1500);
+    if (!quick) cockpit.msg(t("dv_descent", { m: String(BED_M) }), 2600);
+    if (quick) { spot.intensity = 60; cone.visible = true; top.intensity = 0; }      // the film showed the way down
+    else setTimeout(() => { sfx.clack(); spot.intensity = 60; cone.visible = true; cockpit.msg(t("dv_light"), 1600); }, 1500);
     const y0 = D.y, y1 = bedH(0, 0) + 1.8;
-    await anim(5.5, (k) => {
+    await anim(quick ? 1.2 : 5.5, (k) => {
       D.y = y0 + (y1 - y0) * ease(k); top.intensity = 1.8 * (1 - k);
       D.shake = 0.03 * (1 - k) + (k > 0.92 ? (1 - k) * 0.4 : 0); D.desc = 1 - k;
       cockpit.set({ depth: BED_M - (D.y - bedH(0, 0)) * 9 - (1 - k) * 700 });
@@ -737,6 +874,8 @@ export function createDive(view) {
     snow.mat.uniforms.uStreak.value = clamp(Math.hypot(D.vx || 0, D.vz || 0) * 0.5 + (D.desc || 0), 0, 1);
     snow.update(dt, time, camera.position, rise);
     surfPlane.material.uniforms.uT.value = time;
+    beamUniforms.uT.value = time;
+    if (mode === "dive") stepPuffs(dt);
   });
   let active = false;
 
@@ -744,7 +883,7 @@ export function createDive(view) {
    * The first-person search. sceneInfo = {box, debris} from Python. fadeIn() reveals the screen.
    * Resolves {found, coverage, debrisSeen} when the bathyscaphe is back at the surface (screen dark).
    */
-  async function search(sceneInfo, fadeIn, fadeOut) {
+  async function search(sceneInfo, fadeIn, fadeOut, { quick = false } = {}) {
     active = true;
     view.useScene(deep);
     surf.visible = false;
@@ -758,8 +897,9 @@ export function createDive(view) {
     view.setWater(true, { cy: cockpit.centreY, r: cockpit.radius });
     placeCamera();
     const done = new Promise((r) => { finish = r; });
+    nerpa.visible = false;
     await fadeIn();
-    descend();
+    descend(quick);
     const res = await done;
     await fadeOut(res.found);
     view.setWater(false);
@@ -772,42 +912,119 @@ export function createDive(view) {
     return { found: res.found, find: res.found ? D.find : null, coverage: D.cov.size / COVN, debrisSeen: D.debrisSeen, seconds: T - D.t0, o2Left: Math.max(0, D.o2) };
   }
 
-  /** Part 1: the real Nerpa sinks past the camera; resolves when the screen is dark again. */
-  async function surfaceShot(fadeIn) {
+  /**
+   * Shots 3-5 of the descent (CLAUDE.md 23.3-B). durs = [shot 3, shot 4, shot 5] seconds; skip() -> true when the
+   * player pressed Space (the rest is cut short). Ends with Nerpa resting on the seabed, the camera beside her.
+   */
+  async function cinematic(durs, skip, sounds = {}) {
     active = true;
     view.useScene(deep);
+    camera.rotation.order = "XYZ"; camera.fov = 52; camera.updateProjectionMatrix();
+    nerpa.visible = true; depthBox.hidden = false;
+    const model = nerpa.userData.model.userData;
+    const lampsOn = (on) => { nerpa.userData.lamps.forEach((l) => { l.glow.material.opacity = on ? 0.9 : 0; l.sl.intensity = on ? 32 : 0; }); nerpa.userData.cones.forEach((c) => { c.visible = on; }); };
+    lampsOn(false);
+    const shot = (dur, fn) => new Promise((res) => {
+      const t0 = performance.now(); let last = t0;
+      const step = () => {
+        const now = performance.now(), k = Math.min(1, (now - t0) / 1000 / dur);
+        fn(k, Math.min(0.05, (now - last) / 1000), now / 1000); last = now;
+        if (k >= 1 || skip()) res(); else requestAnimationFrame(step);
+      };
+      requestAnimationFrame(step);
+    });
+    const tmpV = new THREE.Vector3();
+    const snowToLamp = () => {        // the flakes glow in Nerpa's lamp cone
+      const l = nerpa.userData.lamps[0];
+      nerpa.updateMatrixWorld(true);
+      snow.mat.uniforms.uLP.value.copy(l.at).applyMatrix4(nerpa.userData.model.matrixWorld);
+      snow.mat.uniforms.uLD.value.set(0, -0.3, 1).applyQuaternion(nerpa.userData.model.getWorldQuaternion(new THREE.Quaternion())).normalize();
+    };
+
+    // ---- shot 3: from under the surface looking up — Snell's window, Tulpar's hull, Nerpa sinks past, a seal
     const Y0 = 60;
     surf.position.set(0, Y0, 0); surf.visible = true;
-    deep.fog.color.set(0x0b2c3c); deep.fog.density = 0.026; deep.background.set(0x08283a);
-    top.color.set(0x7fb8d8); top.intensity = 3.4;
-    snow.mat.uniforms.uOn.value = 0; snow.mat.uniforms.uAmb.value = 0.3;
-    nerpa.position.set(0, 11, 0); nerpa.rotation.set(0, 0.5, 0);
-    nerpa.userData.lamps.forEach((l) => { l.glow.material.opacity = 0; l.sl.intensity = 0; });
-    const camAt = (k) => {
-      camera.position.set(4.6 - k * 1.3, Y0 - 1 - k * 9.5, 7 - k * 2);
-      camera.lookAt(nerpa.position.x, Y0 + nerpa.position.y - 0.3, nerpa.position.z);
-    };
-    camAt(0);
-    await fadeIn();
-    let lit = false;
-    await anim(7.5, (k) => {
-      nerpa.position.y = 11 - ease(k) * 24; nerpa.rotation.y = 0.5 + k * 0.6; nerpa.rotation.z = Math.sin(k * 6) * 0.04;
-      camAt(k);
-      for (const m of shafts) m.material.opacity = (0.25 + 0.2 * Math.sin(performance.now() / 1250 + m.userData.ph)) * (1 - k * 0.7);
-      top.intensity = 3.4 * (1 - k * 0.85); deep.fog.density = 0.026 + k * 0.035;
-      snow.mat.uniforms.uAmb.value = 0.3 * (1 - k) + 0.045;
-      if (!lit && k > 0.3) { lit = true; nerpa.userData.lamps.forEach((l) => { l.glow.material.opacity = 0.9; l.sl.intensity = 30; }); }
-      nerpa.userData.model.userData.update(1 / 60, performance.now() / 1000, 0.5);
+    surfPlane.material.uniforms.uSurf.value = Y0 + 14; surfPlane.material.uniforms.uOrg.value.set(0, 0);
+    deep.fog.color.set(0x0b3c50); deep.fog.density = 0.022; deep.background.set(0x0c4762);
+    top.color.set(0x8fc4dc); top.intensity = 3.6;
+    snow.mat.uniforms.uOn.value = 0; snow.mat.uniforms.uAmb.value = 0.32;
+    sounds.under?.();
+    await shot(durs[0], (k, dt, time) => {
+      const e = ease(k);
+      nerpa.position.set(0.3, Y0 + 12.8 - e * 10.5, 0.2); nerpa.rotation.set(0, 0.4 + k * 0.5, Math.sin(k * 7) * 0.04);
+      camera.position.set(3.2, Y0 + 4.0 - k * 1.5, 5.0);
+      camera.lookAt(nerpa.position.x - 0.6, nerpa.position.y + 1.2 + (1 - k) * 2.5, nerpa.position.z);
+      surfPlane.material.uniforms.uCam.value.copy(camera.position);
+      hullUnder.userData.prop.rotation.z += dt * 3;
+      seal.position.set(-7 + k * 13, Y0 + 12.2 + Math.sin(k * 6) * 0.15, -3 + k * 2); seal.rotation.set(0, Math.PI / 2 - 0.3, Math.sin(time * 6) * 0.15);
+      seal.userData.tail.rotation.y = Math.sin(time * 8) * 0.5;
+      for (const m of shafts) m.material.opacity = 0.3 + 0.2 * Math.sin(time * 0.8 + m.userData.ph);
       const bp = nerpa.userData.bp;
-      for (let i = 1; i < bp.length; i += 3) { bp[i] += 0.06; if (bp[i] > 14) bp[i] = 1; }
+      for (let i = 1; i < bp.length; i += 3) { bp[i] += dt * 3.6; if (bp[i] > 14) bp[i] = 1; }
       nerpa.userData.bg.attributes.position.needsUpdate = true;
+      model.update(dt, time, 0.4);
+      setDepth(k * 12);
     });
+    surf.visible = false;
+
+    // ---- shot 4: the twilight zone — blue to black, the depth races, comb jellies; the lamps click on at ~200 m
+    const H = 400, deepCol = new THREE.Color(), c0 = new THREE.Color(0x0a3550), c1 = new THREE.Color(0x03141f), c2 = new THREE.Color(0x010508);
+    let lit = false;
+    combs.forEach((c, i) => { c.visible = true; c.userData.ph = i * 1.7; });
+    await shot(durs[1], (k, dt, time) => {
+      const depth = 12 + 918 * Math.pow(k, 1.7);
+      setDepth(depth);
+      deepCol.copy(c0).lerp(c1, Math.min(1, k * 1.6)).lerp(c2, Math.max(0, (k - 0.6) / 0.4));
+      deep.background.copy(deepCol); deep.fog.color.copy(deepCol); deep.fog.density = 0.03 + k * 0.05;
+      top.intensity = 1.4 * Math.max(0, 1 - k * 2.2);
+      snow.mat.uniforms.uAmb.value = 0.24 * (1 - k) + 0.04;
+      const ny = H - k * 30;
+      nerpa.position.set(0, ny, 0); nerpa.rotation.set(0, 0.9 + k * 0.4, Math.sin(time * 0.9) * 0.03);
+      const orbit = 0.9 + k * 0.5;
+      camera.position.set(Math.sin(orbit) * 4.6, ny - 0.9, Math.cos(orbit) * 4.6);
+      camera.lookAt(0, ny + 0.2, 0);
+      if (!lit && depth >= 200) { lit = true; lampsOn(true); snow.mat.uniforms.uOn.value = 1; sounds.lights?.(); }
+      if (lit) snowToLamp();
+      combs.forEach((c, i) => {
+        const f = (k - 0.35 - i * 0.12) / 0.5;
+        c.visible = f > 0 && f < 1;
+        camera.getWorldDirection(tmpV);
+        const side = new THREE.Vector3().crossVectors(tmpV, new THREE.Vector3(0, 1, 0)).normalize();
+        c.position.copy(camera.position).addScaledVector(tmpV, 0.9 + i * 0.35).addScaledVector(side, (f - 0.5) * 1.6 * (i % 2 ? -1 : 1)).add(new THREE.Vector3(0, -0.15 + i * 0.12, 0));
+        c.rotation.set(Math.sin(time + i) * 0.3, time * 0.2 + i, 0.2);
+        c.userData.mat.uniforms.uT.value = time + c.userData.ph; c.userData.mat.uniforms.uLit.value = lit ? 1 : 0.15;
+      });
+      if (Math.random() < 0.01) sounds.creak?.();
+      model.update(dt, time, 0.3);
+    });
+    combs.forEach((c) => { c.visible = false; });
+
+    // ---- shot 5: the seabed comes up in the light; the skids touch, a cloud of silt; then into the cockpit
+    if (!lit) { lampsOn(true); snow.mat.uniforms.uOn.value = 1; }
+    deep.fog.color.set(0x02161f); deep.fog.density = 0.07; deep.background.set(0x010a10); top.intensity = 0;
+    snow.mat.uniforms.uAmb.value = 0.045;
+    const bed = bedH(0, 0);
+    let landed = false;
+    await shot(durs[2], (k, dt, time) => {
+      setDepth(930 + 20 * Math.min(1, k / 0.8));
+      const kk = Math.min(1, k / 0.8), e = 1 - Math.pow(1 - kk, 2.2);
+      const ny = bed + 1.05 + 9 * (1 - e);
+      nerpa.position.set(0, ny + (landed ? Math.sin((k - 0.8) * 30) * 0.03 * (1 - k) : 0), 0); nerpa.rotation.set(0, 1.25, 0);
+      camera.position.set(3.6, bed + 0.75, 4.4);
+      camera.lookAt(0, ny - 0.2, 0);
+      snowToLamp();
+      if (!landed && kk >= 1) { landed = true; puffBurst(0, 0); sounds.thud?.(); }
+      stepPuffs(dt);
+      model.update(dt, time, landed ? 0.05 : 0.2);
+    });
+    if (!landed) { nerpa.position.set(0, bed + 1.05, 0); puffBurst(0, 0); }
+    depthBox.hidden = true;
   }
 
   /** Back to the table scene. */
   function leave() {
     active = false;
-    surf.visible = false;
+    surf.visible = false; nerpa.visible = false; depthBox.hidden = true;
     camera.rotation.order = "XYZ";
     view.useScene(null);
     view.refit();
@@ -822,5 +1039,5 @@ export function createDive(view) {
     return true;
   }
 
-  return { deep, surfaceShot, search, leave, debugFaceBox };
+  return { deep, cinematic, search, leave, debugFaceBox, stepPuffs };
 }

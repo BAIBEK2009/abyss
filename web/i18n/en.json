@@ -276,5 +276,6 @@
  "ch_fuel": "refuel",
  "fp_metres": "{m} m",
  "bino_zoom": "Mouse wheel — zoom",
- "sign_exit": "ШЫҒУ / ВЫХОД"
+ "sign_exit": "ШЫҒУ / ВЫХОД",
+ "cine_skip": "Space — skip the descent"
 }

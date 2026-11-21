@@ -1,0 +1,63 @@
+"""Frames of the descent film and the seabed (CLAUDE.md 23.3-E), in real Chrome. Dev tool.
+
+    python tools/descent_shots.py OUT_DIR [--lang ru] [--every 0.5] [--seconds 21]
+
+Starts the campaign in act I, launches Nerpa from the deck ([E] on her), clicks through Murat's line and the
+brief, then saves a frame every --every seconds of the film (descent_NN.png), and finally the cockpit on the
+seabed (bottom.png). Exits with 1 on JS errors.
+"""
+import argparse
+import sys
+import threading
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from playwright.sync_api import sync_playwright  # noqa: E402
+from server import make_server  # noqa: E402
+
+ap = argparse.ArgumentParser()
+ap.add_argument("out", type=Path)
+ap.add_argument("--lang", default="ru")
+ap.add_argument("--every", type=float, default=0.5)
+ap.add_argument("--seconds", type=float, default=21)
+args = ap.parse_args()
+args.out.mkdir(parents=True, exist_ok=True)
+
+server = make_server(0)
+g = server.game
+for ev in ("start", "radio_heard", "binoculars", "enter_cabin", "sit_at_table"):
+    g.story_event(ev)
+g.pop_story()
+threading.Thread(target=server.serve_forever, daemon=True).start()
+url = f"http://127.0.0.1:{server.server_address[1]}/?lang={args.lang}&nointro=1"
+errors = []
+with sync_playwright() as pw:
+    b = pw.chromium.launch(channel="chrome", headless=True, args=["--use-angle=metal", "--enable-gpu"])
+    page = b.new_page(viewport={"width": 1440, "height": 900})
+    page.on("pageerror", lambda e: errors.append(f"{e} | {(e.stack or '')[:300]}"))
+    page.on("console", lambda m: m.type == "error" and errors.append(m.text))
+    page.add_init_script("try { localStorage.setItem('abyss.coachDone','1'); localStorage.setItem('abyss.introDone','1'); localStorage.setItem('abyss.deckHintsDone','1'); } catch (e) {}")
+    page.goto(url)
+    page.wait_for_selector("body[data-ready='1']", timeout=30000)
+    page.wait_for_timeout(1500)
+    page.evaluate("window.__abyss.walk.enterDeckNow({x: 0.6, z: -6.0, yaw: Math.PI})")
+    page.wait_for_timeout(800)
+    page.evaluate("window.__abyss.walk.goTo('nerpa')")
+    for _ in range(160):
+        if page.evaluate("!!document.querySelector('[data-id=dive-start]')"):
+            break
+        if page.evaluate("!!document.querySelector('.speech:not([hidden])')"):
+            page.keyboard.press("Enter")
+        page.wait_for_timeout(300)
+    page.click("[data-id=dive-start]")
+    n = int(args.seconds / args.every)
+    for i in range(n):
+        page.wait_for_timeout(int(args.every * 1000))
+        page.screenshot(path=str(args.out / f"descent_{i:02d}.png"))
+    page.wait_for_selector("[data-id=surface]", state="visible", timeout=30000)
+    page.wait_for_timeout(2500)
+    page.screenshot(path=str(args.out / "bottom.png"))
+    b.close()
+server.shutdown()
+print("frames:", n, "| errors:", errors or "none")
+sys.exit(1 if errors else 0)

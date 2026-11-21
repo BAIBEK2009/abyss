@@ -297,6 +297,8 @@ export function createWalk(ctx) {
     freeCursor: () => fp.unlock(),
     get mode() { return mode; },
     get deck() { return deck; },
+    /** The deck scene (built on first use): the descent film starts on it. */
+    getDeck: () => ensureDeck(),
     fp,
     /** Tests / screenshots: where things are. */
     /** Tests / screenshots: look through the binoculars at a world point with a zoom. */

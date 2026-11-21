@@ -121,6 +121,30 @@ export function createView(canvas) {
   });
   water.enabled = false;
   composer.addPass(water);
+  // shot 2 of the descent (CLAUDE.md 23.3-B): the camera on the water line — below a wavy line the picture is the
+  // murky teal of the sea, wobbling; on the line a bright meniscus
+  const waterline = new ShaderPass({
+    uniforms: { tDiffuse: { value: null }, uT: { value: 0 }, uLine: { value: 0.5 } },
+    vertexShader: "varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }",
+    fragmentShader: /* glsl */`
+      uniform sampler2D tDiffuse; uniform float uT; uniform float uLine; varying vec2 vUv;
+      void main() {
+        float line = uLine + 0.014 * sin(vUv.x * 13.0 + uT * 2.4) + 0.007 * sin(vUv.x * 31.0 - uT * 4.3) + 0.004 * sin(vUv.x * 71.0 + uT * 7.0);
+        float d = vUv.y - line;
+        vec3 col;
+        if (d < 0.0) {
+          vec2 w = vec2(sin(vUv.y * 40.0 + uT * 3.0), cos(vUv.x * 33.0 + uT * 2.2)) * 0.004;
+          vec3 c = texture2D(tDiffuse, vUv + w).rgb;
+          float deep = clamp(-d * 2.2, 0.0, 1.0);
+          col = mix(c * vec3(0.35, 0.72, 0.78) + vec3(0.0, 0.03, 0.04), vec3(0.01, 0.08, 0.11), 0.35 + deep * 0.5);
+        } else col = texture2D(tDiffuse, vUv).rgb;
+        float men = exp(-pow(d / 0.006, 2.0));
+        col = mix(col, vec3(0.75, 0.88, 0.92), men * 0.55);
+        gl_FragColor = vec4(col, 1.0);
+      }`,
+  });
+  waterline.enabled = false;
+  composer.addPass(waterline);
   composer.addPass(new OutputPass());
   const film = new ShaderPass({
     uniforms: { tDiffuse: { value: null }, uTime: { value: 0 }, uRes: { value: new THREE.Vector2(1, 1) } },
@@ -257,6 +281,8 @@ export function createView(canvas) {
       water.uniforms.uAsp.value = window.innerWidth / h;
       water.uniforms.uNear.value = camera.near; water.uniforms.uFar.value = camera.far;
     },
+    /** Shot 2 of the descent: the water line across the frame (v 0..1 from the bottom), its time. */
+    setWaterline(on, v = 0.5, time = 0) { waterline.enabled = on; waterline.uniforms.uLine.value = v; waterline.uniforms.uT.value = time; },
     /** Render another scene (the deep sea); the caller places the camera. null = back to the table. */
     useScene(s, { bloom: keepBloom = false } = {}) {
       manual = !!s;

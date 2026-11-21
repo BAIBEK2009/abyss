@@ -15,6 +15,7 @@ import { createChapter } from "./ui/chapter.js";
 import { createSpeech } from "./ui/speech.js";
 import { createStoryFlow } from "./story_flow.js";
 import { createWalk } from "./walk.js";
+import { createDescent } from "./descent.js";
 import { showResult } from "./ui/result.js";
 import { ICONS } from "./ui/icons.js";
 import { pct, hours } from "./ui/fmt.js";
@@ -324,14 +325,15 @@ export function createTable(view, map, initialState, { cabin, dive } = {}) {
     await run({ type: "go", target: state.pos, tool: "dive" });
   }
 
-  /** The dive (CLAUDE.md v3.1, 19): the crane lowers Nerpa, then the shot from under the surface. */
+  /** The dive: the descent film (23.3-B, five shots from the deck to the seabed), then the cockpit search. */
+  let descent = null;
   async function diveScene(scene) {
+    descent ??= createDescent(view, { getDeck: () => walk.getDeck(), dive });
     toasts.say("grisha", t("toast_crane"), 2600);
-    await map.launchNerpa();
+    await fade(true);
+    await descent.play();
     await fade(true, "blue");
-    await dive.surfaceShot(() => fade(false));
-    await fade(true, "blue");
-    const result = await dive.search(scene, () => fade(false), (found) => fade(true, found ? "white" : "blue"));
+    const result = await dive.search(scene, () => fade(false), (found) => fade(true, found ? "white" : "blue"), { quick: true });
     dive.leave();
     map.resetNerpa(result.found && !result.find);
     view.follow(map.shipPoint);              // the cinema camera goes on following the ship
