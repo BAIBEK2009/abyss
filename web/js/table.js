@@ -160,6 +160,7 @@ export function createTable(view, map, initialState, { cabin, dive } = {}) {
   function speak(e) {
     if (e.type !== "msg" || !SPEAKER[e.key]) return;
     const params = { ...e };
+    for (const k of ["p0", "p1"]) if (typeof params[k] === "number") params[k] = hours(params[k]);   // 0.4 -> "0,4"
     if (typeof e.cell === "string") {            // the core names cells "E5": turn it into a place
       const c = [state.cols.indexOf(e.cell[0]), Number(e.cell.slice(1)) - 1];
       const pl = place(state, c);
@@ -280,9 +281,9 @@ export function createTable(view, map, initialState, { cabin, dive } = {}) {
     await fade(true, "blue");
     await dive.surfaceShot(() => fade(false));
     await fade(true, "blue");
-    const result = await dive.search(scene, () => fade(false), () => fade(true, "blue"));
+    const result = await dive.search(scene, () => fade(false), (found) => fade(true, found ? "white" : "blue"));
     dive.leave();
-    map.resetNerpa();
+    map.resetNerpa(result.found);
     view.follow(map.shipPoint);              // the cinema camera goes on following the ship
     await fade(false);
     return result;

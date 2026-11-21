@@ -110,6 +110,7 @@ export function createCockpit(root, handlers) {
   return {
     el: ck,
     get centreY() { return CY; },
+    get radius() { return R; },
     show() { layout(); ck.classList.add("on"); $(".ck-help").style.opacity = 1; },
     hide() { ck.classList.remove("on", "live", "low"); },
     live(on) { ck.classList.toggle("live", on); },

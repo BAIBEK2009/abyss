@@ -84,6 +84,36 @@ export function createView(canvas) {
   composer.addPass(gtao);
   const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.45, 0.5, 2.6);   // HDR threshold: only emitters (lit paper stays below)
   composer.addPass(bloom);
+  // under water (CLAUDE.md v3.1, 21.1 p. 7): colour absorption by distance (red dies first, so the orange
+  // box looks brown far away and flares up close) + the porthole glass: slight barrel distortion and a
+  // colour fringe towards its rim. Only during the first-person search.
+  const water = new ShaderPass({
+    uniforms: { tDiffuse: { value: null }, tDepth: { value: depthTex }, uNear: { value: 0.1 }, uFar: { value: 260 },
+                uAbs: { value: new THREE.Vector3(0.30, 0.085, 0.045) }, uWater: { value: new THREE.Color(0x01121a) },
+                uC: { value: new THREE.Vector2(0.5, 0.54) }, uR: { value: 0.4 }, uAsp: { value: 1.6 } },
+    vertexShader: "varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }",
+    fragmentShader: /* glsl */`
+      #include <packing>
+      uniform sampler2D tDiffuse; uniform sampler2D tDepth; uniform float uNear, uFar, uR, uAsp;
+      uniform vec3 uAbs; uniform vec3 uWater; uniform vec2 uC; varying vec2 vUv;
+      vec3 absorbed(vec2 uv) {
+        vec3 c = texture2D(tDiffuse, uv).rgb;
+        float d = -perspectiveDepthToViewZ(texture2D(tDepth, uv).x, uNear, uFar);
+        vec3 k = exp(-uAbs * min(d, 60.0));
+        return c * k + uWater * (1.0 - k);
+      }
+      void main() {
+        vec2 p = vUv - uC; p.x *= uAsp;
+        float r = length(p) / uR;                              // 0 centre .. 1 the porthole rim
+        vec2 q = p * (1.0 - 0.06 * r * r);                     // barrel distortion of the thick glass
+        q.x /= uAsp;
+        vec2 ca = q * 0.012 * smoothstep(0.6, 1.0, r);         // colour fringe at the rim
+        vec3 col = vec3(absorbed(uC + q + ca).r, absorbed(uC + q).g, absorbed(uC + q - ca).b);
+        gl_FragColor = vec4(col, 1.0);
+      }`,
+  });
+  water.enabled = false;
+  composer.addPass(water);
   composer.addPass(new OutputPass());
   const film = new ShaderPass({
     uniforms: { tDiffuse: { value: null }, uTime: { value: 0 }, uRes: { value: new THREE.Vector2(1, 1) } },
@@ -207,6 +237,16 @@ export function createView(canvas) {
     follow(fn, opt = {}) { if (!fn && !follow) return; follow = fn; followOpt = { dist: 9.5, tilt: 34, ...opt }; rate = opt.rate ?? 2.2; settled = false; },
     /** Recompute the lens for the table after another scene changed it. */
     refit: () => resize(),
+    /** The water pass during the dive; porthole = {cy (0..1 from the top), r (px)}. */
+    setWater(on, porthole) {
+      water.enabled = on;
+      if (!on) return;
+      const h = window.innerHeight;
+      water.uniforms.uC.value.set(0.5, 1 - porthole.cy);
+      water.uniforms.uR.value = porthole.r / h;
+      water.uniforms.uAsp.value = window.innerWidth / h;
+      water.uniforms.uNear.value = camera.near; water.uniforms.uFar.value = camera.far;
+    },
     /** Render another scene (the deep sea); the caller places the camera. null = back to the table. */
     useScene(s) {
       manual = !!s;

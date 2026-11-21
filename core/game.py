@@ -28,6 +28,12 @@ from core.agent import route
 from core.rival import Rival
 
 
+def _pct(p: float):
+    """Percent for a message: one decimal below 10 % (0.4), whole above (23)."""
+    v = p * 100
+    return round(v, 1) if v < 10 else round(v)
+
+
 class GameError(Exception):
     """An action that is not allowed right now. `key` is a message key for the UI."""
 
@@ -330,7 +336,7 @@ class Game:
         return [{"type": "dive", "t": t, "cell": list(cell), "result": result, "coverage": round(c, 3)},
                 {"type": "belief", "t": t, "P": self.belief_rows()},
                 {"type": "msg", "t": t, "key": "dive_debris" if result == "debris" else "dive_seen", "cell": name,
-                 "c": round(c * 100), "p0": round(before[cell] * 100), "p1": round(self.P[cell] * 100)}]
+                 "c": round(c * 100), "p0": _pct(before[cell]), "p1": _pct(self.P[cell])}]
 
     def _camera(self, cell) -> str:
         r, acc = self.rng.random(), 0.0

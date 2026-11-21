@@ -627,13 +627,24 @@ export function createMap(view, state) {
     await sleep(1000);
   }
   /** After the dive: Nerpa back on the A-frame, the camera back at the table, the gold pin back. */
-  function resetNerpa() {
+  let recovered = null;
+  function resetNerpa(found = false) {
     aurora.bathy.position.y = 0.27; aurora.bathy.scale.setScalar(1); aurora.cable.scale.y = 0.05;
+    if (found && !recovered) {                  // the recorder lies on the deck by the house and blinks
+      recovered = new THREE.Group();
+      recovered.add(mesh(new THREE.BoxGeometry(0.13, 0.085, 0.1), std({ color: 0xe8692b, roughness: 0.45 })));
+      const led = new THREE.Mesh(new THREE.SphereGeometry(0.012, 8, 6), new THREE.MeshBasicMaterial({ color: new THREE.Color(0xff3020).multiplyScalar(6) }));
+      led.position.set(0.075, 0, 0); recovered.add(led);
+      const glow = new THREE.PointLight(0xffb060, 1.6, 2.5, 2); glow.position.y = 0.25; recovered.add(glow);
+      recovered.position.set(0.12, 0.21, 0.22); recovered.userData.led = led;
+      aurora.body.add(recovered);
+    }
     goldPin.scale.setScalar(1);
     view.follow(null);
     placePins();
   }
-  view.onFrame((dt) => {
+  view.onFrame((dt, time) => {
+    if (recovered) recovered.userData.led.visible = Math.sin(time * 5) > 0.3;
     for (let i = fx.length - 1; i >= 0; i--) {
       const f = fx[i]; f.t += dt;
       const k = Math.min(1, f.t / f.dur);
