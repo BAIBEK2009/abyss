@@ -3,9 +3,12 @@
 // moon, a green radio on a cabinet, the ship's wheel and a chart of the Caspian on the walls,
 // a barrel, the brass lamp over the table with dust floating in its light.
 // Scale: the chart sheet (12 units) is about a metre, so the room is about 5 x 5.5 m.
+// The walls are light-grey painted steel with welded seams and rivets (a ship, not a log cabin); the floor
+// stays wooden; the light inside is warm, the moon through the portholes cold.
 import * as THREE from "three";
 import { canvasTexture, rng } from "../view.js";
-import { walnut, brass, glass } from "./materials.js";
+import { walnut, brass, glass, steelPanel } from "./materials.js";
+import { t } from "../i18n.js";
 
 export const FLOOR_Y = -10;
 const CEIL_Y = 18, X0 = -30, X1 = 30, Z0 = -38, Z1 = 30;
@@ -76,10 +79,9 @@ export function createCabin(scene) {
   const floor = mesh(new THREE.PlaneGeometry(W, D).rotateX(-Math.PI / 2), floorMat, false);
   floor.position.set((X0 + X1) / 2, FLOOR_Y, (Z0 + Z1) / 2);
   group.add(floor);
-  const wallMat = walnut([3, 1.6]);
-  wallMat.color.set(0x9a7c62);
+  const steelWall = steelPanel({ color: "#c6c9c8", seed: 23 });
   const wall = (w, x, z, ry) => {
-    const m = mesh(new THREE.PlaneGeometry(w, H), wallMat, false);
+    const m = mesh(new THREE.PlaneGeometry(w, H), steelWall.userData.forSize(w / 12, H / 12), false);
     m.position.set(x, FLOOR_Y + H / 2, z); m.rotation.y = ry;
     group.add(m);
   };
@@ -87,10 +89,10 @@ export function createCabin(scene) {
   wall(W, (X0 + X1) / 2, Z1, Math.PI);
   wall(D, X0, (Z0 + Z1) / 2, Math.PI / 2);
   wall(D, X1, (Z0 + Z1) / 2, -Math.PI / 2);
-  const ceil = mesh(new THREE.PlaneGeometry(W, D).rotateX(Math.PI / 2), std({ color: 0x2a1c12, roughness: 0.9 }), false);
+  const ceil = mesh(new THREE.PlaneGeometry(W, D).rotateX(Math.PI / 2), steelWall.userData.forSize(W / 12, D / 12), false);
   ceil.position.set((X0 + X1) / 2, CEIL_Y, (Z0 + Z1) / 2);
   group.add(ceil);
-  const beamMat = std({ color: 0x3a2618, roughness: 0.8 });
+  const beamMat = std({ color: 0x9a9fa2, roughness: 0.6, metalness: 0.4 });      // painted steel frames
   for (let z = Z0 + 8; z < Z1; z += 14) {                  // ceiling beams
     const b = mesh(new THREE.BoxGeometry(W, 1.6, 1.4), beamMat, false);
     b.position.set((X0 + X1) / 2, CEIL_Y - 0.8, z); group.add(b);
@@ -198,6 +200,21 @@ export function createCabin(scene) {
     const lampD = new THREE.Mesh(new THREE.SphereGeometry(0.6, 12, 8), new THREE.MeshBasicMaterial({ color: new THREE.Color(0xffb862).multiplyScalar(3) }));
     lampD.position.set(SX, FLOOR_Y + 21, Z1 - 1.6); stairs.add(lampD);
     const lightD = new THREE.PointLight(0xffa850, 18, 28, 1.4); lightD.position.set(SX, FLOOR_Y + 19, Z1 - 4); stairs.add(lightD);
+    // a high sill in the doorway, the exit sign over it, a fire extinguisher beside it
+    const sillD = mesh(new THREE.BoxGeometry(11.6, 3.6, 1.8), std({ color: 0x7b8185, roughness: 0.6, metalness: 0.4 })); sillD.position.set(SX, FLOOR_Y + 1.8, Z1 - 0.9); stairs.add(sillD);
+    const signTex = canvasTexture(512, 176, (g, w, h) => {
+      g.fillStyle = "#0b8a3e"; g.fillRect(0, 0, w, h);
+      g.fillStyle = "#f4fff6"; g.font = "800 62px Onest, sans-serif"; g.textAlign = "center"; g.textBaseline = "middle";
+      g.fillText(t("sign_exit"), w / 2, h / 2 + 3);
+      g.strokeStyle = "#f4fff6"; g.lineWidth = 6; g.strokeRect(10, 10, w - 20, h - 20);
+    });
+    const signM = new THREE.Mesh(new THREE.PlaneGeometry(6, 2.06), new THREE.MeshBasicMaterial({ map: signTex, color: new THREE.Color(1, 1, 1).multiplyScalar(1.5) }));
+    signM.position.set(SX, FLOOR_Y + 25.1, Z1 - 1.5); signM.rotation.y = Math.PI; stairs.add(signM);
+    const fe = new THREE.Group(); fe.position.set(SX - 9, FLOOR_Y + 5, Z1 - 1.3); fe.scale.setScalar(12); stairs.add(fe);
+    const red = std({ color: 0xc8231b, roughness: 0.35, metalness: 0.2 }), blackM = std({ color: 0x1c1c1c, metalness: 0.6, roughness: 0.4 });
+    fe.add(mesh(new THREE.LatheGeometry([[0, 0], [0.075, 0], [0.085, 0.02], [0.085, 0.5], [0.07, 0.56], [0.03, 0.6], [0, 0.6]].map(([x, y]) => new THREE.Vector2(x, y)), 24), red));
+    const valve = mesh(new THREE.LatheGeometry([[0.025, 0], [0.025, 0.06], [0.012, 0.08], [0, 0.08]].map(([x, y]) => new THREE.Vector2(x, y)), 12), blackM); valve.position.y = 0.6; fe.add(valve);
+    const hose = mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([[0.02, 0.66, 0.02], [0.1, 0.62, -0.06], [0.11, 0.3, -0.07], [0.08, 0.15, -0.06]].map((q) => new THREE.Vector3(...q))), 20, 0.012, 6), blackM); fe.add(hose);
     group.add(stairs);
   }
 

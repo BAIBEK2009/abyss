@@ -275,5 +275,6 @@
  "ch_signal": "last signal 02:14",
  "ch_fuel": "refuel",
  "fp_metres": "{m} m",
- "bino_zoom": "Mouse wheel — zoom"
+ "bino_zoom": "Mouse wheel — zoom",
+ "sign_exit": "ШЫҒУ / ВЫХОД"
 }

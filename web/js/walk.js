@@ -182,10 +182,11 @@ export function createWalk(ctx) {
     zoom = 4; seenT = 0;
     stage = prologue() && !tasks()[1] ? 0 : 3;
     if (!bino) {
-      bino = el("div", "bino", `<div class="bino-mask"></div><div class="bino-ret"></div>
+      bino = el("div", "bino", `<svg class="bino-svg" aria-hidden="true"></svg>
         <div class="bino-top"></div><div class="bino-bottom"></div>
         <div class="bino-zoom"><button data-z="1" aria-label="+">+</button><button data-z="-1" aria-label="-">&minus;</button></div>`);
       bino.querySelectorAll(".bino-zoom button").forEach((b) => b.addEventListener("click", () => setZoom(zoom * (b.dataset.z > 0 ? 1.4 : 1 / 1.4))));
+      addEventListener("resize", () => { if (mode === "bino") drawMask(); });
       document.body.append(bino);
       addEventListener("wheel", (e) => { if (mode === "bino") setZoom(zoom * (e.deltaY < 0 ? 1.15 : 1 / 1.15)); }, { passive: true });
       addEventListener("keydown", (e) => { if (mode === "bino" && e.code === "KeyE" && !e.repeat && !blocked()) leaveBino(); });
@@ -193,12 +194,32 @@ export function createWalk(ctx) {
     const P = prompts();
     bino.querySelector(".bino-top").textContent = stage < 3 ? (P.binoculars_use ?? "") : "";
     bino.querySelector(".bino-bottom").innerHTML = `${t("bino_zoom")} · <kbd>E</kbd> ${P.binoculars_drop ?? ""}`;
+    drawMask();
     bino.hidden = false;
     document.body.classList.add("binoculars");
     sfx.clack?.();
     refresh();
   }
-  function setZoom(z) { zoom = Math.max(2.5, Math.min(14, z)); }
+  function setZoom(z) { zoom = Math.max(2.5, Math.min(16, z)); }
+  /** One merged figure-eight (two overlapping circles as a single hole, no inner arcs), a soft shadow at its
+   *  rim, and the thin rangefinder reticle of a marine binocular (mil scale). */
+  function drawMask() {
+    const W = innerWidth, H = innerHeight, m = Math.min(W, H), R = 0.34 * m, d = 0.21 * m, cx = W / 2, cy = H / 2;
+    const tick = (x, y, len) => `<line x1="${x}" y1="${y - len}" x2="${x}" y2="${y + len}"/>`;
+    let ret = `<line x1="${cx - R * 0.95}" y1="${cy}" x2="${cx + R * 0.95}" y2="${cy}"/>`;
+    const step = R * 0.075;
+    for (let k = -12; k <= 12; k++) if (k) ret += tick(cx + k * step, cy, k % 2 ? 4 : 9);
+    for (let k = 2; k <= 10; k += 2) ret += `<text x="${cx + k * step}" y="${cy - 14}">${k * 5}</text><text x="${cx - k * step}" y="${cy - 14}">${k * 5}</text>`;
+    ret += `<line x1="${cx}" y1="${cy - R * 0.25}" x2="${cx}" y2="${cy + R * 0.8}"/>`;
+    for (let k = 1; k <= 10; k++) ret += `<line x1="${cx - (k % 2 ? 4 : 9)}" y1="${cy + k * step}" x2="${cx + (k % 2 ? 4 : 9)}" y2="${cy + k * step}"/>`;
+    bino.querySelector(".bino-svg").innerHTML = `
+      <defs><filter id="bsoft" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="${(m * 0.022).toFixed(1)}"/></filter>
+        <mask id="bmask"><rect width="${W}" height="${H}" fill="white"/>
+          <g filter="url(#bsoft)"><circle cx="${cx - d}" cy="${cy}" r="${R}" fill="black"/><circle cx="${cx + d}" cy="${cy}" r="${R}" fill="black"/></g></mask></defs>
+      <rect width="${W}" height="${H}" fill="#000" mask="url(#bmask)"/>
+      <g class="bino-reticle">${ret}</g>`;
+    bino.querySelector(".bino-svg").setAttribute("viewBox", `0 0 ${W} ${H}`);
+  }
   function hideBino() {
     if (bino) bino.hidden = true;
     document.body.classList.remove("binoculars");
@@ -213,6 +234,7 @@ export function createWalk(ctx) {
     refresh();
   }
   const fwd = new THREE.Vector3(), to = new THREE.Vector3();
+  const binoQ = new THREE.Quaternion(), binoE = new THREE.Euler();
   function inView(points, frac) {
     fwd.set(0, 0, -1).applyQuaternion(view.camera.quaternion);
     const half = THREE.MathUtils.degToRad(view.camera.fov / 2) * frac;
@@ -248,7 +270,11 @@ export function createWalk(ctx) {
     if (mode === "bino") {
       const f = FOV / zoom;
       if (Math.abs(view.camera.fov - f) > 0.01) { view.camera.fov += (f - view.camera.fov) * Math.min(1, dt * 8); view.camera.updateProjectionMatrix(); }
-      // a light tremor of the hands, stronger with more zoom
+      // the captain's arms take out the ship's roll (at 16x a degree of pitch is a quarter of the frame);
+      // what is left is a light tremor of the hands, stronger with more zoom
+      const me = fp.pos;
+      binoQ.setFromEuler(binoE.set(me.pitch, me.yaw + Math.PI, 0, "YXZ"));
+      view.camera.quaternion.slerp(binoQ, 0.9);
       const k = 0.00022 * zoom;
       view.camera.rotateX(Math.sin(time * 7.3) * k + Math.sin(time * 13.1) * k * 0.5);
       view.camera.rotateY(Math.sin(time * 5.9 + 1) * k + Math.sin(time * 11.7) * k * 0.4);
@@ -272,6 +298,8 @@ export function createWalk(ctx) {
     get deck() { return deck; },
     fp,
     /** Tests / screenshots: where things are. */
+    /** Tests / screenshots: look through the binoculars at a world point with a zoom. */
+    debugBino(point, z) { if (mode !== "bino") takeBinoculars(); setZoom(z); if (point) { const e = deck.space.toWorld(fp.pos.x, deck.space.eye, fp.pos.z, new THREE.Vector3()); fp.place(fp.pos.x, fp.pos.z, Math.atan2(point[0] - e.x, point[2] - e.z), Math.atan2(point[1] - e.y, Math.hypot(point[0] - e.x, point[2] - e.z))); } },
     /** Tests: walk (A*) up to a thing by id and use it, like a click on it. */
     goTo: (id) => fp.walkToThing(id),
     debug: () => ({ mode, pos: { ...fp.pos }, focus: fp.focus?.id ?? null, stage, zoom, locked: fp.locked }),

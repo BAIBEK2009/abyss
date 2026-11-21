@@ -717,16 +717,10 @@ body.fp .fp-hint:not([hidden]) { display: block; position: fixed; left: 50%; top
 /* the binoculars: two overlapping circles, the rest black */
 .bino { position: fixed; inset: 0; z-index: 28; pointer-events: none; }
 .bino[hidden] { display: none; }
-.bino-mask { position: absolute; inset: 0;
-  background: radial-gradient(circle at calc(50% - 21vmin) 50%, transparent 33vmin, rgba(0,0,0,.6) 35vmin, transparent 35.3vmin),
-              radial-gradient(circle at calc(50% + 21vmin) 50%, transparent 33vmin, rgba(0,0,0,.6) 35vmin, transparent 35.3vmin);
-  -webkit-mask: radial-gradient(circle at calc(50% - 21vmin) 50%, #000 34vmin, transparent 34.4vmin), radial-gradient(circle at calc(50% + 21vmin) 50%, #000 34vmin, transparent 34.4vmin);
-  -webkit-mask-composite: source-over; }
-.bino::before { content: ""; position: absolute; inset: 0; background: #000;
-  -webkit-mask: radial-gradient(circle at calc(50% - 21vmin) 50%, transparent 34vmin, #000 34.4vmin), radial-gradient(circle at calc(50% + 21vmin) 50%, transparent 34vmin, #000 34.4vmin);
-  -webkit-mask-composite: source-in; mask-composite: intersect; }
-.bino-ret { position: absolute; left: 50%; top: 50%; width: 40vmin; height: 1px; translate: -50% 0; background: linear-gradient(90deg, transparent, #9fd0b088 20%, #9fd0b088 80%, transparent); }
-.bino-ret::after { content: ""; position: absolute; left: 50%; top: -6vmin; height: 12vmin; width: 1px; background: linear-gradient(transparent, #9fd0b088 25%, #9fd0b088 75%, transparent); }
+.bino-svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.bino-reticle { stroke: rgba(205, 235, 215, 0.62); stroke-width: 1; fill: rgba(205, 235, 215, 0.7); font: 600 10px var(--mono); text-anchor: middle; }
+.bino-reticle text { stroke: none; }
+body.binoculars .fp-mark { display: none !important; }     /* the reticle instead of the waypoint */
 .bino-top, .bino-bottom { position: absolute; left: 50%; translate: -50% 0; color: #e8dcc0; font: 600 15px var(--print); text-shadow: 0 1px 3px #000; white-space: nowrap; }
 .bino-top { top: 5vh; font: 400 22px var(--title); color: #ffe2a0; }
 .bino-bottom { bottom: 5vh; }
@@ -734,5 +728,5 @@ body.fp .fp-hint:not([hidden]) { display: block; position: fixed; left: 50%; top
 .bino-zoom { position: absolute; right: 3vw; bottom: 12vh; display: flex; flex-direction: column; gap: 8px; pointer-events: auto; }
 .bino-zoom button { width: 46px; height: 46px; border-radius: 50%; border: 1px solid #c3944788; background: rgba(14,12,9,.75); color: #f3e6c4; font: 700 22px var(--print); cursor: pointer; }
 body.binoculars .speech.sp-at-deck { bottom: 12vh; }
-body.binoculars .fp-mark:not(.edge) { margin-top: -78px; }       /* above the target, not over it */
 body.binoculars .speech { z-index: 40; }
+body.binoculars .goal, body.binoculars .fp-hint { visibility: hidden; pointer-events: none; }

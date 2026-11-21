@@ -7,13 +7,14 @@
 //   - between them: the companionway down to the cabin;
 //   - a living sea: waves with foam and a moon path, the ship rolls +-3 deg, spray at the bow, lights on the
 //     horizon; to the south the crash site: patrol boats, a helicopter with a searchlight, a kerosene
-//     slick and a seat afloat (seen through the binoculars: show, don't tell).
+//     slick and debris afloat in the light, 1.4 km off (seen through the binoculars: show, don't tell).
 // Units are metres. Ship-local axes: x to starboard, y up, z to the bow; the bow points south (+z of the
 // world), so "look south" means "look over the bow". No bare boxes or cylinders: rounded boxes, lathes and
 // tubes with seams and wear (CLAUDE.md 23, "forbidden from now on").
 import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import { canvasTexture, rng } from "../view.js";
+import { steelPanel } from "./materials.js";
 import { t } from "../i18n.js";
 
 const std = (o) => new THREE.MeshStandardMaterial(o);
@@ -134,7 +135,7 @@ function createSea(moonDir) {
       h += ${A.toFixed(4)} * sin(ph); g += ${(A * k).toFixed(5)} * cos(ph) * d; }`;
   }).join("\n");
   const mat = new THREE.ShaderMaterial({
-    uniforms: { uTime: { value: 0 }, uMoon: { value: moonDir.clone() }, uFogCol: { value: new THREE.Color(0x0b1626) },
+    uniforms: { uTime: { value: 0 }, uMoon: { value: moonDir.clone() }, uFogCol: { value: new THREE.Color(0x0b1626) }, uPools: { value: [0, 1, 2, 3].map(() => new THREE.Vector4()) },
                 uHull: { value: new THREE.Vector4(0, 0, 5.2, 0) }, uHullZ: { value: new THREE.Vector2(STERN, BOW) } },
     vertexShader: /* glsl */`
       uniform float uTime; varying vec3 vW; varying float vH;
@@ -147,7 +148,7 @@ function createSea(moonDir) {
         gl_Position = projectionMatrix * viewMatrix * w;
       }`,
     fragmentShader: /* glsl */`
-      uniform float uTime; uniform vec3 uMoon; uniform vec3 uFogCol; uniform vec4 uHull; uniform vec2 uHullZ;
+      uniform float uTime; uniform vec3 uMoon; uniform vec3 uFogCol; uniform vec4 uHull; uniform vec2 uHullZ; uniform vec4 uPools[4];
       varying vec3 vW; varying float vH;
       void waves(vec2 p, float t, out float h, out vec2 g) { h = 0.0; g = vec2(0.0); ${waveGLSL} }
       float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -180,6 +181,12 @@ function createSea(moonDir) {
         float foamN = vn(vW.xz * 2.3 + uTime * 0.3) * vn(vW.xz * 5.1 - uTime * 0.2);
         float foam = clamp(crest * 0.35 + wake * 0.9 + stern * 0.55, 0.0, 1.0) * smoothstep(0.12, 0.5, foamN);
         col = mix(col, vec3(0.42, 0.47, 0.5), foam * (1.0 - smoothstep(60.0, 300.0, dist)));
+        // searchlight pools: the lit swell and the glitter of the light on it
+        for (int i = 0; i < 4; i++) {
+          vec2 d = vW.xz - uPools[i].xy; float f = uPools[i].w * exp(-dot(d, d) / (uPools[i].z * uPools[i].z));
+          float gl = pow(max(dot(n, normalize(vec3(0.0, 1.0, 0.0) + v)), 0.0), 90.0);
+          col += f * (vec3(0.16, 0.18, 0.2) * (0.6 + 0.4 * crest) + vec3(1.0, 1.0, 0.97) * gl * 3.0);
+        }
         // into the night haze at the horizon
         col = mix(col, uFogCol, smoothstep(300.0, 4500.0, dist));
         gl_FragColor = vec4(col, 1.0);
@@ -277,18 +284,36 @@ function bollard(m) {
   g.add(mesh(rbox(0.7, 0.05, 0.3, 0.02), m));
   return g;
 }
+/** Marine binoculars 7x50, about 18 cm: two barrels with wide objective bells, the hinge bridge with the
+ *  focus wheel, rubber eyecups, the strap. Lies with the eyepieces towards -z. */
 function binocularsModel() {
   const g = new THREE.Group();
-  const rub = std({ color: 0x16181a, roughness: 0.85 }), met = std({ color: 0x2a2d30, metalness: 0.7, roughness: 0.35 });
-  const lens = std({ color: 0x1b3b4a, metalness: 0.9, roughness: 0.05, emissive: 0x0a1a22 });
-  for (const sx of [-0.045, 0.045]) {
-    const b = mesh(lathe([[0, 0], [0.027, 0], [0.03, 0.02], [0.03, 0.09], [0.036, 0.11], [0.036, 0.17], [0.032, 0.18], [0, 0.18]], 20), rub);
-    b.rotation.x = Math.PI / 2; b.position.set(sx, 0, -0.09); g.add(b);
-    const l = mesh(new THREE.CircleGeometry(0.03, 20), lens); l.position.set(sx, 0, 0.091); g.add(l);
+  const armour = std({ color: 0x1d2124, roughness: 0.82 });                     // rubber armour
+  const metal = std({ color: 0x3a3f43, metalness: 0.75, roughness: 0.32 });
+  const lensM = new THREE.MeshPhysicalMaterial({ color: 0x10303f, metalness: 0.2, roughness: 0.04, clearcoat: 1, emissive: 0x06222c, emissiveIntensity: 0.8 });
+  const eyeM = std({ color: 0x0c0d0e, roughness: 0.9 });
+  for (const sx of [-0.042, 0.042]) {
+    // barrel along z: eyepiece (z = -0.09) -> prism housing -> objective bell (z = +0.09)
+    const barrel = mesh(lathe([[0, -0.092], [0.014, -0.092], [0.016, -0.088], [0.017, -0.06], [0.024, -0.05], [0.026, -0.02],
+                               [0.025, 0.03], [0.029, 0.05], [0.032, 0.085], [0.031, 0.092], [0, 0.092]], 28), armour);
+    barrel.rotation.x = Math.PI / 2; barrel.position.x = sx; g.add(barrel);
+    const ring = mesh(new THREE.TorusGeometry(0.03, 0.0025, 8, 28), metal); ring.position.set(sx, 0, 0.091); g.add(ring);
+    const lens = mesh(new THREE.CircleGeometry(0.028, 24), lensM); lens.position.set(sx, 0, 0.0925); g.add(lens);
+    const cup = mesh(lathe([[0.012, 0], [0.019, 0], [0.021, -0.006], [0.021, -0.022], [0.017, -0.026], [0.012, -0.024]], 20), eyeM);
+    cup.rotation.x = Math.PI / 2; cup.position.set(sx, 0, -0.092); g.add(cup);
+    // the prism bulge (the classic Porro shoulder)
+    const prism = mesh(rbox(0.034, 0.03, 0.055, 0.011), armour); prism.position.set(sx * 1.32, 0.006, -0.03); g.add(prism);
+    for (const z of [-0.07, 0.06]) { const lug = mesh(lathe([[0.004, 0], [0.004, 0.008], [0, 0.008]], 8), metal); lug.rotation.z = sx > 0 ? -Math.PI / 2 : Math.PI / 2; lug.position.set(sx * 1.75, 0.005, z); g.add(lug); }
   }
-  g.add(mesh(rbox(0.07, 0.022, 0.06, 0.008), met));
-  const strap = mesh(tube([[-0.07, 0, -0.06], [-0.09, -0.08, -0.02], [0, -0.13, 0], [0.09, -0.08, -0.02], [0.07, 0, -0.06]], 0.006, 30), std({ color: 0x2c2a26 }));
-  g.add(strap);
+  // the hinge bridge between the barrels and the focus wheel on it
+  for (const z of [-0.045, 0.035]) { const br = mesh(rbox(0.06, 0.016, 0.022, 0.006), metal); br.position.set(0, 0.012, z); g.add(br); }
+  const hinge = mesh(lathe([[0.007, -0.06], [0.007, 0.05], [0, 0.05]], 14), metal); hinge.rotation.x = Math.PI / 2; hinge.position.set(0, 0.014, 0); g.add(hinge);
+  const knurl = canvasTexture(64, 16, (c, w, h) => { for (let x = 0; x < w; x += 4) { c.fillStyle = x % 8 ? "#555" : "#222"; c.fillRect(x, 0, 4, h); } });
+  const wheel = mesh(lathe([[0.006, -0.008], [0.011, -0.008], [0.012, -0.006], [0.012, 0.006], [0.011, 0.008], [0.006, 0.008]], 24), std({ map: knurl, metalness: 0.6, roughness: 0.4 }));
+  wheel.rotation.z = Math.PI / 2; wheel.position.set(0, 0.03, -0.055); g.add(wheel);
+  // the neck strap lying in a loose loop on the shelf
+  g.add(mesh(tube([[-0.074, 0.005, -0.07], [-0.11, -0.012, -0.11], [-0.07, -0.018, -0.17], [0.03, -0.018, -0.19], [0.1, -0.016, -0.13], [0.074, 0.005, -0.07]], 0.0035, 48), std({ color: 0x2c2722, roughness: 0.9 })));
+  g.add(mesh(tube([[-0.074, 0.005, 0.06], [-0.1, -0.012, 0.1], [-0.05, -0.018, 0.16]], 0.0035, 16), std({ color: 0x2c2722, roughness: 0.9 })));
   return g;
 }
 
@@ -359,7 +384,7 @@ export function createDeck(view, { lifeLabel = "" } = {}) {
   scene.add(createSky(moonDir));
   const sea = createSea(moonDir);
   scene.add(sea);
-  scene.add(new THREE.HemisphereLight(0x51648c, 0x0b0f14, 0.55));
+  scene.add(new THREE.HemisphereLight(0x3c4656, 0x0c0e10, 0.42));     // cold night fill, no violet cast
   const moonLight = new THREE.DirectionalLight(0x9db4ff, 0.65);
   moonLight.position.copy(moonDir).multiplyScalar(100);
   scene.add(moonLight);
@@ -375,6 +400,8 @@ export function createDeck(view, { lifeLabel = "" } = {}) {
   const darkSteel = std({ color: 0x2b3034, metalness: 0.6, roughness: 0.5 });
   const yellowPaint = paint(0xe2b23a, { seams: 1, streaks: 0.6, seed: 9 });
   const rubber = std({ color: 0x151515, roughness: 0.95 });
+  const houseSteel = steelPanel({ color: "#c8cbca", seed: 19 });     // light-grey painted steel, seams and rivets
+  const steelFor = (w, h) => houseSteel.userData.forSize(w, h);
 
   const shape = new THREE.Shape(HULL.map(([x, z]) => new THREE.Vector2(x, z)));
   const deckGeo = new THREE.ShapeGeometry(shape, 12).rotateX(Math.PI / 2);
@@ -408,7 +435,7 @@ export function createDeck(view, { lifeLabel = "" } = {}) {
   // ---------------- the wheelhouse (the bridge), the bow end of the ship
   const HX = 3.2, HZ0 = 3, HZ1 = 12, HH = 2.9;
   const house = new THREE.Group(); ship.add(house);
-  const wallPiece = (w, h, d, x, y, z) => { const m = mesh(rbox(w, h, d, 0.05), whitePaint); m.position.set(x, y, z); house.add(m); return m; };
+  const wallPiece = (w, h, d, x, y, z) => { const m = mesh(rbox(w, h, d, 0.05), steelFor(Math.max(w, d), h)); m.position.set(x, y, z); house.add(m); return m; };
   const glassMat = new THREE.MeshPhysicalMaterial({ color: 0x9fb8c8, roughness: 0.05, metalness: 0.1, transparent: true, opacity: 0.18, emissive: 0x3a2a10, emissiveIntensity: 0.25 });
   const pane = (w, h, x, y, z, ry) => { const p = new THREE.Mesh(new THREE.PlaneGeometry(w, h), glassMat); p.position.set(x, y, z); p.rotation.y = ry; house.add(p); };
   // a wall along x at z (windows: [[x0, x1], ...]) or along z at x
@@ -428,12 +455,12 @@ export function createDeck(view, { lifeLabel = "" } = {}) {
       house.children.filter((c) => c.position.z === z && c.position.y === sill / 2).forEach((c) => house.remove(c));
       wallPiece(door[0] - x0, sill, T, (x0 + door[0]) / 2, sill / 2, z);
       wallPiece(x1 - door[1], sill, T, (x1 + door[1]) / 2, sill / 2, z);
-      const coaming = mesh(rbox(door[1] - door[0] + 0.1, 0.12, 0.22, 0.04), greyPaint); coaming.position.set((door[0] + door[1]) / 2, 0.06, z); house.add(coaming);
+      const coaming = mesh(rbox(door[1] - door[0] + 0.1, 0.32, 0.24, 0.06), greyPaint); coaming.position.set((door[0] + door[1]) / 2, 0.16, z); house.add(coaming);   // a high door sill: one steps over it
     }
   }
   function wallZ(x, z0, z1, wins) {
     const sill = 1.05, lint = 2.15, T = 0.16;
-    const piece = (len, h, zc, y) => { const m = mesh(rbox(T, h, len, 0.05), whitePaint); m.position.set(x, y, zc); house.add(m); };
+    const piece = (len, h, zc, y) => { const m = mesh(rbox(T, h, len, 0.05), steelFor(len, h)); m.position.set(x, y, zc); house.add(m); };
     piece(z1 - z0, sill, (z0 + z1) / 2, sill / 2);
     piece(z1 - z0, HH - lint, (z0 + z1) / 2, (HH + lint) / 2);
     let cur = z0;
@@ -448,8 +475,8 @@ export function createDeck(view, { lifeLabel = "" } = {}) {
   wallX(HZ0, -HX, HX, [[-2.6, -1.6], [1.6, 2.6]], [-0.6, 0.6]);                               // the back: the door
   wallZ(-HX, HZ0, HZ1, [[4.2, 5.8], [6.4, 8.0], [8.6, 10.6]]);
   wallZ(HX, HZ0, HZ1, [[4.2, 5.8], [6.4, 8.0], [8.6, 10.6]]);
-  const roof = mesh(rbox(2 * HX + 0.6, 0.22, HZ1 - HZ0 + 0.6, 0.08), whitePaint); roof.position.set(0, HH + 0.1, (HZ0 + HZ1) / 2); house.add(roof);
-  const ceiling = mesh(new THREE.PlaneGeometry(2 * HX - 0.2, HZ1 - HZ0 - 0.2).rotateX(Math.PI / 2), std({ color: 0x3c3e40, roughness: 0.9 }), { cast: false }); ceiling.position.set(0, HH - 0.01, (HZ0 + HZ1) / 2); house.add(ceiling);
+  const roof = mesh(rbox(2 * HX + 0.6, 0.22, HZ1 - HZ0 + 0.6, 0.08), steelFor(6.8, 9.6)); roof.position.set(0, HH + 0.1, (HZ0 + HZ1) / 2); house.add(roof);
+  const ceiling = mesh(new THREE.PlaneGeometry(2 * HX - 0.2, HZ1 - HZ0 - 0.2).rotateX(Math.PI / 2), steelFor(6.2, 8.8), { cast: false }); ceiling.position.set(0, HH - 0.01, (HZ0 + HZ1) / 2); house.add(ceiling);
   const visor = mesh(rbox(2 * HX + 0.8, 0.08, 0.7, 0.03), whitePaint); visor.position.set(0, HH - 0.12, HZ1 + 0.38); visor.rotation.x = -0.15; house.add(visor);
   // inside: the console under the front windows (radar, chart plotter, engine gauges), the helm, the chair
   const consoleG = new THREE.Group(); house.add(consoleG);
@@ -497,9 +524,49 @@ export function createDeck(view, { lifeLabel = "" } = {}) {
   radio.position.set(-2.25, 1.22, HZ1 - 0.6); radio.rotation.x = -0.1;
   house.add(radio);
   const radioLight = new THREE.PointLight(0x9fe08a, 0.6, 3, 1.5); radioLight.position.set(-2.25, 1.6, HZ1 - 1.0); house.add(radioLight);
-  // the bridge at night: dim red light (keeps the eyes used to the dark) and the screens' glow
-  const redLight = new THREE.PointLight(0xff4a3a, 1.6, 9, 1.4); redLight.position.set(0, 2.6, (HZ0 + HZ1) / 2); house.add(redLight);
-  const screenLight = new THREE.PointLight(0x7fd8ff, 1.2, 5, 1.5); screenLight.position.set(0, 1.6, HZ1 - 1.2); house.add(screenLight);
+  const screenLight = new THREE.PointLight(0x7fd8ff, 0.8, 5, 1.5); screenLight.position.set(0, 1.6, HZ1 - 1.2); house.add(screenLight);
+  // inside: a corridor from the door to the bridge (cabin doors either side), warm ceiling lamps,
+  // the exit sign over the door, a fire extinguisher on its bracket
+  const CZ = 7.0, CX = 0.8;                       // the corridor runs from the door (z = HZ0) to z = CZ
+  for (const sx of [-1, 1]) {
+    const len = CZ - HZ0 - 0.16;
+    const part = mesh(rbox(0.12, HH - 0.02, len, 0.04), steelFor(len, HH)); part.position.set(sx * CX, HH / 2, HZ0 + 0.08 + len / 2); house.add(part);
+    const jamb = mesh(rbox(0.16, HH, 0.16, 0.04), greyPaint); jamb.position.set(sx * CX, HH / 2, CZ); house.add(jamb);
+    const door = mesh(rbox(0.05, 1.95, 0.8, 0.03), paint(0x8d969b, { seams: 0.6, streaks: 0.3, seed: 70 + sx })); door.position.set(sx * (CX - 0.07), 1.0, HZ0 + 1.9); house.add(door);
+    const handle = mesh(lathe([[0.012, 0], [0.012, 0.1], [0, 0.1]], 8), steel); handle.rotation.z = Math.PI / 2; handle.position.set(sx * (CX - 0.12), 1.0, HZ0 + 1.62); house.add(handle);
+    const frame = mesh(tube([[sx * (CX - 0.05), 0.02, HZ0 + 1.48], [sx * (CX - 0.05), 2.0, HZ0 + 1.48], [sx * (CX - 0.05), 2.0, HZ0 + 2.32], [sx * (CX - 0.05), 0.02, HZ0 + 2.32]], 0.025, 20), greyPaint); house.add(frame);
+    const sill = mesh(rbox(0.1, 0.18, 0.84, 0.03), greyPaint); sill.position.set(sx * (CX - 0.05), 0.09, HZ0 + 1.9); house.add(sill);
+  }
+  const lampsAt = [[0, HZ0 + 1.2], [0, HZ0 + 3.2], [-1.6, HZ1 - 2.2], [1.6, HZ1 - 2.2]];
+  for (const [x, z] of lampsAt) {
+    const base = mesh(lathe([[0, 0], [0.16, 0], [0.17, -0.03], [0.14, -0.08], [0, -0.09]], 20), greyPaint); base.position.set(x, HH - 0.01, z); house.add(base);
+    const glassL = new THREE.Mesh(new THREE.SphereGeometry(0.13, 18, 10, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), emissive(0xffd29a, 3.2)); glassL.position.set(x, HH - 0.05, z); house.add(glassL);
+    const cage = mesh(new THREE.TorusGeometry(0.135, 0.008, 6, 24), greyPaint); cage.rotation.x = Math.PI / 2; cage.position.set(x, HH - 0.1, z); house.add(cage);
+    const pl = new THREE.PointLight(0xffc98c, 2.6, 6, 1.4); pl.position.set(x, HH - 0.25, z); house.add(pl);
+  }
+  {   // the exit sign over the door, inside: a green lit box with the bilingual exit sign of Kazakhstan (i18n sign_exit)
+    const sign = new THREE.Group(); sign.position.set(0, 2.42, HZ0 + 0.12); house.add(sign);
+    sign.add(mesh(rbox(0.48, 0.18, 0.06, 0.02), greyPaint));
+    const face = new THREE.Mesh(new THREE.PlaneGeometry(0.44, 0.15), new THREE.MeshBasicMaterial({ map: canvasTexture(512, 176, (g, w, h) => {
+      g.fillStyle = "#0b8a3e"; g.fillRect(0, 0, w, h);
+      g.fillStyle = "#f4fff6"; g.font = "800 62px Onest, sans-serif"; g.textAlign = "center"; g.textBaseline = "middle";
+      g.fillText(t("sign_exit"), w / 2, h / 2 + 3);
+      g.strokeStyle = "#f4fff6"; g.lineWidth = 6; g.strokeRect(10, 10, w - 20, h - 20);
+    }), color: new THREE.Color(1, 1, 1).multiplyScalar(1.6) }));
+    face.position.z = 0.032; sign.add(face);
+    sign.add(at(glowSprite(0x2aff7a, 0.7, 0.6), 0, 0, 0.06));
+  }
+  {   // a fire extinguisher on the corridor wall
+    const fe = new THREE.Group(); fe.position.set(-CX + 0.16, 0.42, HZ0 + 0.8); house.add(fe);
+    const red = std({ color: 0xc8231b, roughness: 0.35, metalness: 0.2 });
+    fe.add(mesh(lathe([[0, 0], [0.075, 0], [0.085, 0.02], [0.085, 0.5], [0.07, 0.56], [0.03, 0.6], [0, 0.6]], 24), red));
+    fe.add(at(mesh(lathe([[0.025, 0], [0.025, 0.06], [0.012, 0.08], [0, 0.08]], 12), std({ color: 0x1c1c1c, metalness: 0.6, roughness: 0.4 })), 0, 0.6, 0));
+    fe.add(at(mesh(rbox(0.14, 0.03, 0.03, 0.01), std({ color: 0x1c1c1c, metalness: 0.6, roughness: 0.4 })), 0.04, 0.68, 0));
+    fe.add(mesh(tube([[0.02, 0.66, 0.02], [0.1, 0.62, 0.06], [0.11, 0.3, 0.07], [0.08, 0.15, 0.06]], 0.012, 20), rubber));
+    fe.add(at(mesh(new THREE.PlaneGeometry(0.1, 0.16), std({ color: 0xf0ece0, roughness: 0.8 })), 0, 0.3, 0.087));
+    const bracket = mesh(new THREE.TorusGeometry(0.088, 0.008, 6, 24), steel); bracket.rotation.x = Math.PI / 2; bracket.position.y = 0.35; fe.add(bracket);
+    fe.rotation.y = Math.PI / 2;
+  }
   // the mast with the radar antenna turning, the masthead light and the red light on top
   const mast = new THREE.Group(); mast.position.set(0, HH + 0.2, 7);
   mast.add(mesh(lathe([[0.12, 0], [0.11, 3.0], [0.07, 4.4], [0, 4.45]], 16), whitePaint));
@@ -517,7 +584,7 @@ export function createDeck(view, { lifeLabel = "" } = {}) {
   const head = new THREE.Mesh(new THREE.SphereGeometry(0.06, 10, 8), emissive(0xfff2d0, 5)); head.position.y = 2.2; head.position.z = 0.15; mast.add(head);
   mast.add(at(glowSprite(0xfff0c8, 1.1, 1.6), 0, 2.2, 0.15));
   ship.add(mast);
-  // the searchlight on the roof, its beam on the water over the bow (it finds the seat)
+  // the searchlight on the roof
   const search = new THREE.Group(); search.position.set(2.5, HH + 0.35, HZ1 - 0.4);
   search.add(mesh(lathe([[0, -0.2], [0.16, -0.18], [0.2, 0.05], [0.22, 0.25], [0, 0.25]], 20), darkSteel));
   const sglass = new THREE.Mesh(new THREE.CircleGeometry(0.2, 20), emissive(0xfff3d8, 6)); sglass.position.y = 0.26; sglass.rotation.x = -Math.PI / 2; search.add(sglass);
@@ -643,11 +710,18 @@ export function createDeck(view, { lifeLabel = "" } = {}) {
   ship.add(at(new THREE.Mesh(new THREE.SphereGeometry(0.06, 10, 8), emissive(0xfff2d0, 5)), 0, 3.65, 27));
   ship.add(at(glowSprite(0xfff0c8, 1.2, 1.4), 0, 3.65, 27));
   // the binoculars on a bracket outside the bridge's front starboard corner
-  const binoBracket = new THREE.Group(); binoBracket.position.set(HX + 0.32, 1.12, HZ1 + 0.25); ship.add(binoBracket);
-  binoBracket.add(at(mesh(rbox(0.42, 0.04, 0.3, 0.015), darkSteel), 0, 0, 0));
-  binoBracket.add(at(mesh(rbox(0.04, 0.3, 0.3, 0.015), darkSteel), -0.21, -0.14, 0));
-  const binos = binocularsModel(); binos.position.set(0.02, 0.05, 0); binos.rotation.y = 0.4; binoBracket.add(binos);
-  const binoLamp = new THREE.PointLight(0xffd8a0, 0.9, 2.2, 1.6); binoLamp.position.set(HX + 0.2, 1.9, HZ1 + 0.5); ship.add(binoLamp);
+  // the bridge wing: a teak shelf with a lip on the front starboard corner, the binoculars on it, a lamp over it
+  const binoBracket = new THREE.Group(); binoBracket.position.set(HX + 0.3, 1.1, HZ1 - 0.2); ship.add(binoBracket);
+  const teak = std({ color: 0x8a5a32, roughness: 0.55, map: canvasTexture(128, 32, (c, w, h) => { const rr = rng(88); c.fillStyle = "#8a5a32"; c.fillRect(0, 0, w, h); for (let i = 0; i < 40; i++) { c.strokeStyle = `rgba(60,35,15,${0.15 + rr() * 0.25})`; c.beginPath(); const y = rr() * h; c.moveTo(0, y); c.bezierCurveTo(w * 0.3, y + rr() * 4 - 2, w * 0.6, y + rr() * 4 - 2, w, y + rr() * 3 - 1.5); c.stroke(); } }) });
+  binoBracket.add(at(mesh(rbox(0.44, 0.035, 0.34, 0.012), teak), 0, 0, 0));
+  binoBracket.add(at(mesh(rbox(0.44, 0.035, 0.02, 0.008), teak), 0, 0.03, 0.16));
+  binoBracket.add(at(mesh(rbox(0.02, 0.035, 0.34, 0.008), teak), 0.21, 0.03, 0));
+  for (const z of [-0.12, 0.12]) binoBracket.add(mesh(tube([[-0.2, -0.02, z], [-0.05, -0.17, z], [-0.21, -0.3, z]], 0.012, 12), darkSteel));
+  const binos = binocularsModel(); binos.position.set(0.01, 0.034, 0); binos.rotation.y = -0.5; binoBracket.add(binos);
+  const shade = mesh(lathe([[0.02, 0], [0.1, -0.08], [0.11, -0.1], [0, -0.1]], 20), greyPaint); shade.position.set(0, 0.62, 0); binoBracket.add(shade);
+  binoBracket.add(at(new THREE.Mesh(new THREE.SphereGeometry(0.04, 12, 8), emissive(0xffd8a0, 4)), 0, 0.53, 0));
+  binoBracket.add(mesh(tube([[0, 0.62, 0], [-0.08, 0.72, 0], [-0.2, 0.74, 0]], 0.01, 8), greyPaint));
+  const binoLamp = new THREE.SpotLight(0xffd8a0, 2.2, 3, 0.9, 0.6, 1.4); binoLamp.position.set(HX + 0.3, 1.62, HZ1 - 0.2); binoLamp.target.position.set(HX + 0.3, 1.0, HZ1 - 0.2); ship.add(binoLamp, binoLamp.target);
 
   // spray at the bow
   const SPN = 400, spp = new Float32Array(SPN * 3), spv = new Float32Array(SPN * 3), spl = new Float32Array(SPN);
@@ -668,92 +742,148 @@ export function createDeck(view, { lifeLabel = "" } = {}) {
   for (let i = 0; i < 7; i++) rig.add(at(glowSprite(0xffc070, 30, 1.2), (i % 3) * 25 - 25, 20 + Math.floor(i / 3) * 18, 0));
   rig.add(at(glowSprite(0xff7a30, 60, 2), 0, 90, 0));            // the gas flare
 
-  // ---------------- the crash site to the south (world coordinates; the ship stays near the origin)
+  // ---------------- the crash site to the south, 1 km off (world coordinates; the ship stays at the origin)
+  // Seen through the binoculars it fills the frame: the helicopter hovering with its searchlight, the pool of
+  // light crawling over the swell, three patrol boats with their own searchlights, the kerosene slick that
+  // shows its rainbow only where a beam falls on it, debris rocking in the light.
   const south = new THREE.Group(); scene.add(south);
-  function patrolBoat(seed) {
-    const b = new THREE.Group();
-    const h = mesh(lathe([[0, -9], [1.6, -7.5], [2.4, -3], [2.5, 3], [2.0, 8], [0, 10]], 20), paint(0x4a5560, { seed }), { cast: false });
-    h.rotation.x = Math.PI / 2; h.scale.set(1, 1, 0.45); h.position.y = 0.3; b.add(h);
-    b.add(at(mesh(rbox(3, 2.2, 5, 0.3), paint(0xd8d8d0, { seed: seed + 1 }), { cast: false }), 0, 2.1, -1));
-    b.add(at(glowSprite(0xfff4dc, 7, 2.2), 0, 5.5, 0));
-    b.add(at(glowSprite(0xff2a20, 4, 2.2), -2.4, 2, 2));
-    b.add(at(glowSprite(0x20ff60, 4, 2.2), 2.4, 2, 2));
-    const strobe = glowSprite(0x3a6cff, 10, 3); strobe.position.y = 4.4; b.add(strobe);
-    const beam = new THREE.Mesh(new THREE.ConeGeometry(6, 60, 20, 1, true), beamMaterial(0xdfe8ff, 0.07));
-    beam.geometry.translate(0, -30, 0); beam.position.set(0, 3.5, 4); beam.rotation.x = -1.35; b.add(beam);
-    b.userData = { strobe, beam, seed };
-    return b;
-  }
+  const C = new THREE.Vector3(30, 0, 1000);
   function beamMaterial(hex, k) {
     return new THREE.ShaderMaterial({
       transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false,
       uniforms: { uCol: { value: new THREE.Color(hex) }, uK: { value: k } },
       vertexShader: "varying vec2 vUv; varying vec3 vN; varying vec3 vV; void main() { vUv = uv; vN = normalize(normalMatrix * normal); vec4 mv = modelViewMatrix * vec4(position, 1.0); vV = normalize(-mv.xyz); gl_Position = projectionMatrix * mv; }",
-      fragmentShader: "uniform vec3 uCol; uniform float uK; varying vec2 vUv; varying vec3 vN; varying vec3 vV; void main() { float edge = pow(abs(dot(vN, vV)), 1.5); float along = pow(vUv.y, 1.6); gl_FragColor = vec4(uCol * uK * edge * along * 4.0, 1.0); }",
+      // brighter in the core, soft at the rim, fading near the lamp and growing towards the water
+      fragmentShader: "uniform vec3 uCol; uniform float uK; varying vec2 vUv; varying vec3 vN; varying vec3 vV; void main() { float core = pow(abs(dot(vN, vV)), 2.2); float along = smoothstep(0.0, 0.25, 1.0 - vUv.y) * (0.45 + 0.55 * (1.0 - vUv.y)); gl_FragColor = vec4(uCol * uK * core * along, 1.0); }",
     });
   }
-  const boats = [[-320, 1520, 0.4, 51], [260, 1880, -0.8, 53], [640, 1300, 2.0, 55]].map(([x, z, ry, seed]) => {
-    const b = patrolBoat(seed); b.position.set(x, 0, z); b.rotation.y = ry; south.add(b); return b;
+  function aimCone(cone, from, to, radius) {
+    const d = to.clone().sub(from), len = d.length();
+    cone.position.copy(from); cone.scale.set(radius, len, radius);
+    cone.quaternion.setFromUnitVectors(new THREE.Vector3(0, -1, 0), d.normalize());
+  }
+  const coneGeo = new THREE.ConeGeometry(1, 1, 48, 1, true).translate(0, -0.5, 0);    // apex at the lamp (y = 0), base at y = -1
+  // the pools of light on the water (the sea shader brightens the waves and makes them glitter in them)
+  const pools = [new THREE.Vector4(), new THREE.Vector4(), new THREE.Vector4(), new THREE.Vector4()];
+  sea.material.uniforms.uPools = { value: pools };
+
+  function patrolBoat(seed) {
+    const b = new THREE.Group();
+    const hullP = paint(0x56616c, { seed }), cabP = paint(0xdcdcd4, { seed: seed + 1 });
+    const h = mesh(lathe([[0, -9], [1.6, -7.5], [2.4, -3], [2.5, 3], [2.0, 8], [0, 10]], 24), hullP, { cast: false });
+    h.rotation.x = Math.PI / 2; h.scale.set(1, 1, 0.45); h.position.y = 0.3; b.add(h);
+    b.add(at(mesh(rbox(3.2, 2.2, 5.2, 0.35), cabP, { cast: false }), 0, 2.1, -1.2));
+    b.add(at(mesh(rbox(2.6, 0.9, 2.2, 0.25), cabP, { cast: false }), 0, 3.6, -0.4));
+    b.add(at(mesh(lathe([[0.1, 0], [0.08, 3.4], [0, 3.42]], 10), cabP, { cast: false }), 0, 4.0, -0.4));
+    b.add(at(glowSprite(0xfff4dc, 1.6, 3.0), 0, 7.4, -0.4));                 // masthead, white
+    b.add(at(glowSprite(0xff2a20, 1.1, 3.0), -1.7, 3.3, 0.3));               // port, red
+    b.add(at(glowSprite(0x20ff60, 1.1, 3.0), 1.7, 3.3, 0.3));                // starboard, green
+    const strobe = glowSprite(0x3a6cff, 2.6, 3.6); strobe.position.set(0, 4.7, -0.4); b.add(strobe);
+    const lamp = new THREE.Object3D(); lamp.position.set(0, 4.3, 0.8); b.add(lamp);
+    b.add(at(glowSprite(0xfff6e6, 1.2, 3.0), 0, 4.3, 0.9));
+    b.userData = { strobe, lamp, seed };
+    return b;
+  }
+  const boats = [[-62, 12, 1.2, 51], [58, -20, -1.9, 53], [22, 75, 2.6, 55]].map(([dx, dz, ry, seed]) => {
+    const b = patrolBoat(seed); b.position.set(C.x + dx, 0, C.z + dz); b.rotation.y = ry; south.add(b);
+    const beam = new THREE.Mesh(coneGeo, beamMaterial(0xe8eeff, 0.075)); south.add(beam);
+    b.userData.beam = beam;
+    return b;
   });
-  // the helicopter circles low with its searchlight on the water
+  // the helicopter: a silhouette with blinking red and white lights, rotor discs, skids
   const heli = new THREE.Group(); south.add(heli);
-  const hbody = mesh(lathe([[0, -3.2], [0.9, -2.6], [1.3, -1], [1.3, 1.2], [0.7, 2.6], [0.25, 6], [0, 6.2]], 18), paint(0x2c3a46, { seed: 61 }), { cast: false });
-  hbody.rotation.x = -Math.PI / 2; heli.add(hbody);
-  const rotor = new THREE.Mesh(new THREE.CircleGeometry(6.5, 32), new THREE.MeshBasicMaterial({ color: 0x0a0d10, transparent: true, opacity: 0.35, side: THREE.DoubleSide }));
-  rotor.rotation.x = -Math.PI / 2; rotor.position.y = 1.6; heli.add(rotor);
-  const heliRed = glowSprite(0xff2a1a, 5, 3); heliRed.position.y = 1.4; heli.add(heliRed);
-  const heliWhite = glowSprite(0xfff4e0, 4, 2.4); heliWhite.position.set(0, -1.2, -3); heli.add(heliWhite);
-  const heliBeam = new THREE.Mesh(new THREE.ConeGeometry(14, 1, 24, 1, true), beamMaterial(0xf4f6ff, 0.11));
-  heliBeam.geometry.translate(0, -0.5, 0); south.add(heliBeam);
-  const poolMat = new THREE.MeshBasicMaterial({ map: SOFT, color: new THREE.Color(0xdfe8ff).multiplyScalar(0.9), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false });
-  const pool = new THREE.Mesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), poolMat); south.add(pool);
-  // the kerosene slick: a thin film with rainbow colours where the moonlight falls on it
-  const slick = new THREE.Mesh(new THREE.PlaneGeometry(260, 180, 1, 1).rotateX(-Math.PI / 2), new THREE.ShaderMaterial({
+  const heliPaint = paint(0x2f3c48, { seed: 61 });
+  heli.add(mesh(lathe([[0, -2.4], [0.9, -2.1], [1.25, -1.0], [1.3, 0.6], [1.0, 1.6], [0.45, 2.3], [0, 2.4]], 22), heliPaint, { cast: false }).rotateX(-Math.PI / 2));
+  heli.add(at(mesh(lathe([[0.28, 0], [0.2, 3.0], [0.12, 5.2], [0, 5.3]], 14), heliPaint, { cast: false }).rotateX(-Math.PI / 2), 0, 0.3, 2.0));
+  heli.add(at(mesh(rbox(0.12, 1.6, 1.0, 0.05), heliPaint, { cast: false }), 0, 1.0, 7.0));
+  const tailRotor = new THREE.Mesh(new THREE.CircleGeometry(0.9, 20), new THREE.MeshBasicMaterial({ color: 0x0a0d10, transparent: true, opacity: 0.4, side: THREE.DoubleSide }));
+  tailRotor.rotation.y = Math.PI / 2; tailRotor.position.set(0.15, 1.0, 7.2); heli.add(tailRotor);
+  heli.add(at(new THREE.Mesh(new THREE.SphereGeometry(1.0, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x9fc0d8, transparent: true, opacity: 0.35 })).rotateX(-Math.PI / 2), 0, 0.1, -1.6));
+  for (const sx of [-0.9, 0.9]) heli.add(mesh(tube([[sx, -1.6, -2.0], [sx, -1.65, 0], [sx, -1.6, 1.8], [sx, -1.3, 2.2]], 0.07, 12), darkSteel));
+  const rotor = new THREE.Group(); rotor.position.y = 1.5; heli.add(rotor);
+  rotor.add(new THREE.Mesh(new THREE.CircleGeometry(5.6, 40).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x0a0d10, transparent: true, opacity: 0.22, side: THREE.DoubleSide })));
+  for (let k = 0; k < 4; k++) { const bl = mesh(rbox(5.4, 0.04, 0.32, 0.02), darkSteel, { cast: false }); bl.position.x = 2.8; const arm = new THREE.Group(); arm.rotation.y = (k * Math.PI) / 2; arm.add(bl); rotor.add(arm); }
+  const heliRed = glowSprite(0xff2a1a, 1.4, 3.4); heliRed.position.y = 1.85; heli.add(heliRed);
+  const heliRed2 = glowSprite(0xff2a1a, 1.0, 3.4); heliRed2.position.set(0, -1.4, 0); heli.add(heliRed2);
+  const heliWhite = glowSprite(0xffffff, 1.6, 3.6); heliWhite.position.set(0, 1.9, 7.2); heli.add(heliWhite);
+  const heliLamp = new THREE.Object3D(); heliLamp.position.set(0, -1.5, -1.6); heli.add(heliLamp);
+  heli.add(at(glowSprite(0xfffaf0, 1.4, 3.5), 0, -1.6, -1.7));
+  const heliBeam = new THREE.Mesh(coneGeo, beamMaterial(0xf4f6ff, 0.34)); south.add(heliBeam);
+  const heliSpot = new THREE.SpotLight(0xfaf8ff, 70, 0, 0.42, 0.5, 0); scene.add(heliSpot, heliSpot.target);
+  const poolSprite = new THREE.Mesh(new THREE.CircleGeometry(1, 48).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: SOFT, color: new THREE.Color(0xeef2ff).multiplyScalar(0.5), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }));
+  south.add(poolSprite);
+  // the kerosene slick: an irregular film next to the boats; a rainbow only where a beam falls on it
+  const slick = new THREE.Mesh(new THREE.PlaneGeometry(190, 130, 1, 1).rotateX(-Math.PI / 2), new THREE.ShaderMaterial({
     transparent: true, depthWrite: false, fog: false,
-    uniforms: { uTime: { value: 0 }, uMoon: { value: moonDir } },
+    uniforms: { uTime: { value: 0 }, uPools: { value: pools } },
     vertexShader: "varying vec2 vUv; varying vec3 vW; void main() { vUv = uv; vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }",
     fragmentShader: /* glsl */`
-      uniform float uTime; uniform vec3 uMoon; varying vec2 vUv; varying vec3 vW;
+      uniform float uTime; uniform vec4 uPools[4]; varying vec2 vUv; varying vec3 vW;
       float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
       float vn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
         return mix(mix(hash(i), hash(i + vec2(1, 0)), f.x), mix(hash(i + vec2(0, 1)), hash(i + vec2(1, 1)), f.x), f.y); }
       void main() {
         vec2 p = vUv * 2.0 - 1.0;
-        float n = vn(vUv * 5.0 + uTime * 0.01) * 0.6 + vn(vUv * 13.0) * 0.4;
-        float blob = 1.0 - smoothstep(0.55, 0.95, length(p * vec2(1.0, 1.25)) + (n - 0.5) * 0.6);
-        float film = vn(vUv * 9.0 + vec2(uTime * 0.02, 0.0)) * 6.0 + length(p) * 4.0;
+        float n = vn(vUv * 4.0 + 3.1) * 0.55 + vn(vUv * 11.0) * 0.3 + vn(vUv * 27.0) * 0.15;
+        float blob = 1.0 - smoothstep(0.35, 0.8, length(p * vec2(1.0, 1.2)) + (n - 0.5) * 0.75);
+        float lit = 0.0;
+        for (int i = 0; i < 4; i++) { vec2 d = vW.xz - uPools[i].xy; lit += uPools[i].w * exp(-dot(d, d) / (uPools[i].z * uPools[i].z)); }
+        float film = vn(vUv * 7.0 + vec2(uTime * 0.015, 0.0)) * 5.0 + n * 3.0;
         vec3 rainbow = 0.5 + 0.5 * cos(6.2831 * (film + vec3(0.0, 0.33, 0.67)));
-        vec3 v = normalize(cameraPosition - vW);
-        vec3 r = reflect(-v, vec3(0.0, 1.0, 0.0));
-        float lit = 0.25 + 1.8 * pow(max(dot(r, uMoon), 0.0), 6.0);
-        gl_FragColor = vec4(rainbow * lit * 0.55 + vec3(0.04, 0.05, 0.06), blob * 0.85);
+        vec3 col = vec3(0.012, 0.016, 0.02) + rainbow * min(lit, 1.3) * 0.9;          // dark, flat water outside the light
+        gl_FragColor = vec4(col, blob * (0.55 + 0.35 * min(lit, 1.0)));
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
       }`,
   }));
-  slick.position.set(-60, 0.05, 560); south.add(slick);
-  // a row of passenger seats afloat, close enough to make out with the binoculars, in our searchlight's pool
-  const seat = new THREE.Group(); south.add(seat);
-  const blue = std({ color: 0x4a7fc8, roughness: 0.7 }), cover = std({ color: 0xf2efe6, roughness: 0.8 });
-  const frameM = std({ color: 0xb8c0c6, metalness: 0.8, roughness: 0.35 });
-  for (const sx of [-0.56, 0, 0.56]) {
-    seat.add(at(mesh(rbox(0.5, 0.14, 0.52, 0.06), blue), sx, 0, 0));
-    const back = mesh(rbox(0.5, 0.72, 0.13, 0.06), blue); back.position.set(sx, 0.28, -0.3); back.rotation.x = -1.15; seat.add(back);
-    const head = mesh(rbox(0.42, 0.04, 0.2, 0.015), cover); head.position.set(sx, 0.5, -0.62); head.rotation.x = -1.15; seat.add(head);
+  slick.position.set(C.x - 8, 0.06, C.z + 10); slick.scale.setScalar(0.6); south.add(slick);
+  // debris rocking in the light: a row of seats, an orange life jacket, a suitcase, a piece of fuselage skin
+  const debris = [];
+  // a little larger than life (x1.5): at 1 km a metre is a dozen pixels even at 16x
+  const addDebris = (g, dx, dz, tilt) => { g.scale.setScalar(1.5); g.userData.base = new THREE.Vector3(C.x + dx, 0, C.z + dz); g.userData.tilt = tilt; south.add(g); debris.push(g); return g; };
+  {
+    const seatRow = new THREE.Group();
+    const blue = std({ color: 0x4a7fc8, roughness: 0.7 }), cover = std({ color: 0xf2efe6, roughness: 0.8 }), frameM = std({ color: 0xb8c0c6, metalness: 0.8, roughness: 0.35 });
+    for (const sx of [-0.56, 0, 0.56]) {
+      seatRow.add(at(mesh(rbox(0.5, 0.14, 0.52, 0.06), blue, { cast: false }), sx, 0, 0));
+      const back = mesh(rbox(0.5, 0.72, 0.13, 0.06), blue, { cast: false }); back.position.set(sx, 0.28, -0.3); back.rotation.x = -1.15; seatRow.add(back);
+      const head = mesh(rbox(0.42, 0.04, 0.2, 0.015), cover, { cast: false }); head.position.set(sx, 0.5, -0.62); head.rotation.x = -1.15; seatRow.add(head);
+    }
+    for (const sx of [-0.83, -0.28, 0.28, 0.83]) seatRow.add(at(mesh(rbox(0.05, 0.08, 0.5, 0.02), frameM, { cast: false }), sx, 0.1, 0));
+    addDebris(seatRow, -4, 2, 0.12);
+    const vest = new THREE.Group();
+    const orange = std({ color: 0xff6a12, roughness: 0.55, emissive: 0x2a0c00 });
+    for (const sx of [-0.2, 0.2]) vest.add(at(mesh(rbox(0.34, 0.12, 0.55, 0.06), orange, { cast: false }), sx, 0, 0));
+    vest.add(at(mesh(rbox(0.36, 0.1, 0.18, 0.05), orange, { cast: false }), 0, 0.02, -0.3));
+    for (const z of [-0.1, 0.12]) vest.add(at(mesh(rbox(0.74, 0.125, 0.04, 0.01), std({ color: 0xdfe6ea, metalness: 0.6, roughness: 0.2 }), { cast: false }), 0, 0.005, z));
+    addDebris(vest, 5, -3, 0.25);
+    const suitcase = new THREE.Group();
+    suitcase.add(mesh(rbox(0.7, 0.26, 0.48, 0.06), std({ color: 0x8a2433, roughness: 0.5 }), { cast: false }));
+    suitcase.add(mesh(tube([[-0.12, 0.13, -0.24], [-0.1, 0.13, -0.3], [0.1, 0.13, -0.3], [0.12, 0.13, -0.24]], 0.015, 10), std({ color: 0x222222 }), { cast: false }));
+    addDebris(suitcase, 2, 5, 0.18);
+    const skin = canvasTexture(256, 128, (g, w, h) => {
+      g.fillStyle = "#e8ebec"; g.fillRect(0, 0, w, h);
+      g.fillStyle = "#1f7a86"; g.fillRect(0, h * 0.55, w, h * 0.16);            // a fictional livery stripe
+      g.fillStyle = "rgba(60,60,60,.6)"; for (let x = 8; x < w; x += 14) for (const y of [8, h - 10]) { g.beginPath(); g.arc(x, y, 2.2, 0, 7); g.fill(); }
+      g.strokeStyle = "rgba(40,40,40,.4)"; g.lineWidth = 2; g.strokeRect(0, 0, w, h);
+    });
+    const jag = new THREE.Shape(); const rj = rng(91);
+    const pts = []; for (let k = 0; k < 18; k++) { const a = (k / 18) * Math.PI * 2; const rr = 1 + (rj() - 0.5) * 0.5; pts.push([Math.cos(a) * 1.6 * rr, Math.sin(a) * 0.9 * rr]); }
+    jag.moveTo(...pts[0]); pts.slice(1).forEach((q) => jag.lineTo(...q)); jag.closePath();
+    const skinGeo = new THREE.ExtrudeGeometry(jag, { depth: 0.04, bevelEnabled: true, bevelThickness: 0.01, bevelSize: 0.01, bevelSegments: 1 }).rotateX(-Math.PI / 2);
+    const uv = skinGeo.attributes.uv, pp = skinGeo.attributes.position; for (let k = 0; k < uv.count; k++) uv.setXY(k, (pp.getX(k) + 1.8) / 3.6, (pp.getZ(k) + 1.1) / 2.2);
+    const panel = mesh(skinGeo, std({ map: skin, metalness: 0.55, roughness: 0.35, side: THREE.DoubleSide }), { cast: false });
+    const pg = new THREE.Group(); pg.add(panel); addDebris(pg, -7, -3, 0.08);
   }
-  for (const sx of [-0.83, -0.28, 0.28, 0.83]) seat.add(at(mesh(rbox(0.05, 0.08, 0.5, 0.02), frameM), sx, 0.1, 0));
-  seat.add(at(mesh(rbox(1.7, 0.06, 0.08, 0.02), frameM), 0, -0.06, 0.15));
-  const SEAT_AT = new THREE.Vector3(18, 0, 150);
-  seat.position.copy(SEAT_AT);
-  const seatLight = new THREE.SpotLight(0xfff4e0, 9000, 400, 0.035, 0.5, 1.2); scene.add(seatLight, seatLight.target);
-  const ourPool = new THREE.Mesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), poolMat.clone()); ourPool.material.color.setRGB(0.55, 0.52, 0.46); scene.add(ourPool);
 
   // ---------------- colliders, walk area, interactables (ship-local, metres)
   const colliders = [
     [-HX - 0.1, HZ0 - 0.12, -0.62, HZ0 + 0.12], [0.62, HZ0 - 0.12, HX + 0.1, HZ0 + 0.12],      // the back wall either side of the door
     [-HX - 0.12, HZ0, -HX + 0.12, HZ1], [HX - 0.12, HZ0, HX + 0.12, HZ1],                      // side walls
     [-HX, HZ1 - 0.15, HX, HZ1 + 0.15], [-3.05, HZ1 - 1.0, 3.05, HZ1],                          // front wall, console
+    [3.28, HZ1 - 0.37, 3.72, HZ1 - 0.03],                                                       // the binoculars shelf
     [0.65, HZ1 - 2.3, 1.15, HZ1 - 1.75],                                                        // the chair
+    [-0.92, HZ0, -0.68, 7.08], [0.68, HZ0, 0.92, 7.08],                                         // the corridor walls
     [-2.85, 0.25, -1.55, 2.05],                                                                 // the companionway
     [-0.45, -11.65, 1.65, -8.75],                                                               // Nerpa on her cradle
     [2.55, -5.0, 4.4, -3.8],                                                                    // the winch
@@ -767,7 +897,7 @@ export function createDeck(view, { lifeLabel = "" } = {}) {
   function proxy(w, h, d, x, y, z) { const p = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), proxyMat); p.position.set(x, y, z); ship.add(p); return p; }
   const objects = {
     radio: { show: [radio], hit: proxy(0.8, 0.6, 0.6, -2.25, 1.25, HZ1 - 0.75), stand: [-2.1, HZ1 - 1.55], look: [-2.25, 1.2, HZ1 - 0.6] },
-    binoculars: { show: [binoBracket], hit: proxy(0.6, 0.5, 0.6, HX + 0.32, 1.15, HZ1 + 0.25), stand: [HX + 0.55, HZ1 + 1.3], look: [HX + 0.32, 1.15, HZ1 + 0.25] },
+    binoculars: { show: [binos], hit: proxy(0.5, 0.4, 0.5, HX + 0.3, 1.15, HZ1 - 0.2), stand: [HX + 0.8, HZ1 + 0.5], look: [HX + 0.3, 1.13, HZ1 - 0.2] },
     stairs: { show: [comp], hit: proxy(1.4, 1.4, 1.9, -2.2, 0.7, 1.3), stand: [-2.2, -0.35], look: [-2.2, 0.6, 0.45] },
     nerpa: { show: [nerpa, cradle], hit: proxy(2.6, 3.2, 4.2, 0.6, 1.6, -10.2), stand: [0.6, -7.4], look: [0.6, 1.8, -10.2] },
     workshop: { show: [cont], hit: proxy(2.6, 2.7, 6.2, -3.08, 1.3, -6.0), stand: [-1.2, -9.6], look: [-3.08, 1.3, -9.0] },
@@ -811,34 +941,36 @@ export function createDeck(view, { lifeLabel = "" } = {}) {
       if (spl[i] < 0) spp[i * 3 + 1] = -100;
     }
     spg.attributes.position.needsUpdate = true;
-    // the crash site
-    for (const b of boats) {
-      const s = b.userData.seed;
+    // the crash site: the helicopter hovers and its pool of light crawls over the swell
+    const poolAt = tmp.set(C.x + Math.sin(time * 0.06) * 7, 0, C.z + Math.cos(time * 0.045) * 5);
+    heli.position.set(C.x - 4 + Math.sin(time * 0.11) * 5, 30 + Math.sin(time * 0.4) * 1.0, C.z - 16 + Math.cos(time * 0.09) * 4);
+    heli.lookAt(poolAt.x, heli.position.y, poolAt.z); heli.rotateY(Math.PI);
+    heli.rotation.x += 0.06;
+    rotor.rotation.y = time * 28; tailRotor.rotation.x = time * 40;
+    heliRed.material.opacity = Math.sin(time * 4.2) > 0.4 ? 1 : 0.06;
+    heliRed2.material.opacity = Math.sin(time * 4.2 + 1.5) > 0.4 ? 1 : 0.06;
+    heliWhite.material.opacity = (time * 1.1) % 1 < 0.07 ? 1 : 0;
+    const lampW = heliLamp.getWorldPosition(new THREE.Vector3());
+    const water = poolAt.clone(); water.y = seaHeight(water.x, water.z, time);
+    aimCone(heliBeam, lampW, water, 6.5);
+    heliSpot.position.copy(lampW); heliSpot.target.position.copy(water);
+    poolSprite.position.set(water.x, water.y + 0.3, water.z); poolSprite.scale.setScalar(9 + Math.sin(time * 1.3) * 0.4);
+    pools[0].set(water.x, water.z, 7, 1.0);
+    boats.forEach((b, k) => {
+      const sd = b.userData.seed;
       b.position.y = seaHeight(b.position.x, b.position.z, time) * 0.6;
-      b.rotation.z = Math.sin(time * 0.7 + s) * 0.05;
-      b.userData.strobe.material.opacity = (Math.sin(time * 7 + s) > 0.6) ? 1 : 0;
-      b.userData.beam.rotation.z = Math.sin(time * 0.3 + s) * 0.6;
+      b.rotation.z = Math.sin(time * 0.7 + sd) * 0.05;
+      b.userData.strobe.material.opacity = (time * 1.3 + k * 0.37) % 1 < 0.12 ? 1 : 0;
+      const target = new THREE.Vector3(C.x + Math.sin(time * 0.2 + sd) * 10, 0, C.z + Math.cos(time * 0.17 + sd) * 8);
+      target.y = seaHeight(target.x, target.z, time);
+      aimCone(b.userData.beam, b.userData.lamp.getWorldPosition(new THREE.Vector3()), target, 3.2);
+      pools[k + 1].set(target.x, target.z, 4.5, 0.55);
+    });
+    for (const g of debris) {
+      const bp = g.userData.base, tl = g.userData.tilt;
+      g.position.set(bp.x, seaHeight(bp.x, bp.z, time) + 0.06, bp.z);
+      g.rotation.set(Math.sin(time * 0.8 + bp.x) * tl, bp.z * 0.3 + Math.sin(time * 0.1 + bp.x) * 0.3, Math.cos(time * 0.7 + bp.z) * tl);
     }
-    const ha = time * 0.09;
-    heli.position.set(80 + Math.cos(ha) * 170, 95 + Math.sin(time * 0.4) * 4, 1050 + Math.sin(ha) * 120);
-    heli.rotation.y = -ha;
-    heli.rotation.z = 0.12;
-    rotor.rotation.z = time * 30;
-    heliRed.material.opacity = Math.sin(time * 4) > 0.3 ? 1 : 0.1;
-    const spot = tmp.set(heli.position.x + Math.cos(time * 0.23) * 35, 0.2, heli.position.z + 40 + Math.sin(time * 0.31) * 30);
-    const hb = heliBeam;
-    hb.position.copy(heli.position).add(new THREE.Vector3(0, -1.5, 0));
-    const dir = spot.clone().sub(hb.position); const len = dir.length();
-    hb.scale.set(1, len, 1);
-    hb.quaternion.setFromUnitVectors(new THREE.Vector3(0, -1, 0), dir.normalize());
-    pool.position.copy(spot); pool.scale.setScalar(36);
-    // the floating seat and our searchlight on it
-    seat.position.y = seaHeight(SEAT_AT.x, SEAT_AT.z, time) + 0.05;
-    seat.rotation.set(Math.sin(time * 0.8) * 0.15, 0.6 + Math.sin(time * 0.13) * 0.2, Math.cos(time * 0.7) * 0.12);
-    const from = search.getWorldPosition(new THREE.Vector3()).add(new THREE.Vector3(0, 0.3, 0));
-    const aim = SEAT_AT.clone().add(new THREE.Vector3(Math.sin(time * 0.21) * 1.2, 0, Math.cos(time * 0.17) * 1.2));
-    ourPool.position.set(aim.x, 0.15 + seaHeight(aim.x, aim.z, time), aim.z); ourPool.scale.setScalar(9);
-    seatLight.position.copy(from); seatLight.target.position.copy(aim);
     sea.material.uniforms.uHull.value.set(0, 0, 5.2, 0);
   }
   update(0, 0);
@@ -857,11 +989,11 @@ export function createDeck(view, { lifeLabel = "" } = {}) {
       },
       toLocal(world, out) { return out.copy(world).applyMatrix4(tmpInv.copy(ship.matrixWorld).invert()); },
     },
-    /** World points the binoculars can find: the helicopter and the boats, the slick and the seat. */
+    /** World points the binoculars can find: the helicopter and the boats, the slick and the debris. */
     targets: {
       rescue: () => [heli.position, ...boats.map((b) => b.position)],
-      wreck: () => [SEAT_AT, slick.position],
-      seat: SEAT_AT, heli: heli.position, slick: slick.position,
+      wreck: () => [debris[0].position, debris[1].position, slick.position],
+      seat: debris[0].position, heli: heli.position, slick: slick.position,
     },
     set radioCalling(on) { radioCall = on; },
     spawn: { x: 0.2, z: -6.6, yaw: 0 },

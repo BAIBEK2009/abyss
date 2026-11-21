@@ -155,3 +155,46 @@ export function contactShadow(w, d, opacity = 0.7) {
   m.renderOrder = 2;
   return m;
 }
+
+/**
+ * Light-grey painted steel of a ship's interior and deckhouse (CLAUDE.md 23.2 fix): welded panel seams and
+ * rows of rivets in a normal map, grime along the seams, scuffs low on the wall, a paint roughness map.
+ * One texture tile = one panel (panelW x panelH metres); `size` = [width, height] of the wall in metres.
+ */
+export function steelPanel({ color = "#c4c7c6", seed = 17 } = {}) {
+  const S = 512, r = rng(seed);
+  const hc = canvas(S, S), hg = hc.getContext("2d");
+  hg.fillStyle = "#808080"; hg.fillRect(0, 0, S, S);
+  for (let i = 0; i < 3000; i++) { hg.fillStyle = `rgba(${r() < 0.5 ? 0 : 255},${r() < 0.5 ? 0 : 255},${r() < 0.5 ? 0 : 255},0.03)`; hg.fillRect(r() * S, r() * S, 2, 2); }
+  // seams at the tile edges (a groove), a stiffener line across the middle
+  hg.fillStyle = "#3a3a3a"; hg.fillRect(0, 0, S, 7); hg.fillRect(0, 0, 7, S);
+  hg.fillStyle = "#9a9a9a"; hg.fillRect(0, S / 2 - 2, S, 4);
+  const rivet = (x, y) => { const gr = hg.createRadialGradient(x, y, 0, x, y, 4.5); gr.addColorStop(0, "#e8e8e8"); gr.addColorStop(0.7, "#a8a8a8"); gr.addColorStop(1, "rgba(128,128,128,0)"); hg.fillStyle = gr; hg.fillRect(x - 5, y - 5, 10, 10); };
+  for (let k = 24; k < S; k += 56) { rivet(k, 16); rivet(16, k); }
+  const normal = tex(normalFromHeight(hc, 3.2), false, [1, 1]);
+  const ac = canvas(S, S), ag = ac.getContext("2d");
+  ag.fillStyle = color; ag.fillRect(0, 0, S, S);
+  for (let i = 0; i < 6000; i++) { ag.fillStyle = `rgba(0,0,0,${r() * 0.035})`; ag.fillRect(r() * S, r() * S, 2, 2); }
+  for (let i = 0; i < 2500; i++) { ag.fillStyle = `rgba(255,255,255,${r() * 0.04})`; ag.fillRect(r() * S, r() * S, 2, 2); }
+  const seamGrime = (x, y, w, h) => { const gr = ag.createLinearGradient(x, y, x + w, y + h); gr.addColorStop(0, "rgba(60,55,50,.28)"); gr.addColorStop(1, "rgba(60,55,50,0)"); ag.fillStyle = gr; ag.fillRect(x, y, w, h); };
+  seamGrime(0, 0, S, 22); seamGrime(0, 0, 22, S);
+  for (let i = 0; i < 14; i++) {      // rust tears under rivets, scuffs at boot height
+    const x = r() * S, y = 20 + r() * 40, len = 30 + r() * 90;
+    const gr = ag.createLinearGradient(x, y, x, y + len); gr.addColorStop(0, "rgba(130,80,40,.22)"); gr.addColorStop(1, "rgba(130,80,40,0)");
+    ag.fillStyle = gr; ag.fillRect(x, y, 2 + r() * 2, len);
+  }
+  for (let i = 0; i < 30; i++) { ag.strokeStyle = `rgba(70,70,70,${0.05 + r() * 0.1})`; ag.lineWidth = 1 + r() * 2; ag.beginPath(); const x = r() * S, y = S * (0.82 + r() * 0.16); ag.moveTo(x, y); ag.lineTo(x + (r() - 0.5) * 90, y + (r() - 0.5) * 10); ag.stroke(); }
+  const map = tex(ac, true, [1, 1]);
+  const rc = canvas(128, 128), rg = rc.getContext("2d");
+  rg.fillStyle = "#8c8c8c"; rg.fillRect(0, 0, 128, 128);
+  for (let i = 0; i < 1500; i++) { rg.fillStyle = `rgba(255,255,255,${r() * 0.12})`; rg.fillRect(r() * 128, r() * 128, 1, 1); }
+  const rough = tex(rc, false, [1, 1]);
+  const mat = new THREE.MeshStandardMaterial({ map, normalMap: normal, roughnessMap: rough, roughness: 0.7, metalness: 0.35, normalScale: new THREE.Vector2(0.55, 0.55) });
+  /** A copy of the material whose maps repeat once per panel over a wall of w x h metres. */
+  mat.userData.forSize = (w, h, panelW = 1.2, panelH = 1.0) => {
+    const m = mat.clone();
+    for (const k of ["map", "normalMap", "roughnessMap"]) { m[k] = mat[k].clone(); m[k].repeat.set(Math.max(1, w / panelW), Math.max(1, h / panelH)); m[k].needsUpdate = true; }
+    return m;
+  };
+  return mat;
+}
