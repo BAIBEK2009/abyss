@@ -22,7 +22,10 @@ export function createChapter(root = document.body) {
     back.classList.add("in");
     let skip;
     const skipped = new Promise((r) => { skip = r; back.onclick = r; });
+    const onKey = (e) => { if (["KeyE", "Enter", "Space"].includes(e.code) && !e.repeat) { e.preventDefault(); e.stopPropagation(); skip(); } };
+    addEventListener("keydown", onKey, true);
     await Promise.race([sleep((hud("chapter_card_seconds") ?? 3.5) * 1000), skipped]);
+    removeEventListener("keydown", onKey, true);
     back.onclick = null; skip();
     back.classList.remove("in");
     back.classList.add("out");

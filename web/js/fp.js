@@ -191,7 +191,7 @@ export function createFirstPerson(view, { onStep, onLockLost, isBlocked, onLocke
     if (!path && thing) { pathThing = null; }
   }
   function use() {
-    if (!active || isBlocked?.()) return false;
+    if (!active || isBlocked?.() || lookOnly) return false;     // looking through the binoculars / at the radio: E is theirs
     if (focus && focus.prompt()) { const f = focus; f.use(); return true; }
     return false;
   }

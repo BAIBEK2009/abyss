@@ -65,7 +65,8 @@ export function createSpeech(root = document.body) {
       };
       const onKey = (e) => {
         if (place === "cockpit") return;                    // Space is the sonar under water
-        if (e.code === "Enter" || e.code === "Space") { e.preventDefault(); e.stopPropagation(); step(); }
+        // E too: on foot E is "use", and a line on screen must never swallow it into nothing — it turns the line
+        if (e.code === "Enter" || e.code === "Space" || (e.code === "KeyE" && !e.repeat)) { e.preventDefault(); e.stopPropagation(); step(); }
       };
       box.onclick = step;
       addEventListener("keydown", onKey, true);
@@ -105,7 +106,16 @@ export function goalCards(root, line, buttonLabel) {
     }).join("")}</div><button class="gc-go" data-id="cards-ok">${buttonLabel}</button>`;
     root.append(back);
     sfx.clack?.();
+    // E or Enter takes the cards too (after a moment, so the key that ended the last line does not)
+    const t0 = performance.now();
+    const onKey = (e) => {
+      if (!["KeyE", "Enter"].includes(e.code) || e.repeat || performance.now() - t0 < 600) return;
+      e.preventDefault(); e.stopPropagation(); back.querySelector(".gc-go").onclick();
+    };
+    addEventListener("keydown", onKey, true);
     back.querySelector(".gc-go").onclick = async () => {
+      removeEventListener("keydown", onKey, true);
+      back.querySelector(".gc-go").onclick = null;
       back.classList.add("out");
       await sleep(400);
       back.remove();

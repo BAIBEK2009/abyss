@@ -176,7 +176,9 @@ export function createWalk(ctx) {
     if (!deck || !prologue() || tasks()[1]) return null;
     return stage === 0 ? () => deck.targets.heli : stage === 1 ? () => deck.targets.seat : null;
   }
+  let takenAt = 0;
   function takeBinoculars() {
+    takenAt = performance.now();
     mode = "bino";
     fp.lookOnly = true;
     view.outline([]); ui.setPrompt(null);
@@ -190,7 +192,8 @@ export function createWalk(ctx) {
       addEventListener("resize", () => { if (mode === "bino") drawMask(); });
       document.body.append(bino);
       addEventListener("wheel", (e) => { if (mode === "bino") setZoom(zoom * (e.deltaY < 0 ? 1.15 : 1 / 1.15)); }, { passive: true });
-      addEventListener("keydown", (e) => { if (mode === "bino" && e.code === "KeyE" && !e.repeat && !blocked()) leaveBino(); });
+      // not on the very key press that took them (the take runs first, on the same event)
+      addEventListener("keydown", (e) => { if (mode === "bino" && e.code === "KeyE" && !e.repeat && !blocked() && performance.now() - takenAt > 150) leaveBino(); });
     }
     const P = prompts();
     bino.querySelector(".bino-top").textContent = stage < 3 ? (P.binoculars_use ?? "") : "";
