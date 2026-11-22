@@ -150,7 +150,7 @@ function createSea(moonDir) {
   }).join("\n");
   const mat = new THREE.ShaderMaterial({
     uniforms: { uTime: { value: 0 }, uMoon: { value: moonDir.clone() }, uFogCol: { value: new THREE.Color(0x0b1626) }, uPools: { value: [0, 1, 2, 3].map(() => new THREE.Vector4()) },
-                uAmp: { value: 1 }, uFoam: { value: 0 }, uCloud: { value: 0 }, uMoonVis: { value: 1 }, uFlash: { value: 0 }, uSun: { value: 0 },
+                uAmp: { value: 1 }, uFoam: { value: 0 }, uCloud: { value: 0 }, uMoonVis: { value: 1 }, uFlash: { value: 0 }, uSun: { value: 0 }, uFogD: { value: 0 },
                 uHull: { value: new THREE.Vector4(0, 0, 5.2, 0) }, uHullZ: { value: new THREE.Vector2(STERN, BOW) } },
     vertexShader: /* glsl */`
       uniform float uTime; uniform float uAmp; varying vec3 vW; varying float vH;
@@ -164,7 +164,7 @@ function createSea(moonDir) {
       }`,
     fragmentShader: /* glsl */`
       uniform float uTime; uniform vec3 uMoon; uniform vec3 uFogCol; uniform vec4 uHull; uniform vec2 uHullZ; uniform vec4 uPools[4];
-      uniform float uAmp; uniform float uFoam; uniform float uCloud; uniform float uMoonVis; uniform float uFlash; uniform float uSun;
+      uniform float uAmp; uniform float uFoam; uniform float uCloud; uniform float uMoonVis; uniform float uFlash; uniform float uSun; uniform float uFogD;
       varying vec3 vW; varying float vH;
       void waves(vec2 p, float t, out float h, out vec2 g) { h = 0.0; g = vec2(0.0); ${waveGLSL} }
       float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -210,7 +210,7 @@ function createSea(moonDir) {
           col += f * (vec3(0.16, 0.18, 0.2) * (0.6 + 0.4 * crest) + vec3(1.0, 1.0, 0.97) * gl * 3.0);
         }
         // into the night haze at the horizon
-        col = mix(col, uFogCol, smoothstep(300.0, 4500.0, dist));
+        col = mix(col, uFogCol, max(smoothstep(300.0, 4500.0, dist), 1.0 - exp(-pow(uFogD * dist, 2.0))));     // haze, and the weather's fog
         col = clamp(col, 0.0, 24.0);          // no NaN / overflow into the bloom
         gl_FragColor = vec4(col, 1.0);
         #include <tonemapping_fragment>
@@ -237,11 +237,11 @@ function createSky(moonDir) {
   const dome = new THREE.Mesh(new THREE.SphereGeometry(6000, 48, 24), new THREE.ShaderMaterial({
     side: THREE.BackSide, depthWrite: false, fog: false,
     uniforms: { uMoon: { value: moonDir }, uTime: { value: 0 }, uCloud: { value: 0.1 }, uFlash: { value: 0 }, uMoonVis: { value: 1 },
-                uFogCol: { value: new THREE.Color(0x0b1626) }, uSun: { value: 0 }, uBolt: { value: new THREE.Vector2(0.4, 0.2) } },
+                uFogCol: { value: new THREE.Color(0x0b1626) }, uSun: { value: 0 }, uBolt: { value: new THREE.Vector2(0.4, 0.2) }, uHaze: { value: 0 } },
     vertexShader: "varying vec3 vD; void main() { vD = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }",
     fragmentShader: /* glsl */`
       uniform vec3 uMoon; uniform float uTime; uniform float uCloud; uniform float uFlash; uniform float uMoonVis; uniform vec3 uFogCol;
-      uniform float uSun; uniform vec2 uBolt; varying vec3 vD;
+      uniform float uSun; uniform vec2 uBolt; uniform float uHaze; varying vec3 vD;
       float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
       float vn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
         return mix(mix(hash(i), hash(i + vec2(1, 0)), f.x), mix(hash(i + vec2(0, 1)), hash(i + vec2(1, 1)), f.x), f.y); }
@@ -265,6 +265,7 @@ function createSky(moonDir) {
         col = mix(col, cloud, cov * smoothstep(-0.05, 0.08, vD.y));
         col += vec3(0.12, 0.14, 0.2) * uFlash * 0.4;
         col = mix(col, uFogCol, 1.0 - smoothstep(-0.02, 0.06 + uCloud * 0.1, vD.y));
+        col = mix(col, uFogCol * 1.15, uHaze * (1.0 - 0.55 * smoothstep(0.0, 0.6, vD.y)));      // fog: the sky goes milky
         gl_FragColor = vec4(col, 1.0);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
@@ -935,8 +936,8 @@ export function createDeck(view, { lifeLabel = "" } = {}) {
   function applyWeather(time) {
     const su = sea.material.uniforms, ku = sky.userData.dome.material.uniforms;
     SEA.amp = W.amp; su.uAmp.value = W.amp; su.uFoam.value = W.foam; su.uCloud.value = W.cloud; su.uMoonVis.value = W.moon;
-    su.uFlash.value = W.flash; su.uSun.value = W.sun; su.uFogCol.value.copy(W.fogCol);
-    ku.uTime.value = time; ku.uCloud.value = W.cloud; ku.uFlash.value = W.flash; ku.uMoonVis.value = W.moon; ku.uSun.value = W.sun; ku.uFogCol.value.copy(W.fogCol);
+    su.uFlash.value = W.flash; su.uSun.value = W.sun; su.uFogCol.value.copy(W.fogCol); su.uFogD.value = W.fogD * 0.6;
+    ku.uTime.value = time; ku.uCloud.value = W.cloud; ku.uFlash.value = W.flash; ku.uMoonVis.value = W.moon; ku.uSun.value = W.sun; ku.uFogCol.value.copy(W.fogCol); ku.uHaze.value = W.haze * 0.85;
     if (W.flash > 0.99) ku.uBolt.value.set((Math.random() - 0.5) * 1.6, (Math.random() - 0.2) * 1.6);
     sky.userData.stars.material.opacity = W.stars * (1 - W.cloud * 0.8);
     sky.userData.moon.material.opacity = W.moon; sky.userData.halo.material.opacity = W.moon;

@@ -167,10 +167,12 @@ export function createView(canvas) {
   composer.addPass(waterline);
   composer.addPass(new OutputPass());
   const film = new ShaderPass({
-    uniforms: { tDiffuse: { value: null }, uTime: { value: 0 }, uRes: { value: new THREE.Vector2(1, 1) } },
+    uniforms: { tDiffuse: { value: null }, uTime: { value: 0 }, uRes: { value: new THREE.Vector2(1, 1) },
+                uSat: { value: 1 }, uCon: { value: 1 }, uSh: { value: new THREE.Vector3(-0.02, 0.012, 0.03) }, uHi: { value: new THREE.Vector3(0.035, 0.012, -0.03) } },
     vertexShader: "varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }",
     fragmentShader: /* glsl */`
       uniform sampler2D tDiffuse; uniform float uTime; uniform vec2 uRes; varying vec2 vUv;
+      uniform float uSat; uniform float uCon; uniform vec3 uSh; uniform vec3 uHi;
       float h(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
       void main() {
         vec2 c = vUv - 0.5;
@@ -178,8 +180,11 @@ export function createView(canvas) {
         vec2 ca = c * smoothstep(0.14, 0.5, r2) * 0.004;           // colour fringe only near the edges
         vec3 col = vec3(texture2D(tDiffuse, vUv - ca).r, texture2D(tDiffuse, vUv).g, texture2D(tDiffuse, vUv + ca).b);
         float l = dot(col, vec3(0.299, 0.587, 0.114));
-        col += vec3(0.035, 0.012, -0.03) * smoothstep(0.45, 1.0, l);   // warm highlights
-        col += vec3(-0.02, 0.012, 0.03) * (1.0 - smoothstep(0.0, 0.4, l)); // teal shadows
+        // the grade of the scene (weather.js: each act its palette): saturation, contrast, tinted shadows and highlights
+        col = mix(vec3(l), col, uSat);
+        col = (col - 0.42) * uCon + 0.42;
+        col += uHi * smoothstep(0.45, 1.0, l);                        // warm highlights (dawn: gold)
+        col += uSh * (1.0 - smoothstep(0.0, 0.4, l));                 // teal shadows (dawn: violet)
         col *= 1.0 - 0.55 * smoothstep(0.18, 0.62, r2 * 1.35);       // soft vignette
         col += (h(vUv * uRes + fract(uTime * 13.0)) - 0.5) * 0.035;  // film grain
         gl_FragColor = vec4(col, 1.0);
@@ -306,6 +311,8 @@ export function createView(canvas) {
 
   return {
     renderer, scene, camera, rig, aim, lamp, pin, toScreen, placeLamp, passes: { gtao, bloom },
+    /** The grade (weather.js): {sat, con, sh: [r, g, b], hi: [r, g, b]}. */
+    setGrade(g) { const u = film.uniforms; u.uSat.value = g.sat; u.uCon.value = g.con; u.uSh.value.set(...g.sh); u.uHi.value.set(...g.hi); },
     /** Fly the camera after a point (fn(vector) fills it) or back home (null). */
     follow(fn, opt = {}) { if (!fn && !follow) return; follow = fn; followOpt = { dist: 9.5, tilt: 34, ...opt }; rate = opt.rate ?? 2.2; settled = false; },
     /** Recompute the lens for the table after another scene changed it. */

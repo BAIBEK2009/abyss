@@ -8,13 +8,17 @@ import { sfx } from "./audio.js";
 const C = (hex) => new THREE.Color(hex);
 export const STATES = {
   calm: { amp: 1, foam: 0, cloud: 0.12, rain: 0, wind: 0.15, roll: 1, fogD: 0.00042, fogCol: C(0x0b1626), moon: 1, stars: 1,
-          env: 1, envName: "night", wet: 0, lightning: 0, sun: 0, haze: 0, grade: 0 },
+          env: 1, envName: "night", wet: 0, lightning: 0, sun: 0, haze: 0,
+          sat: 1, con: 1, shR: -0.02, shG: 0.012, shB: 0.03, hiR: 0.035, hiG: 0.012, hiB: -0.03 },
   storm: { amp: 2.6, foam: 1, cloud: 1, rain: 1, wind: 1, roll: 2.1, fogD: 0.0042, fogCol: C(0x0a1118), moon: 0, stars: 0,
-           env: 0.55, envName: "overcast", wet: 1, lightning: 1, sun: 0, haze: 0.35, grade: 1 },
+           env: 0.55, envName: "overcast", wet: 1, lightning: 1, sun: 0, haze: 0.35,
+           sat: 0.72, con: 1.12, shR: -0.018, shG: 0.0, shB: 0.032, hiR: -0.01, hiG: 0.0, hiB: 0.02 },
   fog: { amp: 0.7, foam: 0, cloud: 0.8, rain: 0, wind: 0.05, roll: 0.8, fogD: 0.02, fogCol: C(0x1a242c), moon: 0.25, stars: 0,
-         env: 0.7, envName: "overcast", wet: 0.45, lightning: 0, sun: 0, haze: 1, grade: 2 },
+         env: 0.7, envName: "overcast", wet: 0.45, lightning: 0, sun: 0, haze: 1,
+         sat: 0.6, con: 0.86, shR: 0.012, shG: 0.022, shB: 0.024, hiR: 0.0, hiG: 0.01, hiB: 0.0 },
   dawn: { amp: 0.85, foam: 0, cloud: 0.35, rain: 0, wind: 0.2, roll: 0.9, fogD: 0.0007, fogCol: C(0x9a7a6a), moon: 0, stars: 0,
-          env: 1.4, envName: "night", wet: 0.1, lightning: 0, sun: 1, haze: 0.25, grade: 3 },
+          env: 1.4, envName: "night", wet: 0.1, lightning: 0, sun: 1, haze: 0.25,
+          sat: 1.12, con: 1.04, shR: 0.022, shG: -0.01, shB: 0.042, hiR: 0.065, hiG: 0.025, hiB: -0.045 },
 };
 export const ACT_WEATHER = { prologue: "calm", act1: "calm", act2: "storm", act3: "fog", act4: "dawn" };
 
@@ -57,4 +61,10 @@ export function updateWeather(dt) {
   }
   if (thunderAt > 0 && time >= thunderAt) { thunderAt = -1; sfx.thunder?.(); }
   sfx.weather?.(W.rain, W.wind);
+}
+
+const NEUTRAL = { sat: 1, con: 1, sh: [-0.02, 0.012, 0.03], hi: [0.035, 0.012, -0.03] };
+/** The grade for the final pass: the weather's palette on the surface; under water the dive keeps its own. */
+export function gradeNow(underwater) {
+  return underwater ? NEUTRAL : { sat: W.sat, con: W.con, sh: [W.shR, W.shG, W.shB], hi: [W.hiR, W.hiG, W.hiB] };
 }

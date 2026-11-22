@@ -1,5 +1,5 @@
 // Entry point: fonts -> state from Python -> the navigator's table (map + table UI).
-import { setWeather, updateWeather, weatherForAct } from "./weather.js";
+import { setWeather, updateWeather, weatherForAct, gradeNow } from "./weather.js";
 import { createView } from "./view.js";
 import { createMap } from "./scenes/map.js";
 import { createCabin } from "./scenes/cabin.js";
@@ -71,7 +71,10 @@ async function start() {
   const table = createTable(view, map, state, { cabin, dive });
   // the weather follows the story (act II storm, act III fog, act IV dawn); ?weather= forces one
   setWeather(weatherForAct(state.campaign?.act), 0);
-  view.onFrame((dt) => { setWeather(weatherForAct(table.state?.campaign?.act)); updateWeather(dt); });
+  view.onFrame((dt) => {
+    setWeather(weatherForAct(table.state?.campaign?.act)); updateWeather(dt);
+    view.setGrade(gradeNow(document.body.classList.contains("diving") || document.body.classList.contains("descent")));
+  });
   view.start();
   // the opening shot: the whole cabin first, then the camera glides down to the chart table
   const prologue = state.campaign?.act === "prologue";     // the story moves the camera itself
