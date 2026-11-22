@@ -74,6 +74,18 @@ with sync_playwright() as pw:
     page.wait_for_selector("[data-id=surface]", state="visible", timeout=40000)
     page.wait_for_timeout(2600)
     shot(page, "finder_far")
+    # the sonar screen: swim along the trail by hand for a while (the track, the covered bed), then ping
+    for key, ms in (("w", 2500), ("a", 700), ("w", 2200), ("d", 1400), ("w", 2400)):
+        page.keyboard.down("KeyW")
+        if key != "w":
+            page.keyboard.down("Key" + key.upper())
+        page.wait_for_timeout(ms)
+        page.keyboard.up("Key" + key.upper())
+    page.keyboard.up("KeyW")
+    page.keyboard.press("Space")
+    page.wait_for_timeout(1600)
+    page.locator(".ck-scope").screenshot(path=str(args.out / f"{args.prefix}sonar_map_crop.png"))
+    shot(page, "sonar_map")
     where = page.evaluate("window.__abyss.diveWhere()")
     print("where:", {k: where.get(k) for k in ("box", "debris", "buoys")})
 
@@ -96,12 +108,6 @@ with sync_playwright() as pw:
         face(where["box"], 4.5, 0.3, 0.35)
         page.wait_for_timeout(3500)
         shot(page, "finder_near")
-    # the sonar screen: swim a little along the trail, then ping
-    page.evaluate("window.__abyss.diveDrive && window.__abyss.diveDrive()")
-    page.keyboard.press("Space")
-    page.wait_for_timeout(1600)
-    page.locator(".ck-scope").screenshot(path=str(args.out / f"{args.prefix}sonar_map_crop.png"))
-    shot(page, "sonar_map")
     if where.get("buoys"):
         face(where["buoys"][0], 4.0, 0.25)
         page.wait_for_timeout(1800)

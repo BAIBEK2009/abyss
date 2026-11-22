@@ -1000,7 +1000,7 @@ export function createDive(view) {
     D = { x: 0, z: 0, y: 0, yaw: 0, vx: 0, vz: 0, turn: 0, o2: O2, max: O2, found: false, grabT: 0, cov: new Set(), pingCD: 0,
           pingerT: 0.6, seen: new Set(), creakT: 4, heartT: 0, tether: 0, shake: 0, desc: 0, t0: 0, tick: 0,
           hasBox: !!sceneInfo.box || !!sceneInfo.find, find: sceneInfo.find || null, hasDebris: !!sceneInfo.debris,
-          debrisSeen: false, anyDebris: false, cine: null, fdOff: 0, fdRange: "", fdBars: 0, far: null, task: sceneInfo.task || null, onEvent: sceneInfo.onEvent || (() => {}) };
+          debrisSeen: false, anyDebris: false, cine: null, fdOff: 0, fdRange: "", fdBars: 0, far: null, track: [[0, 0]], marks: [], buoys: [], task: sceneInfo.task || null, onEvent: sceneInfo.onEvent || (() => {}) };
     box = D.find ? flapFind : recorder;
     recorder.visible = flapFind.visible = false;
     for (const k in keys) keys[k] = false;
@@ -1042,13 +1042,17 @@ export function createDive(view) {
   function sonarPing() {
     if (mode !== "dive" || D.pingCD > 0) return;
     D.pingCD = 1.8; D.o2 -= 3; sfx.sonar();
+    cockpit.ping(D.x, D.z, T);
+    // the echoes stay on the dive map: the find a ring, each piece of debris a square (22.3 p. 3)
     const items = [...(box.visible ? [{ o: box, s: 1 }] : []), ...debris.filter((g) => g.visible).map((o) => ({ o, s: 0.55 }))];
-    cockpit.ping(items.map(({ o, s }) => {
-      const dx = o.position.x - D.x, dz = o.position.z - D.z;
-      let rel = Math.atan2(-dx, -dz) - D.yaw; rel = Math.atan2(Math.sin(rel), Math.cos(rel));
-      return { rel, r: clamp(Math.hypot(dx, dz) / 28, 0, 1), s };
-    }).filter((b) => b.r < 1), T);
+    for (const { o, s } of items) {
+      const dd = Math.hypot(o.position.x - D.x, o.position.z - D.z);
+      if (dd > 28 || D.marks.some((m) => m.o === o)) continue;
+      D.marks.push({ o, x: o.position.x, z: o.position.z, s, t: T + (dd / 28) * 1.2 });
+    }
   }
+  /** What the sonar screen draws (the dive map). */
+  const scopeMap = () => ({ x: D.x, z: D.z, yaw: D.yaw, track: D.track, cov: D.cov, zone: SEARCH_R, tether: TETHER, marks: D.marks, buoys: D.buoys });
 
   async function descend(quick = false) {
     mode = "descent";
@@ -1092,6 +1096,8 @@ export function createDive(view) {
       if (T > D.tether) { cockpit.msg(t("dv_tether")); D.tether = T + 5; }
     }
     D.y += (bedH(D.x, D.z) + 1.8 - D.y) * Math.min(1, dt * 1.8);
+    const last = D.track[D.track.length - 1];
+    if (Math.hypot(D.x - last[0], D.z - last[1]) > 0.6) D.track.push([D.x, D.z]);     // the own track on the dive map
     sfx.thrust(Math.abs(fwd) + Math.abs(turn) * 0.5);
     D.o2 -= dt; D.pingCD -= dt;
     if ((D.tick += dt) > 0.25) {
@@ -1234,7 +1240,7 @@ export function createDive(view) {
     if (mode === "dive" && !cine) update(dt);
     else if (cine) { D.o2 -= dt; }
     if (mode === "dive" || mode === "descent" || mode === "ending") {
-      placeCamera(); cockpit.drawScope(T); cockpit.stepFinder(dt, T);
+      placeCamera(); cockpit.drawScope(T, scopeMap()); cockpit.stepFinder(dt, T);
       life.update(dt, T, D, mode === "dive" && (keys.f || keys.b));
     }
     rise = mode === "descent" ? D.desc * 3.5 : 0;

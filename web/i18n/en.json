@@ -18,7 +18,7 @@
  "ck_finder_dist": "~{m} m",
  "ck_finder_far": "> {m} m",
  "ck_finder_none": "no signal",
- "ck_sonar": "SONAR · SPACE",
+ "ck_sonar": "SONAR MAP · SPACE — PING",
  "ck_surface": "Surface",
  "ck_plate": "NERPA-2 · DEEP-SEA VEHICLE",
  "ck_grab": "Hold E — grab with the manipulator",

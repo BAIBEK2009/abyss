@@ -135,7 +135,7 @@ export function createCockpit(root, handlers) {
   }
   addEventListener("resize", () => { if (ck.classList.contains("on")) layout(); });
 
-  let blips = [], scopeT = -9;
+  let ping = { x: 0, z: 0, t: -9 };
   // the needle: a spring towards the bearing (deg, + = right of the bow), with overshoot
   const fd = { a: 0, v: 0, want: 0, on: false };
   const needle = $(".ck-needle"), led = $(".ck-fd-led"), bars = [...ck.querySelectorAll(".ck-bars i")], dist = $(".ck-fd-dist");
@@ -200,29 +200,55 @@ export function createCockpit(root, handlers) {
     /** A short pulse round the finder (Dana points at it). */
     pulseFinder() { const f = ck.querySelector(".ck-finder"); f.classList.remove("pulse"); void f.offsetWidth; f.classList.add("pulse"); },
     prompt(on, p = 0) { const pr = $(".ck-prompt"); pr.classList.toggle("on", on); pr.style.setProperty("--p", p.toFixed(3)); },
-    /** A sonar ping: blips = [{rel (radians, + = left), r (0..1), s (size)}], drawn as the sweep passes. */
-    ping(b, now) { blips = b; scopeT = now; },
-    drawScope(now) {
-      const W = scope.width, c = W / 2, Rr = W / 2 - 10, g = sg;
-      g.fillStyle = "rgba(2,14,6,.35)"; g.fillRect(0, 0, W, W);
-      g.strokeStyle = "rgba(110,255,150,.18)"; g.lineWidth = 2;
-      for (const r of [0.33, 0.66, 1]) { g.beginPath(); g.arc(c, c, Rr * r, 0, 7); g.stroke(); }
-      g.beginPath(); g.moveTo(c, c - Rr); g.lineTo(c, c + Rr); g.moveTo(c - Rr, c); g.lineTo(c + Rr, c); g.stroke();
-      const age = now - scopeT;
-      if (age < 1.2) {
-        const a = -Math.PI / 2 + (age / 1.2) * Math.PI * 2;
-        g.strokeStyle = "rgba(140,255,170,.75)"; g.lineWidth = 4;
-        g.beginPath(); g.moveTo(c, c); g.lineTo(c + Math.cos(a) * Rr, c + Math.sin(a) * Rr); g.stroke();
+    /** A sonar ping from (x, z) at time now: the ring runs out to 28 m and shows the marks as it passes them. */
+    ping(x, z, now) { ping = { x, z, t: now }; },
+    /**
+     * The sonar screen is the map of the dive (22.3 p. 3), seen from above, north up, centred on the landing spot:
+     * the covered seabed shaded, the search zone, the own track, the buoys, the marks found by pings, Nerpa.
+     * m = {x, z, yaw, track: [[x, z]], cov: Set("i,j" of 2 m cells), zone, tether, marks: [{x, z, s, t}], buoys: [[x, z]]}
+     */
+    drawScope(now, m) {
+      const W = scope.width, c = W / 2, Rr = W / 2 - 10, g = sg, k = Rr / m.tether;
+      const X = (x) => c + x * k, Y = (z) => c + z * k;
+      g.fillStyle = "#03110a"; g.fillRect(0, 0, W, W);
+      g.save(); g.beginPath(); g.arc(c, c, Rr, 0, 7); g.clip();
+      g.fillStyle = "rgba(110,255,150,.17)";                   // the seabed the searchlight has covered
+      for (const key of m.cov) { const [i, j] = key.split(",").map(Number); g.fillRect(X(i * 2 - 1), Y(j * 2 - 1), 2 * k + 0.5, 2 * k + 0.5); }
+      g.strokeStyle = "rgba(110,255,150,.10)"; g.lineWidth = 1;   // a 5 m grid
+      for (let v = -25; v <= 25; v += 5) { g.beginPath(); g.moveTo(X(v), 0); g.lineTo(X(v), W); g.moveTo(0, Y(v)); g.lineTo(W, Y(v)); g.stroke(); }
+      g.setLineDash([10, 8]); g.strokeStyle = "rgba(150,255,180,.6)"; g.lineWidth = 2.5;   // the search zone
+      g.beginPath(); g.arc(c, c, m.zone * k, 0, 7); g.stroke(); g.setLineDash([]);
+      g.strokeStyle = "rgba(150,255,180,.9)"; g.lineWidth = 2;  // the landing spot
+      g.beginPath(); g.moveTo(c - 7, c); g.lineTo(c + 7, c); g.moveTo(c, c - 7); g.lineTo(c, c + 7); g.stroke();
+      if (m.track.length > 1) {                                 // the own track
+        g.strokeStyle = "rgba(255,190,110,.85)"; g.lineWidth = 3; g.lineJoin = "round"; g.beginPath();
+        m.track.forEach(([x, z], i) => (i ? g.lineTo(X(x), Y(z)) : g.moveTo(X(x), Y(z))));
+        g.lineTo(X(m.x), Y(m.z)); g.stroke();
       }
-      for (const b of blips) {
-        const sweepA = ((-b.rel + Math.PI * 2) % (Math.PI * 2)) / (Math.PI * 2);
-        if (age <= sweepA * 1.2) continue;
-        const life = clamp(1 - (age - sweepA * 1.2) / 5, 0, 1);
-        if (life <= 0) continue;
-        const x = c - Math.sin(b.rel) * b.r * Rr, y = c - Math.cos(b.rel) * b.r * Rr;
-        g.fillStyle = `rgba(150,255,180,${life * b.s})`; g.beginPath(); g.arc(x, y, b.s > 0.9 ? 9 : 6, 0, 7); g.fill();
+      const blink = Math.sin(now * 5) > 0;
+      for (const [x, z] of m.buoys) {                           // the transponder buoys
+        g.fillStyle = blink ? "#ff9a3c" : "#a8541c"; g.beginPath();
+        g.moveTo(X(x), Y(z) - 8); g.lineTo(X(x) + 7, Y(z)); g.lineTo(X(x), Y(z) + 8); g.lineTo(X(x) - 7, Y(z)); g.fill();
       }
-      g.fillStyle = "#ffb35c"; g.beginPath(); g.moveTo(c, c - 9); g.lineTo(c - 6, c + 6); g.lineTo(c + 6, c + 6); g.fill();
+      const age = now - ping.t, ringR = (age / 1.2) * 28;
+      if (age < 1.4) {                                          // the ping ring
+        g.strokeStyle = `rgba(160,255,190,${0.8 * (1 - age / 1.4)})`; g.lineWidth = 4;
+        g.beginPath(); g.arc(X(ping.x), Y(ping.z), ringR * k, 0, 7); g.stroke();
+      }
+      for (const mk of m.marks) {                               // what the pings found: they stay on the map
+        if (now < mk.t) continue;
+        const fresh = clamp(1 - (now - mk.t) / 1.5, 0, 1), x = X(mk.x), y = Y(mk.z);
+        g.fillStyle = `rgba(170,255,195,${0.75 + fresh * 0.25})`;
+        if (mk.s > 0.9) { g.lineWidth = 3; g.strokeStyle = g.fillStyle; g.beginPath(); g.arc(x, y, 11 + fresh * 8, 0, 7); g.stroke(); g.beginPath(); g.arc(x, y, 5, 0, 7); g.fill(); }
+        else { g.fillRect(x - 5 - fresh * 3, y - 5 - fresh * 3, 10 + fresh * 6, 10 + fresh * 6); }
+      }
+      g.restore();
+      g.save(); g.translate(X(m.x), Y(m.z)); g.rotate(-m.yaw);   // Nerpa: the bow points along -z at yaw 0 (north)
+      g.fillStyle = "#ffb35c"; g.strokeStyle = "#1a0c02"; g.lineWidth = 2;
+      g.beginPath(); g.moveTo(0, -13); g.lineTo(-8, 9); g.lineTo(8, 9); g.closePath(); g.fill(); g.stroke();
+      g.restore();
+      g.strokeStyle = "rgba(110,255,150,.35)"; g.lineWidth = 2; g.beginPath(); g.arc(c, c, Rr, 0, 7); g.stroke();
+      g.fillStyle = "#9fe0b0"; g.font = "bold 22px PT Mono, monospace"; g.textAlign = "center"; g.fillText(t("ck_n"), c, 32);
     },
   };
 }
