@@ -1030,6 +1030,12 @@ export function createDeck(view, { lifeLabel = "" } = {}) {
   let radioCall = false;
   // 13 lamps on board, 5 real point lights near the camera (+1 fading): see lightpool.js
   const pool = lightPool(scene, { slots: 5, exclude: [heliFill] });
+  // far off in the fog (act III): the lights of «Poseidon-2» — masthead white, side red, deck lamps — wide and soft
+  const poseidonFar = new THREE.Group(); poseidonFar.position.set(-90, 0, 120); scene.add(poseidonFar);
+  poseidonFar.add(at(mesh(rbox(9, 3, 36, 0.6), std({ color: 0x0a0b0d, roughness: 0.9 })), 0, 1.2, 0, 0.6));
+  for (const [hx, y, z, col, sz] of [[0, 14, 4, 0xfff2d8, 9], [0, 10, -6, 0xfff2d8, 7], [4.5, 5, 2, 0xff3020, 6], [-2, 4, -10, 0xffc890, 8], [2, 4, 8, 0xffc890, 8]]) {
+    const sp = glowSprite(col, sz, 1.4); sp.position.set(hx, y, z); poseidonFar.add(sp);
+  }
   // the weather (weather.js): rain round the camera, none inside the wheelhouse
   const rain = createRain({ shelter: { min: new THREE.Vector3(-HX - 0.1, -0.5, HZ0 - 0.15), max: new THREE.Vector3(HX + 0.1, HH + 0.4, HZ1 + 0.1) } });
   scene.add(rain.object);
@@ -1044,6 +1050,7 @@ export function createDeck(view, { lifeLabel = "" } = {}) {
     if (W.flash > 0.99) ku.uBolt.value.set((Math.random() - 0.5) * 1.6, (Math.random() - 0.2) * 1.6);
     sky.userData.stars.material.opacity = W.stars * (1 - W.cloud * 0.8);
     sky.userData.moon.material.opacity = W.moon; sky.userData.halo.material.opacity = W.moon;
+    poseidonFar.visible = W.haze > 0.4;
     const hz = 0.55 + 0.9 * W.haze + 0.35 * W.rain;
     for (const h of HALOS) if (h.s !== sky.userData.halo) { h.s.scale.setScalar(h.size * hz); h.s.material.opacity = Math.min(1, 0.65 + 0.35 * hz); }
     scene.fog.color.copy(W.fogCol); scene.fog.density = W.fogD;

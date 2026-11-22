@@ -21,6 +21,7 @@ SPOTS = [
     ("lifeboat", "deck", [3.4, 4.4, 0.95, 0.12]),          # the lifeboat on its davits, close
     ("bridge", "deck", [-1.75, 10.35, -0.42, -0.3]),        # the radio and the console, close
     ("porthole", "cabin", None),                           # the cabin's porthole
+    ("table", "table", None),                              # the chart table (cloud shadows in the storm)
 ]
 
 ap = argparse.ArgumentParser()
@@ -57,12 +58,17 @@ with sync_playwright() as pw:
     page.wait_for_timeout(1500)
     page.add_style_tag(content=".goal, .fp-mark, .fp-hint, .speech, .toasts { visibility: hidden !important; }")   # the frame only
     for name, where, at in SPOTS:
-        if where == "deck":
+        if where == "table":
+            page.evaluate("window.__abyss.walk.toTable()")
+            page.wait_for_timeout(3500)
+        elif where == "deck":
             page.evaluate("window.__abyss.walk.enterDeckNow()")
         else:
             page.evaluate("window.__abyss.walk.enterCabinNow('stairs')")
         page.wait_for_timeout(500)
-        if at:
+        if where == "table":
+            pass
+        elif at:
             page.evaluate(f"window.__abyss.walk.fp.place({at[0]}, {at[1]}, {at[2]}, {at[3]})")
         else:     # the cabin: face the porthole wall
             page.evaluate("(() => { const f = window.__abyss.walk.fp; f.place(-0.6, 0.6, Math.PI + 0.05, 0.06); })()")

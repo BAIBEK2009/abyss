@@ -41,7 +41,7 @@ export function setWeather(name, sec = 6) {
 }
 export const weatherForAct = (act) => ACT_WEATHER[act] ?? "calm";
 
-let time = 0;
+let time = 0, hornT = 6;
 /** Every frame: ease W, throw lightning (a flash, the thunder 1-3 s later), feed the sound. */
 export function updateWeather(dt) {
   time += dt;
@@ -60,6 +60,7 @@ export function updateWeather(dt) {
     setTimeout(() => { W.flash = Math.max(W.flash, 0.7); }, 120);          // a double stroke
   }
   if (thunderAt > 0 && time >= thunderAt) { thunderAt = -1; sfx.thunder?.(); }
+  if (W.haze > 0.6 && (hornT -= dt) <= 0) { hornT = 22 + Math.random() * 14; sfx.foghorn?.(); }      // a ship's horn somewhere in the fog
   sfx.weather?.(W.rain, W.wind);
 }
 

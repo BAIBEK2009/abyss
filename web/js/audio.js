@@ -107,6 +107,12 @@ export const sfx = {
     if (Math.abs(r - wxRain) < 0.01 && Math.abs(w - wxWind) < 0.01) return;
     wxRain = r; wxWind = w; mixWeather();
   },
+  /** A ship's horn far off in the fog: two long low notes, muffled by distance. */
+  foghorn() {
+    if (!ac) return;
+    const k = outdoors ? 1 : 0.45;
+    for (const [f, d] of [[98, 0], [98, 3.4]]) { tone(f, f * 0.99, 2.6, "sawtooth", 0.035 * k, d); tone(f * 1.5, f * 1.49, 2.6, "sawtooth", 0.018 * k, d); nz(2.6, 200, "lowpass", 0.05 * k, d, 1); }
+  },
   /** Thunder: a crack, then a long low roll. */
   thunder() {
     if (!ac) return;

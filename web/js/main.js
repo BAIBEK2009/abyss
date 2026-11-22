@@ -1,5 +1,5 @@
 // Entry point: fonts -> state from Python -> the navigator's table (map + table UI).
-import { setWeather, updateWeather, weatherForAct, gradeNow } from "./weather.js";
+import { setWeather, updateWeather, weatherForAct, gradeNow, W } from "./weather.js";
 import { createView } from "./view.js";
 import { createMap } from "./scenes/map.js";
 import { createCabin } from "./scenes/cabin.js";
@@ -71,8 +71,10 @@ async function start() {
   const table = createTable(view, map, state, { cabin, dive });
   // the weather follows the story (act II storm, act III fog, act IV dawn); ?weather= forces one
   setWeather(weatherForAct(state.campaign?.act), 0);
+  const cookie = lampCookie(view);
   view.onFrame((dt) => {
     setWeather(weatherForAct(table.state?.campaign?.act)); updateWeather(dt);
+    cookie(dt);
     view.setGrade(gradeNow(document.body.classList.contains("diving") || document.body.classList.contains("descent")));
   });
   view.start();
@@ -88,3 +90,9 @@ async function start() {
 }
 
 start();
+
+/** At dawn the chart lamp is dimmed: the sun comes in through the portholes (21.2). */
+function lampCookie(view) {
+  const base = view.lamp.intensity;
+  return () => { view.lamp.intensity = base * (1 - 0.55 * W.sun); };
+}
