@@ -488,36 +488,82 @@ export function createDeck(view, { lifeLabel = "" } = {}) {
   const visor = mesh(rbox(2 * HX + 0.8, 0.08, 0.7, 0.03), whitePaint); visor.position.set(0, HH - 0.12, HZ1 + 0.38); visor.rotation.x = -0.15; house.add(visor);
   // inside: the console under the front windows (radar, chart plotter, engine gauges), the helm, the chair
   const consoleG = new THREE.Group(); house.add(consoleG);
-  const cbody = mesh(rbox(6.0, 1.0, 0.75, 0.06), darkSteel); cbody.position.set(0, 0.5, HZ1 - 0.55); consoleG.add(cbody);
-  const ctop = mesh(rbox(6.0, 0.06, 0.6, 0.02), std({ color: 0x1a1c1e, roughness: 0.6 })); ctop.position.set(0, 1.04, HZ1 - 0.62); ctop.rotation.x = 0.35; consoleG.add(ctop);
-  const screenTex = (kind) => canvasTexture(256, 192, (g, w, h) => {
-    g.fillStyle = "#020806"; g.fillRect(0, 0, w, h);
-    if (kind === "radar") {
-      g.strokeStyle = "#1f8f4a"; g.lineWidth = 1.5;
-      for (const r of [25, 50, 75, 90]) { g.beginPath(); g.arc(w / 2, h / 2, r, 0, 7); g.stroke(); }
-      g.fillStyle = "#4dff8c"; const rr = rng(4); for (let i = 0; i < 40; i++) g.fillRect(w / 2 + (rr() - 0.5) * 170, h / 2 + 30 + rr() * 60, 2, 2);
-      g.fillStyle = "#c8ff6a"; g.fillRect(w / 2 - 3, h / 2 + 70, 6, 4); g.fillRect(w / 2 + 40, h / 2 + 75, 5, 3);
-    } else if (kind === "chart") {
-      g.fillStyle = "#0b2a44"; g.fillRect(0, 0, w, h); g.fillStyle = "#3b6a52"; g.beginPath(); g.moveTo(0, 0); g.lineTo(90, 0); g.lineTo(60, 80); g.lineTo(0, 120); g.fill();
-      g.strokeStyle = "#e85a3a"; g.setLineDash([5, 4]); g.lineWidth = 2; g.beginPath(); g.moveTo(140, 40); g.lineTo(150, 170); g.stroke();
-      g.setLineDash([]); g.fillStyle = "#ffd36a"; g.beginPath(); g.arc(140, 110, 5, 0, 7); g.fill();
-    } else {
-      g.fillStyle = "#1a1408"; g.fillRect(0, 0, w, h);
-      for (let i = 0; i < 4; i++) { const cx = 35 + i * 62; g.strokeStyle = "#ffb347"; g.lineWidth = 2; g.beginPath(); g.arc(cx, 90, 24, Math.PI, 0); g.stroke(); g.beginPath(); g.moveTo(cx, 90); g.lineTo(cx + Math.cos(-2 + i * 0.4) * 20, 90 + Math.sin(-2 + i * 0.4) * 20); g.stroke(); }
+  // C3: a matte grey console with a 30-degree sloping panel, rounded edges
+  const consoleGrey = std({ color: 0x4a5056, roughness: 0.78, metalness: 0.25 }), panelGrey = std({ color: 0x2e3338, roughness: 0.7, metalness: 0.2 });
+  const cbody = mesh(rbox(6.0, 1.0, 0.75, 0.06), consoleGrey); cbody.position.set(0, 0.5, HZ1 - 0.55); consoleG.add(cbody);
+  const ctop = mesh(rbox(6.0, 0.06, 0.62, 0.025), panelGrey); ctop.position.set(0, 1.04, HZ1 - 0.62); ctop.rotation.x = Math.PI / 6; consoleG.add(ctop);
+  const kick = mesh(rbox(5.9, 0.12, 0.1, 0.03), std({ color: 0x1c1f22, roughness: 0.9 })); kick.position.set(0, 0.06, HZ1 - 0.93); consoleG.add(kick);
+  // four live screens: radar (sweep and targets from the world), the electronic chart, the echo sounder, Nerpa's status
+  const radarTargets = [];
+  const screens = [];
+  const liveScreen = (kind) => {
+    const c = document.createElement("canvas"); c.width = 256; c.height = 192;
+    const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
+    screens.push({ kind, g: c.getContext("2d"), tex });
+    return tex;
+  };
+  const sounding = Array.from({ length: 128 }, (_, i) => 940 + Math.sin(i * 0.2) * 6);
+  function drawScreens(time) {
+    for (const sc of screens) {
+      const g = sc.g, w = 256, h = 192;
+      if (sc.kind === "radar") {
+        g.fillStyle = "#010a05"; g.fillRect(0, 0, w, h);
+        const cx = w / 2, cy = h / 2 + 6, R = 86, sweep = (time * 1.6) % (Math.PI * 2);
+        g.strokeStyle = "#1a7a40"; g.lineWidth = 1;
+        for (const r of [R / 3, (R * 2) / 3, R]) { g.beginPath(); g.arc(cx, cy, r, 0, 7); g.stroke(); }
+        g.beginPath(); g.moveTo(cx, cy - R); g.lineTo(cx, cy + R); g.moveTo(cx - R, cy); g.lineTo(cx + R, cy); g.stroke();
+        const grd = g.createConicGradient ? g.createConicGradient(sweep - 0.9, cx, cy) : null;
+        if (grd) { grd.addColorStop(0, "rgba(60,255,140,0)"); grd.addColorStop(0.14, "rgba(60,255,140,.35)"); grd.addColorStop(0.145, "rgba(60,255,140,0)"); g.fillStyle = grd; g.beginPath(); g.arc(cx, cy, R, 0, 7); g.fill(); }
+        g.strokeStyle = "#7dffb0"; g.lineWidth = 2; g.beginPath(); g.moveTo(cx, cy); g.lineTo(cx + Math.sin(sweep) * R, cy - Math.cos(sweep) * R); g.stroke();
+        for (const tg of radarTargets) {
+          const a = Math.atan2(tg.x, tg.z), d = Math.min(1, Math.hypot(tg.x, tg.z) / 6000) * R;
+          const since = ((sweep - (a < 0 ? a + Math.PI * 2 : a)) + Math.PI * 4) % (Math.PI * 2);
+          g.fillStyle = tg.col; g.globalAlpha = Math.max(0.25, 1 - since / 5);
+          g.fillRect(cx + Math.sin(a) * d - tg.s / 2, cy - Math.cos(a) * d - tg.s / 2, tg.s, tg.s);
+        }
+        g.globalAlpha = 1; g.fillStyle = "#7dffb0"; g.font = "11px PT Mono, monospace"; g.fillText("6 NM  N-UP  HDG 182", 6, 13);
+      } else if (sc.kind === "chart") {
+        g.fillStyle = "#0e3552"; g.fillRect(0, 0, w, h);
+        g.fillStyle = "#c9b98a"; g.beginPath(); g.moveTo(0, 0); g.lineTo(110, 0); g.bezierCurveTo(90, 30, 70, 60, 20, 90); g.lineTo(0, 100); g.fill();
+        g.strokeStyle = "#5c8fb0"; g.lineWidth = 1; for (let k = 1; k < 5; k++) { g.beginPath(); g.arc(150, 120, k * 22, 0, 7); g.stroke(); }
+        g.strokeStyle = "#ffd36a"; g.setLineDash([6, 4]); g.lineWidth = 2; g.beginPath(); g.moveTo(130, 60); g.lineTo(150, 150); g.stroke(); g.setLineDash([]);
+        g.strokeStyle = "#e85a3a"; g.lineWidth = 3; g.beginPath(); g.moveTo(144, 140); g.lineTo(156, 152); g.moveTo(156, 140); g.lineTo(144, 152); g.stroke();
+        const bob = Math.sin(time * 0.5) * 1.5;
+        g.fillStyle = "#f2b632"; g.beginPath(); g.moveTo(132, 74 + bob); g.lineTo(126, 90 + bob); g.lineTo(138, 90 + bob); g.fill();
+        g.fillStyle = "#e9f2f8"; g.font = "11px PT Mono, monospace"; g.fillText("42\u00b011'N 50\u00b028'E", 6, h - 22); g.fillText("SOG 0.4 kn  COG 182", 6, h - 8);
+      } else if (sc.kind === "sounder") {
+        if (Math.floor(time * 8) !== sc.tick) { sc.tick = Math.floor(time * 8); sounding.shift(); sounding.push(944 + Math.sin(time * 0.3) * 7 + (Math.random() - 0.5) * 3); }
+        g.fillStyle = "#08101a"; g.fillRect(0, 0, w, h);
+        const y = (m) => 30 + (m - 900) * 2.4;
+        g.fillStyle = "#3a2410"; g.beginPath(); g.moveTo(0, h); sounding.forEach((m, i) => g.lineTo(i * 2, y(m))); g.lineTo(w, h); g.fill();
+        g.strokeStyle = "#ffb347"; g.lineWidth = 2; g.beginPath(); sounding.forEach((m, i) => (i ? g.lineTo(i * 2, y(m)) : g.moveTo(0, y(m)))); g.stroke();
+        g.fillStyle = "#ffd9a0"; g.font = "bold 22px PT Mono, monospace"; g.fillText(`${Math.round(sounding[127])} m`, 8, 24);
+        g.font = "11px PT Mono, monospace"; g.fillText("ECHO SOUNDER 38 kHz", 120, 16);
+      } else {
+        g.fillStyle = "#06121a"; g.fillRect(0, 0, w, h);
+        g.fillStyle = "#f2b632"; g.font = "bold 16px PT Mono, monospace"; g.fillText("NERPA-2  TLP-02", 10, 22);
+        const rows = [["O2", 0.98], ["BATT", 0.94], ["BALLAST", 0.5], ["TETHER", 1]];
+        rows.forEach(([k, v], i) => { const yy = 48 + i * 34; g.fillStyle = "#9fc4d8"; g.font = "12px PT Mono, monospace"; g.fillText(k, 10, yy);
+          g.strokeStyle = "#2f5a70"; g.strokeRect(80, yy - 11, 160, 12); g.fillStyle = v > 0.6 ? "#40ff70" : "#ffb347"; g.fillRect(81, yy - 10, 158 * v, 10); });
+        g.fillStyle = (time % 1.4) < 0.7 ? "#40ff70" : "#103018"; g.beginPath(); g.arc(236, 18, 6, 0, 7); g.fill();
+      }
+      sc.tex.needsUpdate = true;
     }
-  });
-  for (const [x, kind] of [[-1.5, "chart"], [0, "radar"], [1.5, "gauges"]]) {
-    const tx = screenTex(kind);
-    const s = new THREE.Mesh(new THREE.PlaneGeometry(0.86, 0.56), new THREE.MeshPhysicalMaterial({ color: 0x000000, emissive: 0xffffff, emissiveMap: tx, emissiveIntensity: 1.6,
+  }
+  let screenT = 0;
+  const updateScreens = (dt, time) => { screenT += dt; if (screenT > 1 / 15) { screenT = 0; drawScreens(time); } };
+  for (const [x, kind] of [[-2.1, "chart"], [-0.7, "radar"], [0.7, "sounder"], [2.1, "nerpa"]]) {
+    const tx = liveScreen(kind);
+    const s = new THREE.Mesh(new THREE.PlaneGeometry(0.86, 0.56), new THREE.MeshPhysicalMaterial({ color: 0x000000, emissive: 0xffffff, emissiveMap: tx, emissiveIntensity: 1.5,
       roughness: 0.12, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.08 }));      // the lit picture behind glass: it reflects the bridge
-    s.position.set(x, 1.43, HZ1 - 0.42); s.rotation.y = Math.PI; s.rotation.x = 0.25; consoleG.add(s);
-    const bez = mesh(rbox(1.0, 0.8, 0.08, 0.035), darkSteel); bez.position.set(x, 1.4, HZ1 - 0.38); bez.rotation.x = -0.25; consoleG.add(bez);
+    const bez = mesh(rbox(1.0, 0.8, 0.08, 0.035), panelGrey); bez.position.set(x, 1.4, HZ1 - 0.38); bez.rotation.x = -0.25; consoleG.add(bez);
+    s.geometry = new THREE.PlaneGeometry(0.9, 0.62); s.position.set(0, 0.04, -0.043); s.rotation.set(0, Math.PI, 0); bez.add(s);   // in the bezel's face
     const keys = new THREE.Group(); keys.position.set(x, 1.4, HZ1 - 0.38); keys.rotation.x = -0.25; consoleG.add(keys);
     for (let k = 0; k < 7; k++) { const kb = mesh(rbox(0.07, 0.03, 0.02, 0.008), std({ color: k === 6 ? 0x3a6a3a : 0x2c3034, roughness: 0.6 })); kb.position.set(-0.3 + k * 0.1, -0.34, -0.045); keys.add(kb); }
     const pw = new THREE.Mesh(new THREE.CircleGeometry(0.008, 10), emissive(0x40ff70, 3)); pw.position.set(0.44, -0.34, -0.046); pw.rotation.y = Math.PI; keys.add(pw);
   }
   {   // on the sloping console top: the engine telegraph levers (port, starboard), a trackball, rows of lit keys
-    const top = new THREE.Group(); top.position.set(0, 1.07, HZ1 - 0.66); top.rotation.x = 0.35; consoleG.add(top);
+    const top = new THREE.Group(); top.position.set(0, 1.07, HZ1 - 0.66); top.rotation.x = Math.PI / 6; consoleG.add(top);
     const black = std({ color: 0x111214, roughness: 0.5 }), chrome = std({ color: 0xd8dde0, metalness: 1, roughness: 0.18 });
     for (const lx of [1.95, 2.15]) {
       const slot = mesh(rbox(0.06, 0.012, 0.22, 0.006), black); slot.position.set(lx, 0.01, 0); top.add(slot);
@@ -535,15 +581,31 @@ export function createDeck(view, { lifeLabel = "" } = {}) {
       const lt = new THREE.Mesh(new THREE.CircleGeometry(0.009, 10), emissive(col, 3)); lt.rotation.x = -Math.PI / 2; lt.position.set(lx, 0.013, -0.1); top.add(lt);
     }
   }
+  // the helm: a small wheel on its own pedestal in front of the console (not sticking out of it), a hub and a shaft
   const helm = new THREE.Group();
-  helm.add(mesh(new THREE.TorusGeometry(0.26, 0.022, 10, 36), std({ color: 0x5a3820, roughness: 0.5 })));
-  for (let i = 0; i < 6; i++) { const s = mesh(rbox(0.02, 0.5, 0.02, 0.008), steel); s.rotation.z = (i / 6) * Math.PI; helm.add(s); }
-  helm.position.set(0, 1.25, HZ1 - 1.0); helm.rotation.x = -0.5; consoleG.add(helm);
+  const helmWood = std({ color: 0x5a3820, roughness: 0.45 });
+  helm.add(at(mesh(lathe([[0.2, 0], [0.16, 0.06], [0.09, 0.12], [0.08, 0.85], [0.11, 0.92], [0.1, 1.0], [0, 1.0]], 18), consoleGrey), 0, 0, 0));
+  const wheel = new THREE.Group(); wheel.position.set(0, 1.08, -0.12); wheel.rotation.x = -0.25; helm.add(wheel);
+  wheel.add(mesh(new THREE.TorusGeometry(0.2, 0.02, 10, 36), helmWood));
+  wheel.add(mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.08, 14).rotateX(Math.PI / 2), steel));
+  for (let i = 0; i < 6; i++) { const sp = mesh(rbox(0.016, 0.4, 0.016, 0.006), steel); sp.rotation.z = (i / 6) * Math.PI; wheel.add(sp); }
+  for (let i = 0; i < 6; i++) { const hnd = mesh(new THREE.CylinderGeometry(0.012, 0.014, 0.07, 8), helmWood); const a = (i / 6) * Math.PI * 2; hnd.position.set(Math.cos(a) * 0.235, Math.sin(a) * 0.235, 0); hnd.rotation.z = a - Math.PI / 2; wheel.add(hnd); }
+  wheel.add(at(mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.14, 10).rotateX(Math.PI / 2), steel), 0, 0, 0.09));
+  helm.position.set(0, 0, HZ1 - 1.15); house.add(helm);
+  // the magnetic compass in its binnacle (brass dome on a wooden pedestal) beside the helm
+  const binn = new THREE.Group();
+  binn.add(mesh(lathe([[0.17, 0], [0.13, 0.08], [0.12, 0.9], [0.17, 0.98], [0.18, 1.04], [0, 1.04]], 18), helmWood));
+  const dome = mesh(new THREE.SphereGeometry(0.15, 20, 12, 0, Math.PI * 2, 0, Math.PI / 2), std({ color: 0xc39447, metalness: 1, roughness: 0.25 })); dome.position.y = 1.04; binn.add(dome);
+  for (const sx of [-1, 1]) { const ball = mesh(new THREE.SphereGeometry(0.06, 14, 10), std({ color: sx < 0 ? 0xb8281e : 0x2a7a3a, metalness: 0.5, roughness: 0.3 })); ball.position.set(sx * 0.24, 1.0, 0); binn.add(ball);
+    binn.add(at(mesh(rbox(0.12, 0.02, 0.03, 0.008), steel), sx * 0.17, 0.98, 0)); }
+  binn.position.set(-1.45, 0, HZ1 - 1.35); house.add(binn);
+  // the log book lying on the console top, a pencil on it
+  const logbk = mesh(rbox(0.28, 0.035, 0.36, 0.01), std({ color: 0x23324a, roughness: 0.7 })); logbk.position.set(1.15, 1.13, HZ1 - 0.75); logbk.rotation.set(Math.PI / 6, 0.15, 0); house.add(logbk);
   const chair = new THREE.Group();
   chair.add(at(mesh(lathe([[0.25, 0], [0.04, 0.05], [0.04, 0.55], [0, 0.56]], 16), steel), 0, 0, 0));
   chair.add(at(mesh(rbox(0.55, 0.12, 0.5, 0.05), rubber), 0, 0.62, 0));
   chair.add(at(mesh(rbox(0.52, 0.6, 0.1, 0.05), rubber), 0, 0.98, -0.25));
-  chair.position.set(0.9, 0, HZ1 - 2.0); house.add(chair);
+  chair.position.set(1.55, 0, HZ1 - 1.6); chair.rotation.y = 0.35; house.add(chair);
   // the VHF radio: a set on the left of the console, its scale glows green; a red light blinks on a call
   const radio = new THREE.Group();
   {   // a marine VHF set: a cast body in a U-bracket with thumb screws, the channel display, keys, the red DISTRESS key
@@ -1071,9 +1133,9 @@ export function createDeck(view, { lifeLabel = "" } = {}) {
   const colliders = [
     [-HX - 0.1, HZ0 - 0.12, -0.62, HZ0 + 0.12], [0.62, HZ0 - 0.12, HX + 0.1, HZ0 + 0.12],      // the back wall either side of the door
     [-HX - 0.12, HZ0, -HX + 0.12, HZ1], [HX - 0.12, HZ0, HX + 0.12, HZ1],                      // side walls
-    [-HX, HZ1 - 0.15, HX, HZ1 + 0.15], [-3.05, HZ1 - 1.0, 3.05, HZ1],                          // front wall, console
+    [-HX, HZ1 - 0.15, HX, HZ1 + 0.15], [-3.05, HZ1 - 1.0, 3.05, HZ1], [-0.25, HZ1 - 1.4, 0.25, HZ1 - 0.95], [-1.65, HZ1 - 1.55, -1.25, HZ1 - 1.15],                          // front wall, console
     [3.28, HZ1 - 0.37, 3.72, HZ1 - 0.03],                                                       // the binoculars shelf
-    [0.65, HZ1 - 2.3, 1.15, HZ1 - 1.75],                                                        // the chair
+    [1.3, HZ1 - 1.9, 1.8, HZ1 - 1.35],                                                          // the chair
     [-0.92, HZ0, -0.68, 7.08], [0.68, HZ0, 0.92, 7.08],                                         // the corridor walls
     [-2.95, 0.36, -1.45, 2.25],                                                                 // the companionway
     [-0.45, -11.65, 1.65, -8.75],                                                               // Nerpa on her cradle
@@ -1140,7 +1202,12 @@ export function createDeck(view, { lifeLabel = "" } = {}) {
     rain.update(view.camera, lampList.slice(0, 6), W.rain, W.wind, time, ship, W.flash);
   }
   const tmpW = new THREE.Vector3();
+  // radar targets: the boats and the helicopter at the crash site, the ships and the platform on the horizon, «Poseidon-2»
+  radarTargets.push({ x: C.x, z: C.z, col: "#c8ff6a", s: 5 }, { x: C.x + 60, z: C.z - 40, col: "#c8ff6a", s: 4 }, { x: C.x - 70, z: C.z + 30, col: "#c8ff6a", s: 4 },
+    { x: rig.position.x, z: rig.position.z, col: "#ffd36a", s: 7 }, { x: poseidonFar.position.x * 20, z: poseidonFar.position.z * 20, col: "#ff6a50", s: 6 });
+  horizon.children.forEach((sp, i) => { if (i < 9 && i % 2 === 0) radarTargets.push({ x: sp.position.x, z: sp.position.z, col: "#7dffb0", s: 4 }); });
   function update(dt, time) {
+    updateScreens(dt, time);
     sea.material.uniforms.uTime.value = time;
     slick.material.uniforms.uTime.value = time;
     // the ship rolls +-3 deg, pitches a little and heaves with the swell (CLAUDE.md 23.2)
