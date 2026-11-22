@@ -405,13 +405,19 @@ export function createDeck(view, { lifeLabel = "" } = {}) {
   const steelFor = (w, h) => houseSteel.userData.forSize(w, h);
 
   const shape = new THREE.Shape(HULL.map(([x, z]) => new THREE.Vector2(x, z)));
+  // the companionway's opening in the deck (C1): the ladder goes down through it into the lit corridor
+  const HOLE = { x0: -2.58, x1: -1.82, z0: 0.56, z1: 1.76 };
+  shape.holes.push(new THREE.Path([[HOLE.x0, HOLE.z0], [HOLE.x0, HOLE.z1], [HOLE.x1, HOLE.z1], [HOLE.x1, HOLE.z0]].map(([x, z]) => new THREE.Vector2(x, z))));
   const deckGeo = new THREE.ShapeGeometry(shape, 12).rotateX(Math.PI / 2);
   const deckUV = deckGeo.attributes.uv; for (let i = 0; i < deckUV.count; i++) deckUV.setXY(i, (deckGeo.attributes.position.getX(i) + 5) / 10, (deckGeo.attributes.position.getZ(i) - STERN) / 45);
   const deckMat = deckMaterial(); deckMat.side = THREE.DoubleSide;
   const deck = mesh(deckGeo, deckMat, { cast: false });
   deck.position.y = 0.001;
   ship.add(deck);
-  const hullGeo = new THREE.ExtrudeGeometry(shape, { depth: 4.2, bevelEnabled: true, bevelThickness: 0.12, bevelSize: 0.12, bevelSegments: 3, curveSegments: 14 });
+  // the hull's own outline: its bevel (0.12) narrows holes, so the companionway's shaft is cut 0.14 wider
+  const hullShape = new THREE.Shape(HULL.map(([x, z]) => new THREE.Vector2(x, z)));
+  { const e = 0.14; hullShape.holes.push(new THREE.Path([[HOLE.x0 - e, HOLE.z0 - e], [HOLE.x0 - e, HOLE.z1 + 1.1], [HOLE.x1 + e, HOLE.z1 + 1.1], [HOLE.x1 + e, HOLE.z0 - e]].map(([x, z]) => new THREE.Vector2(x, z)))); }
+  const hullGeo = new THREE.ExtrudeGeometry(hullShape, { depth: 4.2, bevelEnabled: true, bevelThickness: 0.12, bevelSize: 0.12, bevelSegments: 3, curveSegments: 14 });
   hullGeo.rotateX(Math.PI / 2);
   const hull = mesh(hullGeo, hullPaint, { cast: false });
   hull.position.y = -0.14;           // its bevelled top cap stays under the deck plates
@@ -703,14 +709,78 @@ export function createDeck(view, { lifeLabel = "" } = {}) {
     const pl = new THREE.PointLight(0xffc27a, 5, 9, 1.5); pl.position.set(sx, 2.15, HZ0 - 0.6); ship.add(pl);
   }
   // ---------------- between the bridge and the working deck: the companionway down to the cabin
+  // C1: a real companionway (the deck entrance of a research ship): a 2.1 m steel trunk with rounded edges, seams
+  // and rivets, its watertight door open at 100 degrees, a knee-high coaming with yellow-black stripes, a sign over
+  // the door; inside a steep 60-degree ladder with ribbed aluminium treads and two handrails goes down through the
+  // opening in the deck into the warm light of the corridor below; a 2700 K ceiling light.
   const comp = new THREE.Group(); comp.position.set(-2.2, 0, 1.15); ship.add(comp);
-  comp.add(at(mesh(rbox(1.25, 1.15, 1.7, 0.08), whitePaint), 0, 0.575, 0.15));
-  const compDoor = new THREE.Mesh(new THREE.PlaneGeometry(0.8, 1.0), std({ color: 0x050403, roughness: 1 })); compDoor.position.set(0, 0.52, -0.705); compDoor.rotation.y = Math.PI; comp.add(compDoor);
-  for (let i = 0; i < 4; i++) comp.add(at(mesh(rbox(0.74, 0.04, 0.22, 0.015), greyPaint), 0, 0.42 - i * 0.12, -0.55 + i * 0.22));
-  for (const sx of [-0.55, 0.55]) comp.add(mesh(tube([[sx, 0.2, -1.2], [sx, 1.0, -1.15], [sx, 1.15, -0.8]], 0.022, 12), steel));
-  const compLamp = new THREE.Mesh(new THREE.SphereGeometry(0.05, 10, 8), emissive(0xffc070, 5)); compLamp.position.set(0, 1.08, -0.72); comp.add(compLamp);
-  comp.add(at(glowSprite(0xffb860, 0.9, 1.2), 0, 1.08, -0.75));
-  const compLight = new THREE.PointLight(0xffb060, 1.4, 4, 1.6); compLight.position.set(0, 1.0, -1.3); comp.add(compLight);
+  {
+    const W2 = 0.68, D0 = -0.72, D1 = 1.0, H = 2.1, T = 0.06;           // half width, front / back (local z), height
+    const wallFor = steelFor(1.4, 2.1);
+    comp.add(at(mesh(rbox(T, H, D1 - D0, 0.03), wallFor), -W2, H / 2, (D0 + D1) / 2));        // the sides
+    comp.add(at(mesh(rbox(T, H, D1 - D0, 0.03), wallFor), W2, H / 2, (D0 + D1) / 2));
+    comp.add(at(mesh(rbox(W2 * 2 + T, H, T, 0.03), wallFor), 0, H / 2, D1));                   // the back
+    comp.add(at(mesh(rbox(W2 * 2 + 0.2, 0.1, D1 - D0 + 0.2, 0.06), whitePaint), 0, H + 0.03, (D0 + D1) / 2));   // the roof, a little overhang
+    // the front with the door opening (rounded corners) above the coaming
+    const DW = 0.8, DH = 1.72, DY = 0.32;
+    const fs = new THREE.Shape([[-W2 - T / 2, 0], [W2 + T / 2, 0], [W2 + T / 2, H], [-W2 - T / 2, H]].map(([x, y]) => new THREE.Vector2(x, y)));
+    const hp = new THREE.Path(); { const r = 0.16, x0 = -DW / 2, y0 = DY, x1 = DW / 2, y1 = DY + DH;
+      hp.moveTo(x0 + r, y0); hp.lineTo(x1 - r, y0); hp.quadraticCurveTo(x1, y0, x1, y0 + r); hp.lineTo(x1, y1 - r); hp.quadraticCurveTo(x1, y1, x1 - r, y1);
+      hp.lineTo(x0 + r, y1); hp.quadraticCurveTo(x0, y1, x0, y1 - r); hp.lineTo(x0, y0 + r); hp.quadraticCurveTo(x0, y0, x0 + r, y0); }
+    fs.holes.push(hp);
+    const front = mesh(new THREE.ExtrudeGeometry(fs, { depth: T, bevelEnabled: true, bevelThickness: 0.015, bevelSize: 0.015, bevelSegments: 2, curveSegments: 10 }), wallFor);
+    front.position.set(0, 0, D0 - T / 2); comp.add(front);
+    // rivets along the edges (one instanced mesh)
+    const rivG = new THREE.SphereGeometry(0.012, 6, 4), rivets = [];
+    for (let y = 0.15; y < H - 0.05; y += 0.15) for (const x of [-W2 - T / 2 - 0.004, W2 + T / 2 + 0.004]) for (const z of [D0 + 0.05, D1 - 0.05]) rivets.push([x, y, z]);
+    for (let x = -W2 + 0.1; x < W2; x += 0.15) rivets.push([x, H - 0.08, D0 - T / 2 - 0.02]);
+    const riv = new THREE.InstancedMesh(rivG, whitePaint, rivets.length); const m4 = new THREE.Matrix4();
+    rivets.forEach((p, i) => riv.setMatrixAt(i, m4.makeTranslation(...p))); comp.add(riv);
+    // the coaming: knee high, yellow and black stripes
+    const stripes = canvasTexture(256, 64, (g, w, h) => { g.fillStyle = "#e3b21f"; g.fillRect(0, 0, w, h); g.fillStyle = "#151515";
+      for (let x = -h; x < w + h; x += 48) { g.beginPath(); g.moveTo(x, h); g.lineTo(x + 24, h); g.lineTo(x + 24 + h, 0); g.lineTo(x + h, 0); g.fill(); } });
+    stripes.wrapS = THREE.RepeatWrapping;
+    comp.add(at(mesh(rbox(DW + 0.02, DY, 0.09, 0.02), std({ map: stripes, roughness: 0.6, metalness: 0.2 })), 0, DY / 2, D0 - T / 2 + 0.01));
+    // the door, open to 100 degrees
+    const door = watertightDoor({ w: DW, h: DH, open: 1.745, color: 0xbfc4c4 });
+    door.position.set(0, DY + DH / 2, D0 - T - 0.02); door.rotation.y = Math.PI; comp.add(door);
+    // the sign over the door: a ladder going down (a pictogram, no words)
+    const sign = canvasTexture(256, 128, (g, w, h) => {
+      g.fillStyle = "#1b7a3e"; g.fillRect(0, 0, w, h); g.strokeStyle = "#fff"; g.lineWidth = 9; g.lineCap = "round";
+      g.beginPath(); g.moveTo(70, 28); g.lineTo(130, 100); g.moveTo(100, 28); g.lineTo(160, 100); g.stroke();
+      g.lineWidth = 6; for (let k = 0; k < 4; k++) { const y = 42 + k * 16; g.beginPath(); g.moveTo(70 + (y - 28) * 0.83, y); g.lineTo(100 + (y - 28) * 0.83, y); g.stroke(); }
+      g.beginPath(); g.moveTo(205, 34); g.lineTo(205, 92); g.moveTo(190, 76); g.lineTo(205, 94); g.lineTo(220, 76); g.stroke();
+    });
+    comp.add(at(new THREE.Mesh(new THREE.PlaneGeometry(0.36, 0.18), new THREE.MeshStandardMaterial({ map: sign, roughness: 0.4, emissive: 0xffffff, emissiveMap: sign, emissiveIntensity: 0.25 })), 0, DY + DH + 0.14, D0 - T - 0.02, Math.PI));
+    // the ladder: 60 degrees, ribbed aluminium treads, stringers, handrails on both sides
+    const ribs = canvasTexture(64, 64, (g, w, h) => { g.fillStyle = "#808080"; g.fillRect(0, 0, w, h); g.fillStyle = "#fff"; for (let y = 0; y < h; y += 8) g.fillRect(0, y, w, 3); }, false);
+    ribs.wrapS = ribs.wrapT = THREE.RepeatWrapping;
+    const alu = std({ color: 0xc7ccd0, metalness: 0.85, roughness: 0.35, bumpMap: ribs, bumpScale: 1.2 });
+    const run = 1 / Math.tan(Math.PI / 3);                              // 60 degrees: z per metre of drop
+    const top = { y: 0.02, z: HOLE.z0 - 1.15 + 0.06 };
+    for (let k = 0; k < 10; k++) {
+      const y = top.y - k * 0.24, z = top.z + k * 0.24 * run;
+      comp.add(at(mesh(rbox(0.6, 0.035, 0.16, 0.012), alu), 0, y, z));
+    }
+    const drop = 10 * 0.24;
+    for (const sx of [-0.33, 0.33]) {
+      const sl = mesh(rbox(0.04, 0.18, drop / Math.sin(Math.PI / 3) + 0.2, 0.015), alu);
+      sl.position.set(sx, top.y - drop / 2, top.z + drop * run / 2); sl.rotation.x = -(Math.PI / 2 - Math.PI / 3); comp.add(sl);
+      comp.add(mesh(tube([[sx * 1.08, -drop + 0.9, top.z + drop * run], [sx * 1.08, 0.9, top.z], [sx * 1.08, 1.05, top.z - 0.35], [sx * 1.08, 0.95, D0 + 0.05]], 0.02, 20), steel));
+    }
+    // the well under the deck (painted walls) and the corridor's lit floor
+    const wellMat = std({ color: 0xd8d2c4, roughness: 0.8, side: THREE.BackSide });
+    const well = mesh(new THREE.BoxGeometry(HOLE.x1 - HOLE.x0 - 0.02, 2.6, HOLE.z1 - HOLE.z0 + 1.0), wellMat, { cast: false });
+    well.position.set(0, -1.32, (HOLE.z0 + HOLE.z1) / 2 - 1.15 + 0.45); comp.add(well);
+    const floorTex = canvasTexture(128, 256, (g, w, h) => { const gr = g.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, "#3a2a1c"); gr.addColorStop(1, "#ffcf8f");
+      g.fillStyle = gr; g.fillRect(0, 0, w, h); g.fillStyle = "#0003"; for (let y = 0; y < h; y += 32) g.fillRect(0, y, w, 2); });
+    comp.add(at(new THREE.Mesh(new THREE.PlaneGeometry(0.74, 2.3).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: floorTex, side: THREE.DoubleSide })), 0, -2.58, (HOLE.z0 + HOLE.z1) / 2 - 1.15 + 0.45));
+    // the ceiling light of the trunk (2700 K)
+    const lampGlass = new THREE.Mesh(new THREE.SphereGeometry(0.07, 14, 10, 0, Math.PI * 2, 0, Math.PI / 2), emissive(0xffb46b, 4));
+    lampGlass.rotation.x = Math.PI; lampGlass.position.set(0, H - 0.04, 0.1); comp.add(lampGlass);
+    comp.add(at(glowSprite(0xffb46b, 0.7, 1.1), 0, H - 0.12, 0.1));
+  }
+  const compLight = new THREE.PointLight(0xffb46b, 2.2, 5, 1.6); compLight.position.set(0, 1.7, -0.2); comp.add(compLight);
 
   // ---------------- the working deck (stern): A-frame, Nerpa on her cradle, winch, container, rope, rings
   const aframe = new THREE.Group(); aframe.position.set(0, 0, STERN + 0.9); ship.add(aframe);
@@ -1005,7 +1075,7 @@ export function createDeck(view, { lifeLabel = "" } = {}) {
     [3.28, HZ1 - 0.37, 3.72, HZ1 - 0.03],                                                       // the binoculars shelf
     [0.65, HZ1 - 2.3, 1.15, HZ1 - 1.75],                                                        // the chair
     [-0.92, HZ0, -0.68, 7.08], [0.68, HZ0, 0.92, 7.08],                                         // the corridor walls
-    [-2.85, 0.25, -1.55, 2.05],                                                                 // the companionway
+    [-2.95, 0.36, -1.45, 2.25],                                                                 // the companionway
     [-0.45, -11.65, 1.65, -8.75],                                                               // Nerpa on her cradle
     [2.55, -5.0, 4.4, -3.8],                                                                    // the winch
     [-4.4, -9.1, -1.82, -2.9],                                                                  // the container
@@ -1019,7 +1089,7 @@ export function createDeck(view, { lifeLabel = "" } = {}) {
   const objects = {
     radio: { show: [radio], hit: proxy(0.8, 0.6, 0.6, -2.25, 1.25, HZ1 - 0.75), stand: [-2.1, HZ1 - 1.55], look: [-2.25, 1.2, HZ1 - 0.6] },
     binoculars: { show: [binos], hit: proxy(0.5, 0.4, 0.5, HX + 0.3, 1.15, HZ1 - 0.2), stand: [HX + 0.8, HZ1 + 0.5], look: [HX + 0.3, 1.13, HZ1 - 0.2] },
-    stairs: { show: [comp], hit: proxy(1.4, 1.4, 1.9, -2.2, 0.7, 1.3), stand: [-2.2, -0.35], look: [-2.2, 0.6, 0.45] },
+    stairs: { show: [comp], hit: proxy(1.4, 2.1, 1.9, -2.2, 1.05, 1.3), stand: [-2.2, -0.15], look: [-2.2, 0.9, 0.6] },
     nerpa: { show: [nerpa, cradle], hit: proxy(2.9, 2.6, 4.0, 0.6, 1.4, -10.2), stand: [0.6, -7.5], look: [0.6, 1.5, -9.6] },
     workshop: { show: [cont], hit: proxy(2.6, 2.7, 6.2, -3.08, 1.3, -6.0), stand: [-1.2, -9.6], look: [-3.08, 1.3, -9.0] },
   };
