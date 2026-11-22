@@ -47,6 +47,10 @@ export function createCoach(root, steps) {
   }
   function stop() { layer.hidden = true; store.set(); }
   window.addEventListener("resize", () => { if (!layer.hidden) place(); });
+  window.addEventListener("keydown", (e) => {       // E / Enter: "Next" (A2)
+    if (layer.hidden || e.repeat || !["KeyE", "Enter"].includes(e.code) || document.body.classList.contains("menu-open")) return;
+    e.preventDefault(); e.stopPropagation(); layer.querySelector(".coach-next")?.click();
+  }, true);
 
   return {
     start() { i = 0; show(); },

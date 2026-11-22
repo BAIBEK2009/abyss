@@ -18,6 +18,11 @@ export function createIntro(root, { onClose } = {}) {
     <button class="go" data-id="who-go">${t("who_go")}</button></div>`;
   root.append(back);
   let first = false;
+  // E / Enter / Space close it too (A2: a key on an open window always does something)
+  addEventListener("keydown", (e) => {
+    if (back.hidden || e.repeat || !["KeyE", "Enter", "Space"].includes(e.code) || document.body.classList.contains("menu-open")) return;
+    e.preventDefault(); e.stopPropagation(); back.querySelector(".go").click();
+  }, true);
   back.querySelector(".go").addEventListener("click", () => {
     back.hidden = true;
     store.set();
