@@ -10,6 +10,7 @@ import * as THREE from "three";
 import { canvasTexture } from "../view.js";
 import { anim, ease, sleep } from "../anim.js";
 import { t } from "../i18n.js";
+import { who } from "../story.js";
 import { createNerpa } from "./nerpa.js";
 import { HULL } from "./deck.js";
 import { mergeVertices } from "three/addons/utils/BufferGeometryUtils.js";
@@ -1043,7 +1044,7 @@ export function createDive(view) {
     D = { x: 0, z: 0, y: 0, yaw: 0, vx: 0, vz: 0, turn: 0, o2: O2, max: O2, found: false, grabT: 0, cov: new Set(), pingCD: 0,
           pingerT: 0.6, seen: new Set(), creakT: 4, heartT: 0, tether: 0, shake: 0, desc: 0, t0: 0, tick: 0,
           hasBox: !!sceneInfo.box || !!sceneInfo.find, find: sceneInfo.find || null, hasDebris: !!sceneInfo.debris,
-          debrisSeen: false, anyDebris: false, cine: null, fdOff: 0, fdRange: "", fdBars: 0, far: null, track: [[0, 0]], marks: [], buoys: [], task: sceneInfo.task || null, onEvent: sceneInfo.onEvent || (() => {}) };
+          debrisSeen: false, anyDebris: false, cine: null, fdOff: 0, fdRange: "", fdBars: 0, far: null, track: [[0, 0]], marks: [], buoys: [], hintT: -99, bestD: null, strongAt: null, sent: new Set(), o2Warn: false, story: !!sceneInfo.find, task: sceneInfo.task || null, onEvent: sceneInfo.onEvent || (() => {}) };
     box = D.find ? flapFind : recorder;
     recorder.visible = flapFind.visible = false;
     for (const k in keys) keys[k] = false;
@@ -1100,6 +1101,25 @@ export function createDive(view) {
       D.marks.push({ o, x: o.position.x, z: o.position.z, s, t: T + (dd / 28) * 1.2 });
     }
   }
+  /**
+   * Dana's hints on the way (22.3 p. 5), at most one in 8 s: "the signal is getting stronger" each time Nerpa has
+   * closed 4 m on the beacon heading towards it; "you're drifting off, turn to the needle" when she has moved 2.5 m
+   * away from the closest she came, with the beacon off to the side or behind. A story dive plays the first of each
+   * as the story's own beat (dive:signal_stronger, dive:off_course: Dana in the speech window), then they are short
+   * cockpit subtitles.
+   */
+  function danaHint(sd, rel) {
+    if (D.bestD === null) { D.bestD = D.strongAt = sd; return; }
+    D.bestD = Math.min(D.bestD, sd);
+    let kind = null;
+    if (sd < D.strongAt - 4 && Math.abs(rel) < 0.9) kind = "signal_stronger";
+    else if (sd > D.bestD + 2.5 && Math.abs(rel) > 1.05 && Math.hypot(D.vx, D.vz) > 0.4) kind = "off_course";
+    if (!kind || T - D.hintT < 8) return;
+    D.hintT = T;
+    if (kind === "signal_stronger") D.strongAt = sd; else { D.bestD = D.strongAt = sd; cockpit.pulseFinder(); }      // back on course, 4 m closer: praise
+    if (D.story && !D.sent.has(kind)) { D.sent.add(kind); D.onEvent(kind); return; }
+    cockpit.msg(t("dv_says", { name: who("dana").name.split(" ")[0], text: t(kind === "signal_stronger" ? "dv_hint_stronger" : "dv_hint_off") }), 3600);
+  }
   /** What the sonar screen draws (the dive map). */
   const scopeMap = () => ({ x: D.x, z: D.z, yaw: D.yaw, track: D.track, cov: D.cov, zone: SEARCH_R, tether: TETHER, marks: D.marks, buoys: D.buoys });
 
@@ -1154,6 +1174,9 @@ export function createDive(view) {
       cockpit.set({ o2: D.o2, max: D.max, fog: clamp((16 - D.o2) / 16, 0, 0.85), depth: BED_M - bedH(D.x, D.z) * 9, low: D.o2 < 12 });
     }
     if (D.o2 < 12 && (D.heartT -= dt) <= 0) { D.heartT = 0.85; sfx.heart(); }
+    if (D.o2 < 30 && !D.o2Warn && D.max > 40) {       // Murat (22.3 p. 6): time to think about coming up
+      D.o2Warn = true; cockpit.msg(t("dv_says", { name: who("murat").name, text: t("dv_o2_30") }), 3600);
+    }
     if ((D.creakT -= dt) <= 0) { D.creakT = 6 + Math.random() * 7; sfx.creak(); }
     // where the light points: what is seen, what can be grabbed, how much seabed is covered
     const aimYaw = D.yaw - mx * 0.62, aimPitch = clamp(-0.36 - my * 0.55, -1.1, 0.25);
@@ -1205,6 +1228,7 @@ export function createDive(view) {
         D.fdBars = src.far ? 1 : clamp(Math.ceil(vol * 5), 1, 5);
       }
       sfx.pinger(vol, pan); cockpit.pinger(src ? vol : 0.05);
+      if (src && !src.far && !D.found) danaHint(sd, trueRel);
       cockpit.finder({ bearing: src ? (-trueRel * 180) / Math.PI + D.fdOff : null, bars: src ? D.fdBars : 0, range: src ? D.fdRange : t("ck_finder_none") });
     } else cockpit.aim(src ? (-trueRel * 180) / Math.PI + D.fdOff : null);
     cockpit.set({ heading: D.yaw - mx * 0.36 });
@@ -1489,7 +1513,7 @@ export function createDive(view) {
     return true;
   }
   /** Test hook: where the dive's main find and the debris lie. */
-  const debugWhere = () => ({ buoys: buoys.filter((g) => g.visible).map((g) => g.position.toArray()), box: box.visible ? box.position.toArray() : null, debris: debris.filter((g) => g.visible).map((g) => g.position.toArray()),
+  const debugWhere = () => ({ hint: [D.bestD, D.strongAt, D.hintT, T, [...(D.sent || [])]].map((v) => (typeof v === "number" ? +v.toFixed(1) : v)), bearing: cockpit.bearing, buoys: buoys.filter((g) => g.visible).map((g) => g.position.toArray()), box: box.visible ? box.position.toArray() : null, debris: debris.filter((g) => g.visible).map((g) => g.position.toArray()),
                              keys: debris.filter((g) => g.visible).map((g) => g.userData.key), rocks: bigRocks.slice().sort((a, b) => b[2] - a[2]).slice(0, 4) });
   return { deep, cinematic, search, leave, debugFaceBox, debugLook, debugWhere, stepPuffs };
 }

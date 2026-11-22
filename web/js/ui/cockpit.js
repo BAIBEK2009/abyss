@@ -143,6 +143,8 @@ export function createCockpit(root, handlers) {
     el: ck,
     get centreY() { return CY; },
     get radius() { return R; },
+    /** Where the finder's needle points now (deg from the bow, + = right). */
+    get bearing() { return Math.round((((fd.a % 360) + 540) % 360) - 180); },
     show() { layout(); ck.classList.add("on"); $(".ck-help").style.opacity = 1; },
     hide() { ck.classList.remove("on", "live", "low"); },
     live(on) { ck.classList.toggle("live", on); },

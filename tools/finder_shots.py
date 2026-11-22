@@ -75,13 +75,32 @@ with sync_playwright() as pw:
     page.wait_for_timeout(2600)
     shot(page, "finder_far")
     # the sonar screen: swim along the trail by hand for a while (the track, the covered bed), then ping
-    for key, ms in (("w", 2500), ("a", 700), ("w", 2200), ("d", 1400), ("w", 2400)):
+    # Dana's hints: first away from the find (off course), then back along the needle (stronger), by hand
+    heard = []
+
+    def listen(ms):
+        for _ in range(ms // 250):
+            page.wait_for_timeout(250)
+            for said in page.evaluate("[document.querySelector('.ck-msg.on')?.textContent || '', document.querySelector('.speech:not([hidden]) .sp-text')?.textContent || '']"):
+                if said and not any(h.startswith(said) for h in heard):
+                    heard[:] = [h for h in heard if not said.startswith(h)] + [said]
+                    print("  heard:", said[:100])
+
+    w0 = page.evaluate("window.__abyss.diveWhere()")
+    if w0.get("box"):
+        bx, bz = w0["box"][0], w0["box"][2]
+        page.evaluate(f"window.__abyss.diveLook(0, 0, {math.atan2(bx, bz)}, 0.35)")       # the bow away from the find
+        page.keyboard.down("KeyW"); listen(5000); page.keyboard.up("KeyW"); listen(1500)
+        page.keyboard.down("KeyA"); listen(3300); page.keyboard.up("KeyA")             # turn round, as the needle says
         page.keyboard.down("KeyW")
-        if key != "w":
-            page.keyboard.down("Key" + key.upper())
-        page.wait_for_timeout(ms)
-        page.keyboard.up("Key" + key.upper())
-    page.keyboard.up("KeyW")
+        for _ in range(14):
+            ww = page.evaluate("window.__abyss.diveWhere()")
+            fd = ww["bearing"]                                                           # steer by the needle
+            key = "KeyA" if fd < -8 else "KeyD" if fd > 8 else None
+            if key:
+                page.keyboard.down(key); listen(250); page.keyboard.up(key)
+            listen(750)
+        page.keyboard.up("KeyW")
     page.keyboard.press("Space")
     page.wait_for_timeout(1600)
     page.locator(".ck-scope").screenshot(path=str(args.out / f"{args.prefix}sonar_map_crop.png"))
