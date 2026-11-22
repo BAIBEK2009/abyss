@@ -72,8 +72,21 @@ with sync_playwright() as pw:
         page.wait_for_timeout(700)
         page.keyboard.press("Space")
     page.wait_for_selector("[data-id=surface]", state="visible", timeout=40000)
-    page.wait_for_timeout(2600)
+    page.wait_for_timeout(1300)
     shot(page, "finder_far")
+    # the first piece of the trail: the bow 1 rad off it, then turn by hand until it comes into the light
+    w0 = page.evaluate("window.__abyss.diveWhere()")
+    if not page.evaluate("!!document.querySelector('.ck-tasks li.done')") and w0.get("debris"):
+        d0 = w0["debris"][0]
+        page.evaluate(f"window.__abyss.diveLook(0, 0, {math.atan2(-d0[0], -d0[2]) + 1.0}, 0.4)")
+        page.keyboard.down("KeyD")
+        for _ in range(40):
+            if page.evaluate("!!document.querySelector('.ck-tasks li.done')"):
+                break
+            page.wait_for_timeout(100)
+        page.keyboard.up("KeyD")
+    page.wait_for_timeout(1800)
+    shot(page, "first_debris")
     # the sonar screen: swim along the trail by hand for a while (the track, the covered bed), then ping
     # Dana's hints: first away from the find (off course), then back along the needle (stronger), by hand
     heard = []
@@ -118,11 +131,6 @@ with sync_playwright() as pw:
         cx, cz = tx - tx / L * dist, tz - tz / L * dist
         look(cx, cz, math.atan2(-(tx - cx), -(tz - cz)) + side, down)
 
-    if where.get("debris"):                               # the first piece of the trail comes into the light
-        face(where["debris"][0], 4.2, 0.45)
-        page.wait_for_timeout(900)
-        shot(page, "first_debris")
-        page.wait_for_timeout(2500)
     if where.get("box"):
         face(where["box"], 4.5, 0.3, 0.35)
         page.wait_for_timeout(3500)
