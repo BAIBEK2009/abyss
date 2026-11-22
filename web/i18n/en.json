@@ -312,5 +312,11 @@
  "storm_note": "storm in {h} h",
  "warn_storm_sonar": "The sonar is deaf in the storm",
  "warn_storm_route": "Course through the storm: a cell costs three times as much",
- "toast_sonar_storm": "The storm drowned the echo {at} — <b>nothing heard</b>. The map did not change."
+ "toast_sonar_storm": "The storm drowned the echo {at} — <b>nothing heard</b>. The map did not change.",
+ "kalka_switch": "Tracing paper",
+ "kalka_fdr": "Data",
+ "kalka_cvr": "Voice",
+ "voice_beacon": "Voice beacon",
+ "choice_keys": "Click a card or press its number",
+ "toast_cvr_dead": "The voice recorder's beacon has gone silent. Without a signal it <b>cannot be found now</b>."
 }

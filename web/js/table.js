@@ -87,8 +87,30 @@ export function createTable(view, map, initialState, { cabin, dive } = {}) {
   const flow = createStoryFlow({
     view, cabin, ui, speech, chapter, toasts, intro, goal,
     getState: () => state, setState: (st) => { state = st; map.setState(st); }, render: () => render(),
-    stand: (on) => stand(on, true), auto: () => autopilot, walk: () => walk,
+    stand: (on) => stand(on, true), auto: () => autopilot, walk: () => walk, finish: () => finish(),
   });
+  // act III (17.6): the "Data / Voice" switch over the tracing paper — which recorder the officers work for
+  const kswitch = document.createElement("div");
+  kswitch.className = "kalka-switch"; kswitch.hidden = true;
+  kswitch.innerHTML = `<small>${t("kalka_switch")}</small><div><button data-k="fdr" data-id="kalka-fdr">${t("kalka_fdr")}</button><button data-k="cvr" data-id="kalka-cvr">${t("kalka_cvr")}</button></div>`;
+  ui.append(kswitch);
+  kswitch.querySelectorAll("button").forEach((b) => b.addEventListener("click", async () => {
+    if (busy || b.classList.contains("on") || b.disabled) return;
+    const res = await api.focus(b.dataset.k);
+    state = res.state;
+    await map.setState(state, { animate: true });
+    render();
+  }));
+  function renderSwitch() {
+    const c = state.campaign;
+    kswitch.hidden = !c?.boxes || c.act !== "act3";
+    if (kswitch.hidden) return;
+    kswitch.querySelectorAll("button").forEach((b) => {
+      b.classList.toggle("on", c.focus === b.dataset.k);
+      b.disabled = c.boxes[b.dataset.k] !== null;
+      b.dataset.state = c.boxes[b.dataset.k] ?? "";
+    });
+  }
   // on foot: the deck and the cabin in first person (CLAUDE.md 22.4, 23.2)
   const walk = createWalk({
     view, cabin, speech, chapter, getState: () => state, flow: () => flow, busy: () => busy,
@@ -98,6 +120,7 @@ export function createTable(view, map, initialState, { cabin, dive } = {}) {
   banner.textContent = t("autopilot_on");
 
   function render() {
+    renderSwitch();
     goal.update(state.campaign);
     walk?.refresh();
     if (state.dive) return;              // under water: the table waits (no previews while the dive is open)

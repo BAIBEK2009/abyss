@@ -5,6 +5,8 @@
 import { api } from "./api.js";
 import { act, beat, who } from "./story.js";
 import { goalCards } from "./ui/speech.js";
+import { choiceCards } from "./ui/choice.js";
+import { el } from "./ui/fmt.js";
 import { showBrief } from "./ui/brief.js";
 import { sleep } from "./anim.js";
 import { sfx } from "./audio.js";
@@ -35,11 +37,33 @@ export function createStoryFlow(ctx) {
         ctx.render();
         await shown;
         if (it.act === "act1") setTimeout(() => ctx.intro.showIfFirstTime(), 400);   // who is who, once
+        if (it.act === "act4") await toDawnDeck();
         continue;
       }
+      if (it.msg) { ctx.toasts.say("lev", t(`toast_${it.msg}`), 4200); continue; }
       if (!it.beat) continue;
       const b = beat(it.beat);
-      if (!b || b.type === "act_end" || b.type === "clue" || b.type === "choice") continue;
+      if (!b || b.type === "act_end" || b.type === "clue") continue;
+      if (b.type === "choice") {                      // act III: what first; act IV: who gets the recording
+        await speech.idle();
+        ctx.walk()?.freeCursor();
+        const key = camp()?.act;
+        const option = await choiceCards(b);
+        const res = await api.choice(key, option);
+        hold(res.story);
+        ctx.setState(res.state);
+        ctx.render();
+        await playItems(res.story);
+        if (res.state.status !== "playing") ctx.finish?.();
+        continue;
+      }
+      if (b.show === "cvr_waveform") {                // the voice recorder: a dark screen, only the voice wave
+        const dark = cvrScreen();
+        await speech.say(it.beat, { auto: false });
+        await sleep(2000);                            // two seconds of silence after the last words
+        dark.close();
+        continue;
+      }
       if (b.type === "goal_cards") {
         await speech.idle();
         ctx.walk()?.freeCursor();
@@ -53,6 +77,30 @@ export function createStoryFlow(ctx) {
     }
     if (!ctx.auto() || speech.place !== "cockpit") await speech.idle();
   }
+  /** The voice recorder's last minutes (17.6, show: cvr_waveform): black screen, a green voice wave. */
+  function cvrScreen() {
+    const box = el("div", "cvr-screen", `<canvas width="900" height="160"></canvas>`);
+    document.body.append(box);
+    const c = box.querySelector("canvas").getContext("2d");
+    let on = true, t0 = performance.now();
+    const draw = () => {
+      if (!on) return;
+      const tt = (performance.now() - t0) / 1000, talking = speech.open;
+      c.clearRect(0, 0, 900, 160);
+      c.strokeStyle = "#7fe0a0"; c.lineWidth = 2; c.shadowColor = "#7fe0a0"; c.shadowBlur = 8;
+      c.beginPath();
+      for (let x = 0; x <= 900; x += 3) {
+        const a = talking ? (0.35 + 0.65 * Math.abs(Math.sin(tt * 2.1 + x * 0.004))) * Math.sin(x * 0.11 + tt * 31) * Math.sin(x * 0.023 - tt * 7) : 0.02 * Math.sin(x * 0.3 + tt * 5);
+        c.lineTo(x, 80 + a * 62);
+      }
+      c.stroke();
+      requestAnimationFrame(draw);
+    };
+    requestAnimationFrame(() => box.classList.add("on"));
+    draw();
+    return { close() { on = false; box.classList.remove("on"); setTimeout(() => box.remove(), 800); } };
+  }
+
   /** Story items are played one batch after another, never two at once. */
   function play(items) {
     if (!items?.length) return queue;
@@ -109,9 +157,29 @@ export function createStoryFlow(ctx) {
     }
   }
 
+  /** Act IV (17.7, B3): the deck at dawn, «Poseidon-2» alongside; the talk and the choice happen there. */
+  async function toDawnDeck() {
+    if (walk()?.mode === "deck") return;
+    speech.place = "deck";
+    await walk().enterDeck({ x: 1.6, z: -8.6, yaw: Math.PI / 2 + 0.25, pitch: 0.02 });
+    walk().refresh();
+  }
+
+  /** A choice that fired but was not answered (the page was reloaded): ask again. */
+  function resumeChoice() {
+    const c = camp();
+    if (!c || ctx.getState().status !== "playing") return false;
+    const id = c.act === "act3" && !c.choices.act3 && c.fired.includes("a3_3") ? "a3_3"
+      : c.act === "act4" && !c.choices.act4 && c.fired.includes("a4_5") ? "a4_5" : null;
+    if (c.act === "act4") queue = queue.then(() => toDawnDeck());
+    if (id) play([{ beat: id }]);
+    return c.act === "act4";
+  }
+
   /** On load: start or resume the prologue where it was left. Returns true if the prologue is running. */
   function startIfNeeded() {
     const c = camp();
+    if (c && c.act !== "prologue") return resumeChoice();
     if (!c || c.act !== "prologue") return false;
     document.body.classList.add("prologue");
     speech.place = "deck";

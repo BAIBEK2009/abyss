@@ -29,7 +29,9 @@ export function createHud(root, buttons, { onWho }) {
   const inst = el("div", "inst");
   const beacon = instrument("beacon", t("beacon"));
   const fuel = instrument("fuel", t("fuel_label"));
-  inst.append(beacon.el, fuel.el);
+  const voice = instrument("beacon", t("voice_beacon"));       // act III: the voice recorder's 30 h (17.6)
+  voice.el.classList.add("dial-voice"); voice.el.hidden = true;
+  inst.append(beacon.el, fuel.el, voice.el);
 
   const right = el("div", "hud-right");
   const btns = {};
@@ -51,6 +53,9 @@ export function createHud(root, buttons, { onWho }) {
     update(st) {
       beacon.set(st.beacon_left, t("beacon_value", { h: hours(Math.max(0, st.beacon_left)) }), st.beacon_left < 30);
       fuel.set(st.fuel, String(Math.max(0, st.fuel)), st.fuel < 35);
+      const v = st.campaign?.cvr_left;
+      voice.el.hidden = v == null;
+      if (v != null) voice.set(v * 4, t("beacon_value", { h: hours(Math.max(0, v)) }), v < 10);
     },
     setActive(id, on) { btns[id]?.classList.toggle("active", on); },
   };
