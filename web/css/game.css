@@ -891,3 +891,16 @@ body:has(.cvr-screen.on) .speech { z-index: 56; }
 .skip-act:disabled { opacity: 0.5; }
 .skip-act svg { width: 18px; height: 18px; }
 body.cine .skip-act, body.diving .skip-act, body.descent .skip-act { display: none; }
+
+/* ---- C9a: living portraits — blink, breathe, talk while the line types, radio static for Aigerim and Berg */
+.medal .pt-lids { transform-box: fill-box; transform-origin: center top; transform: scaleY(0); animation: pt-blink 4.7s infinite; }
+.medal.pt-erlan .pt-lids { animation-duration: 5.9s; } .medal.pt-murat .pt-lids { animation-duration: 3.6s; } .medal.pt-berg .pt-lids { animation-duration: 6.4s; }
+@keyframes pt-blink { 0%, 95%, 100% { transform: scaleY(0); } 97% { transform: scaleY(1); } }
+.medal .pt-bust { transform-box: fill-box; transform-origin: 50% 100%; animation: pt-breathe 3.8s ease-in-out infinite; }
+@keyframes pt-breathe { 50% { transform: scale(1.013); } }
+.medal .pt-head { transform-box: fill-box; transform-origin: 50% 80%; transition: transform 0.6s; }
+.speech .medal .pt-head { transform: rotate(-2deg); }
+.speech.talking .medal .pt-open { animation: pt-talk 0.22s steps(2) infinite; }
+@keyframes pt-talk { 50% { opacity: 1; } }
+.speech .medal .pt-noise { animation: pt-static 0.35s steps(3) infinite; }
+@keyframes pt-static { 0% { opacity: 0.08; transform: translateY(0); } 50% { opacity: 0.16; transform: translateY(2px); } 100% { opacity: 0.05; transform: translateY(-1px); } }

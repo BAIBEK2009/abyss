@@ -15,6 +15,7 @@ import { t } from "../i18n.js";
 
 function medal(id) {
   if (PORTRAIT[id]) return portrait(PORTRAIT[id]);
+  if (id === "aigerim" || id === "berg") return portrait(id);          // on the radio: their faces with the channel's static
   const ch = who(id).channel;
   const icon = ch === "recorder"
     ? `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="8.5" cy="12" r="2.5"/><circle cx="15.5" cy="12" r="2.5"/><path d="M8.5 14.5h7"/></svg>`
@@ -49,12 +50,13 @@ export function createSpeech(root = document.body) {
       const full = line.text;
       let i = 0, typing = true;
       text.textContent = "";
+      box.classList.add("talking");
       const timer = setInterval(() => {
         if (clock.paused) return;                           // the pause stops the typewriter too
         i += 2;
         text.textContent = full.slice(0, i);
         if (i % 6 === 0) sfx.type?.();
-        if (i >= full.length) { clearInterval(timer); typing = false; }
+        if (i >= full.length) { clearInterval(timer); typing = false; box.classList.remove("talking"); }
       }, 24);
       let autoT = null;
       const done = () => {
@@ -64,7 +66,7 @@ export function createSpeech(root = document.body) {
         resolve();
       };
       const step = () => {
-        if (typing) { clearInterval(timer); typing = false; text.textContent = full; return; }
+        if (typing) { clearInterval(timer); typing = false; text.textContent = full; box.classList.remove("talking"); return; }
         done();
       };
       const onKey = (e) => {
