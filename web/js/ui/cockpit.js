@@ -4,6 +4,8 @@
 // On touch screens the same actions are on-screen buttons.
 import { el } from "./fmt.js";
 import { t } from "../i18n.js";
+import { CHECK } from "./goal.js";
+import { sfx } from "../audio.js";
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
@@ -69,6 +71,7 @@ export function createCockpit(root, handlers) {
     </div>
     <button class="ck-surf" data-id="surface">${t("ck_surface")} <b>Q</b></button>
     <div class="ck-plate">${t("ck_plate")}</div>
+    <div class="ck-tasks"><div class="ck-tasks-h">${t("dv_tasks")}</div><ul class="goal-tasks"></ul></div>
     <div class="ck-msg"></div>
     <div class="ck-prompt"><span class="pr"></span><b>${t("ck_grab")}</b></div>
     <div class="ck-help"><h5>${t("ck_help_title")}</h5>
@@ -182,6 +185,17 @@ export function createCockpit(root, handlers) {
       fd.v += ((fd.want - fd.a) * 38 - fd.v * 7.5) * Math.min(dt, 0.05);
       fd.a += fd.v * Math.min(dt, 0.05);
       needle.setAttribute("transform", `rotate(${fd.a.toFixed(2)} 80 80)`);
+    },
+    /** The dive's own checklist (22.3 p. 2): keys of i18n lines; [] hides it. */
+    tasks(keys) {
+      const box = $(".ck-tasks"); box.hidden = !keys.length;
+      box.querySelector("ul").replaceChildren(...keys.map((k) => el("li", "", `${CHECK}<span>${t(k)}</span>`)));
+    },
+    tick(i) {
+      const li = $(".ck-tasks ul").children[i];
+      if (!li || li.classList.contains("done")) return;
+      li.classList.add("done", "just"); sfx.tick?.();
+      setTimeout(() => li.classList.remove("just"), 1400);
     },
     /** A short pulse round the finder (Dana points at it). */
     pulseFinder() { const f = ck.querySelector(".ck-finder"); f.classList.remove("pulse"); void f.offsetWidth; f.classList.add("pulse"); },

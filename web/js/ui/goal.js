@@ -6,7 +6,7 @@ import { el } from "./fmt.js";
 import { act, hud } from "../story.js";
 import { sfx } from "../audio.js";
 
-const CHECK = `<svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2" y="2" width="16" height="16" rx="2.5" class="bx"/>
+export const CHECK = `<svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2" y="2" width="16" height="16" rx="2.5" class="bx"/>
   <path d="M5 10.5l3.4 3.6L15.5 5" class="ck" pathLength="1"/></svg>`;
 
 export function createGoal(root = document.body, { onWho } = {}) {

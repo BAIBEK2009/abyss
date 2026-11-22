@@ -1004,20 +1004,19 @@ export function createDive(view) {
     box = D.find ? flapFind : recorder;
     recorder.visible = flapFind.visible = false;
     for (const k in keys) keys[k] = false;
-    const a = (Math.random() - 0.5) * 2.0, d = 11 + Math.random() * 5;
+    const a = (Math.random() - 0.5) * 2.8, d = 14 + Math.random() * 3;
     const bx = -Math.sin(a) * d, bz = -Math.cos(a) * d;
     box.visible = D.hasBox;
     D.far = !D.hasBox && D.hasDebris ? { x: -Math.sin(a) * 60, z: -Math.cos(a) * 60 } : null;     // the box lies in the next cell, that way
     if (box.parent !== deep) deep.attach(box);
     box.position.set(bx, bedH(bx, bz) + 0.02, bz); box.rotation.set(0.08, Math.atan2(-bx, -bz) + (Math.random() - 0.5) * 0.6, -0.1);   // the label towards where Nerpa comes from
-    // with the box: two pieces lie along the way to it; with debris only: all four, scattered
-    const fr = [0.3, 0.48, 0.66, 0.84];
+    // the trail of debris (22.3 p. 2): all four pieces lie in a line from the landing spot to the find, a little
+    // to either side, as they fell when the tail broke up; with debris only the line runs off towards the next cell
+    const along = D.hasBox ? [0.22, 0.42, 0.62, 0.8].map((f) => f * d) : [4, 8.5, 13, 17.5];
     debris.forEach((g, i) => {
-      g.visible = D.hasDebris || (D.hasBox && i % 2 === 0);          // the skin with the livery and the seats on the way to the box
-      const side = (i % 2 ? 1 : -1) * (1.6 + Math.random() * 1.6);
-      let px, pz;
-      if (D.hasDebris) { const aa = Math.random() * Math.PI * 2, dd = 5 + Math.random() * 10; px = Math.cos(aa) * dd; pz = Math.sin(aa) * dd; }
-      else { px = bx * fr[i] + Math.cos(a) * side; pz = bz * fr[i] - Math.sin(a) * side; }
+      g.visible = D.hasDebris || D.hasBox;
+      const side = (i % 2 ? 1 : -1) * (0.4 + Math.random() * 0.9), r = along[i] + (Math.random() - 0.5) * 0.8;
+      const px = -Math.sin(a) * r + Math.cos(a) * side, pz = -Math.cos(a) * r - Math.sin(a) * side;
       g.position.set(px, bedH(px, pz) + 0.08, pz);               // half settled, one edge up: not swallowed by the ripples
       g.rotation.set((Math.random() - 0.5) * 0.35, Math.random() * 6, 0.12 + Math.random() * 0.2);
     });
@@ -1029,6 +1028,7 @@ export function createDive(view) {
       g.position.set(px, bedH(px, pz) + 0.02, pz); g.rotation.set((Math.random() - 0.5) * 0.2, Math.random() * 6, (Math.random() - 0.5) * 0.2);
     });
     cockpit.set({ o2: D.o2, max: D.max, fog: 0, low: false, depth: 0 });
+    cockpit.tasks(D.hasBox ? ["dv_task_trail", "dv_task_find"] : D.hasDebris ? ["dv_task_trail"] : []);
   }
 
   const wrapA = (a) => Math.atan2(Math.sin(a), Math.cos(a));
@@ -1105,14 +1105,14 @@ export function createDive(view) {
     aimDir.set(-Math.sin(aimYaw) * Math.cos(aimPitch), Math.sin(aimPitch), -Math.cos(aimYaw) * Math.cos(aimPitch));
     const bp = box.position, dx = bp.x - D.x, dy = bp.y - D.y, dz = bp.z - D.z, dist = Math.hypot(dx, dy, dz);
     const dot = (dx * aimDir.x + dy * aimDir.y + dz * aimDir.z) / Math.max(0.001, dist);
-    if (box.visible && !D.found && dist < 8.5 && dot > Math.cos(0.46)) { D.found = true; D.cine = 0; sfx.chord(); }
+    if (box.visible && !D.found && dist < 8.5 && dot > Math.cos(0.46)) { D.found = true; D.cine = 0; sfx.chord(); cockpit.tick(1); }
     for (const g of debris) {
       if (!g.visible || D.seen.has(g)) continue;
       const ex = g.position.x - D.x, ez = g.position.z - D.z, ey = g.position.y - D.y, ed = Math.hypot(ex, ey, ez);
       if (ed < 8 && (ex * aimDir.x + ey * aimDir.y + ez * aimDir.z) / ed > Math.cos(0.5)) {
         D.seen.add(g); if (D.hasDebris) D.debrisSeen = true; sfx.seen();
         D.cap = { id: cockpit.msg(t(g.userData.key), 4000), of: g };         // the caption of a find: 4 s, or until the next one
-        if (!D.anyDebris) { D.anyDebris = true; D.onEvent("first_debris"); }
+        if (!D.anyDebris) { D.anyDebris = true; D.onEvent("first_debris"); cockpit.tick(0); }      // Dana's line and the tick
       }
     }
     if (D.cap) {        // ... and it never hangs over something else: gone as soon as its find leaves the view

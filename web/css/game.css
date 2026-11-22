@@ -556,6 +556,14 @@ body.cine .goal { opacity: 0.0; pointer-events: none; }
 body.diving .goal { opacity: 0.94; transform: none; width: min(300px, 30vw); padding: 9px 12px 8px; }
 body.diving .goal .goal-who { display: none; }
 body.diving .ck-help { top: calc(var(--goal-h) + 16px); }
+/* the dive's own checklist, under the act's goal (22.3 p. 2) */
+.ck-tasks { position: absolute; left: 20px; top: 18px; width: min(300px, 30vw); padding: 8px 12px 8px; background: linear-gradient(170deg, #f4ead2, #e6d8b6);
+  color: var(--ink); box-shadow: 0 10px 22px #000b; border-radius: 2px; opacity: 0; transition: opacity 0.6s; }
+.cockpit.live .ck-tasks { opacity: 0.94; }
+.ck-tasks[hidden] { display: none; }
+.ck-tasks-h { font: 700 11px Onest, sans-serif; letter-spacing: 0.06em; text-transform: uppercase; color: #8e2f1f; }
+.ck-tasks .goal-tasks { margin-top: 4px; }
+body.has-goal .ck-tasks { top: calc(var(--goal-h) + 8px); }
 
 /* chapter card */
 .chapter { position: fixed; inset: 0; z-index: 70; display: grid; place-items: center; background: #070504; color: #ecdcb8; cursor: pointer; opacity: 0; transition: opacity 0.7s; }
