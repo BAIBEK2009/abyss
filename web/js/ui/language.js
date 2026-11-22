@@ -29,7 +29,7 @@ export function pickLanguage(tables, sfx = {}) {
       setTimeout(() => box.remove(), 450);
       resolve(l);
     };
-    // by the physical key: in the Kazakh layout the digit row types letters (2 = ә, 3 = і)
+    // by the physical key: in the Kazakh layout the digit row types Kazakh letters, not digits
     const onKey = (e) => { const i = ["1", "2", "3"].indexOf(e.code.replace(/^(Digit|Numpad)/, "")); if (i >= 0) done(ORDER[i]); };
     addEventListener("keydown", onKey);
     box.querySelectorAll(".lang-card").forEach((b) => {
