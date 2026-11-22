@@ -74,8 +74,12 @@ HOWTO = """ABYSS · Капитан картасы / Карта капитана 
 3. Іске қосу файлын екі рет басыңыз:
    Mac — ABYSS.command,   Windows — ABYSS.bat.
    Ойын браузерде өзі ашылады. Қара терезені ойын біткенше жаппаңыз.
-4. Mac «әзірлеуші белгісіз» деп ескертсе: ABYSS.command файлын тінтуірдің оң жағымен басып → «Ашу» (Open) → «Ашу».
-   Бұл бір рет қана керек.
+4. Mac «Apple could not verify…» (немесе «әзірлеуші белгісіз») деп ескертсе: «Done» (Дайын) басыңыз →
+   Жүйе баптаулары (System Settings) → «Құпиялылық және қауіпсіздік» (Privacy & Security) → төменде «Open Anyway»
+   (Бәрібір ашу) → құпиясөз → «Open». Бұл бір рет қана керек.
+   Басқа жол: «Терминал» бағдарламасын ашып, python3 деп жазып, бос орын қойып, main.py файлын терезеге
+   сүйреп әкеліп, Enter басыңыз.
+5. Демо (қорғауға): мәзірде «Қорғауға арналған демо» — бүкіл оқиға 5 минутта.
 Интернет керек емес. Тіл ойынның басында таңдалады.
 
 ========================================  РУССКИЙ  ========================================
@@ -86,8 +90,12 @@ HOWTO = """ABYSS · Капитан картасы / Карта капитана 
 3. Дважды щёлкните файл запуска:
    Mac — ABYSS.command,   Windows — ABYSS.bat.
    Игра сама откроется в браузере. Чёрное окно не закрывайте, пока играете.
-4. Если Mac предупреждает «неустановленный разработчик»: правый клик по ABYSS.command → «Открыть» → «Открыть».
-   Это нужно только один раз.
+4. Если Mac пишет «Apple could not verify…» (или «неустановленный разработчик»): нажмите «Done» (Готово) →
+   Системные настройки → «Конфиденциальность и безопасность» → внизу «Open Anyway» (Всё равно открыть) →
+   пароль → «Open». Это нужно только один раз.
+   Запасной путь: откройте программу «Терминал», напишите python3 и пробел, перетащите в окно файл main.py
+   и нажмите Enter.
+5. Демо для защиты: в главном меню «Демо для защиты» — вся история за 5 минут.
 Интернет не нужен. Язык выбирается в начале игры.
 
 ========================================  ENGLISH  ========================================
@@ -98,8 +106,11 @@ HOWTO = """ABYSS · Капитан картасы / Карта капитана 
 3. Double-click the launcher:
    Mac: ABYSS.command,   Windows: ABYSS.bat.
    The game opens in your browser by itself. Keep the black window open while you play.
-4. If the Mac warns about an "unidentified developer": right-click ABYSS.command -> Open -> Open.
+4. If the Mac says "Apple could not verify..." (or "unidentified developer"): click Done ->
+   System Settings -> Privacy & Security -> at the bottom "Open Anyway" -> password -> Open.
    You only need to do this once.
+   Fallback: open the Terminal app, type python3 and a space, drag main.py into the window, press Enter.
+5. Demo for the defence: "Demo for the defence" in the main menu — the whole story in 5 minutes.
 No internet needed. You pick the language when the game starts.
 """
 
