@@ -16,6 +16,7 @@ import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.j
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { canvasTexture, rng } from "../view.js";
 import { steelPanel, watertightDoor } from "./materials.js";
+import { lightPool } from "./lightpool.js";
 import { createNerpa } from "./nerpa.js";
 import { t } from "../i18n.js";
 
@@ -659,7 +660,10 @@ export function createDeck(view, { lifeLabel = "" } = {}) {
     sl.position.set(sx, HH - 0.1, HZ0 - 0.4); sl.target.position.set(sx * 0.3, 0, -9); ship.add(sl, sl.target);
     floods.push(sl);
   }
-  floods[0].castShadow = true; floods[0].shadow.mapSize.set(2048, 2048); floods[0].shadow.bias = -0.0004; floods[0].shadow.camera.near = 0.5; floods[0].shadow.camera.far = 30;
+  floods[0].castShadow = true; floods[0].shadow.mapSize.set(2048, 2048); floods[0].shadow.bias = -0.0004; floods[0].shadow.normalBias = 0.02;
+  // the floodlight rides on the ship with everything it lights: its shadow map only changes when something moves
+  // on deck (the launch); otherwise it is drawn once (152 draw calls a frame less)
+  floods[0].shadow.autoUpdate = false; floods[0].shadow.needsUpdate = true; floods[0].shadow.camera.near = 0.5; floods[0].shadow.camera.far = 30;
   // the bow: a windlass with the anchor chain and a light on the bow mast
   const winds = new THREE.Group(); winds.position.set(0, 0, 21); ship.add(winds);
   for (const sx of [-0.7, 0.7]) { const d = mesh(lathe([[0.25, -0.2], [0.3, -0.18], [0.3, 0.18], [0.25, 0.2]], 20), darkSteel); d.rotation.z = Math.PI / 2; d.position.set(sx, 0.4, 0); winds.add(d); }
@@ -866,6 +870,8 @@ export function createDeck(view, { lifeLabel = "" } = {}) {
   const tmp = new THREE.Vector3();
   let roll = 0, pitch = 0, heave = 0;
   let radioCall = false;
+  // 13 lamps on board, 5 real point lights near the camera (+1 fading): see lightpool.js
+  const pool = lightPool(scene, { slots: 5, exclude: [heliFill] });
   function update(dt, time) {
     sea.material.uniforms.uTime.value = time;
     slick.material.uniforms.uTime.value = time;
@@ -876,6 +882,7 @@ export function createDeck(view, { lifeLabel = "" } = {}) {
     ship.position.set(0, DECK_Y + heave, 0);
     ship.rotation.set(pitch, 0, roll, "ZXY");
     ship.updateMatrixWorld(true);
+    floods[0].shadow.updateMatrices(floods[0]);      // the map is static, but the lookup follows the rolling ship
     radar.rotation.y = time * 2.4;
     nerpa.userData.update(dt, time, 0);
     topLight.material.color.setScalar(0).add(new THREE.Color(0xff2a1a).multiplyScalar(Math.sin(time * 3) > 0.2 ? 6 : 0.6));
@@ -931,6 +938,7 @@ export function createDeck(view, { lifeLabel = "" } = {}) {
       g.rotation.set(Math.sin(time * 0.8 + bp.x) * tl, bp.z * 0.3 + Math.sin(time * 0.1 + bp.x) * 0.3, Math.cos(time * 0.7 + bp.z) * tl);
     }
     sea.material.uniforms.uHull.value.set(0, 0, 5.2, 0);
+    pool.update(view.camera.position, dt);
   }
   update(0, 0);
 
@@ -1019,10 +1027,10 @@ export function createDeck(view, { lifeLabel = "" } = {}) {
   };
   const deckSpace = { toWorld: (x, y, z, out) => out.set(x, y, z).applyMatrix4(ship.matrixWorld) };
   const launch = {
-    start() { cable.visible = false; wire.visible = true; splashed = false; hang(0.5, 1.0, 0); },
+    start() { floods[0].shadow.needsUpdate = true; cable.visible = false; wire.visible = true; splashed = false; hang(0.5, 1.0, 0); },
     /** Shot 1 (k 0..1): the A-frame swings out from inboard, Nerpa sways on the cable. */
     lift(k, dt, time, cam) {
-      lastT = time;
+      lastT = time; floods[0].shadow.needsUpdate = true;
       const e = k * k * (3 - 2 * k);
       hang(0.5 - 1.12 * e, 1.0 + 0.3 * e, Math.sin(k * 9) * 0.35 * (1 - k * 0.5));
       stepSplash(dt);
@@ -1030,7 +1038,7 @@ export function createDeck(view, { lifeLabel = "" } = {}) {
     },
     /** Shot 2 (k 0..1): down she goes; the camera sits on the water line. Returns her world position. */
     lower(k, dt, time, cam) {
-      lastT = time;
+      lastT = time; floods[0].shadow.needsUpdate = true;
       const len = 1.3 + k * 6.5;
       hang(-0.62, len, Math.sin(time * 2.1) * 0.08);
       const w = nerpa.getWorldPosition(new THREE.Vector3());
@@ -1041,7 +1049,7 @@ export function createDeck(view, { lifeLabel = "" } = {}) {
       cam.lookAt(w.x - 0.4, 0.02, w.z + 1.5);
       return w;
     },
-    end() { aframe.rotation.x = 0; nerpa.position.copy(home.pos); nerpa.rotation.copy(home.rot); cable.visible = true; wire.visible = false;
+    end() { floods[0].shadow.needsUpdate = true; aframe.rotation.x = 0; nerpa.position.copy(home.pos); nerpa.rotation.copy(home.rot); cable.visible = true; wire.visible = false;
             for (let i = 0; i < SPL; i++) { splL[i] = -1; splP[i * 3 + 1] = -100; } splG.attributes.position.needsUpdate = true; foamT = -1; foam.visible = false; },
   };
 

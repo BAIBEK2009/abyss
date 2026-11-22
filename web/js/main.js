@@ -77,7 +77,7 @@ async function start() {
     setTimeout(() => document.body.classList.remove("standing"), 2600);
   }
 
-  window.__abyss = { table, walk: table.walk, state: () => table.state, busy: () => table.busy, cellScreen: map.cellScreen, faceBox: dive.debugFaceBox, diveLook: dive.debugLook, diveWhere: dive.debugWhere, perf: view.perf };
+  window.__abyss = { table, walk: table.walk, state: () => table.state, busy: () => table.busy, cellScreen: map.cellScreen, faceBox: dive.debugFaceBox, diveLook: dive.debugLook, diveWhere: dive.debugWhere, perf: view.perf, view };
 }
 
 start();

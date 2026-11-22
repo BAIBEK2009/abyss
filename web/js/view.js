@@ -305,7 +305,7 @@ export function createView(canvas) {
   }
 
   return {
-    renderer, scene, camera, rig, aim, lamp, pin, toScreen, placeLamp,
+    renderer, scene, camera, rig, aim, lamp, pin, toScreen, placeLamp, passes: { gtao, bloom },
     /** Fly the camera after a point (fn(vector) fills it) or back home (null). */
     follow(fn, opt = {}) { if (!fn && !follow) return; follow = fn; followOpt = { dist: 9.5, tilt: 34, ...opt }; rate = opt.rate ?? 2.2; settled = false; },
     /** Recompute the lens for the table after another scene changed it. */
@@ -328,7 +328,7 @@ export function createView(canvas) {
       renderPass.scene = gtao.scene = outline.renderScene = s || scene;
       // GTAO only at the table (paper joints, under ships): objects floating in open water have the far
       // plane behind them and come out fully 'occluded' (black)
-      gtao.enabled = !s;
+      gtao.enabled = !s && !driven;
       // bloom breaks on the dark deep scene with the additive jellyfish (the frame goes black): only at the table
       bloom.enabled = !s || keepBloom;
       document.body.classList.toggle("other-scene", !!s);
@@ -342,7 +342,9 @@ export function createView(canvas) {
       settled = false; rate = speed; aim();
     },
     /** First person in the cabin: the caller places the camera (the table's rig stops). */
-    drive(on) { driven = on; if (!on) { settled = false; } },
+    // first person in the cabin: no GTAO — its radius is set for the chart (paper joints, under the ships), at eye
+    // height it shows almost nothing and costs ~11 ms a frame on a Retina screen
+    drive(on) { driven = on; gtao.enabled = !on && renderPass.scene === scene; if (!on) { settled = false; } },
     /** A fixed vertical field of view (first person), null = the table's lens. */
     setFov(f) { fovOverride = f; camera.fov = f ?? camera.fov; camera.updateProjectionMatrix(); if (f === null) resize(); },
     /** Outline these objects (empty = none). */

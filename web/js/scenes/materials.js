@@ -239,9 +239,13 @@ export function watertightDoor({ w = 0.8, h = 1.85, open = 0, color = 0x8c959a, 
   const handle = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([new THREE.Vector3(-0.08, 0, 0.06), new THREE.Vector3(-0.07, 0, 0.12), new THREE.Vector3(0.07, 0, 0.12), new THREE.Vector3(0.08, 0, 0.06)]), 12, 0.014, 6), darkM);
   handle.position.set(w * 0.22, 0, 0.02); leaf.add(handle);
   // the gasket on the leaf's back
-  const gasket = new THREE.Mesh(new THREE.ExtrudeGeometry(roundedRect(new THREE.Shape(), -w / 2 + 0.03, -h / 2 + 0.03, w - 0.06, h - 0.06, R * 0.8),
-    { depth: 0.01, bevelEnabled: false, curveSegments: 10 }), rubberM);
-  gasket.position.z = -0.012; leaf.add(gasket);
+  const gs = roundedRect(new THREE.Shape(), -w / 2 + 0.03, -h / 2 + 0.03, w - 0.06, h - 0.06, R * 0.8);      // a strip round the edge
+  gs.holes.push(roundedRect(new THREE.Path(), -w / 2 + 0.075, -h / 2 + 0.075, w - 0.15, h - 0.15, R * 0.6));
+  const gasket = new THREE.Mesh(new THREE.ExtrudeGeometry(gs,
+    { depth: 0.008, bevelEnabled: false, curveSegments: 10 }), rubberM);
+  // behind the leaf's bevel (its back face is at -0.012): sharing that plane, rubber and paint z-fought into
+  // black checks, worst on the 12x door in the cabin
+  gasket.position.z = -0.024; leaf.add(gasket);
   hinge.rotation.y = -open;
   if (frame) {
     const fs = roundedRect(new THREE.Shape(), -w / 2 - 0.09, -h / 2 - 0.06, w + 0.18, h + 0.15, R + 0.08);
