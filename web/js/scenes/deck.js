@@ -17,7 +17,7 @@ import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { canvasTexture, rng } from "../view.js";
 import { steelPanel, watertightDoor } from "./materials.js";
 import { lightPool } from "./lightpool.js";
-import { loadEnv } from "./envmap.js";
+import { loadEnv, pbrSet } from "./envmap.js";
 import { createNerpa } from "./nerpa.js";
 import { t } from "../i18n.js";
 
@@ -72,7 +72,10 @@ function deckMaterial() {
   const map = canvasTexture(512, 512, (g, w, h) => draw(g, w, h, false));
   const rough = canvasTexture(512, 512, (g, w, h) => draw(g, w, h, true), false);
   for (const tx of [map, rough]) { tx.wrapS = tx.wrapT = THREE.RepeatWrapping; tx.repeat.set(2.5, 9); }
-  return std({ map, roughnessMap: rough, bumpMap: rough, bumpScale: 0.6, roughness: 1, metalness: 0.15 });
+  // the relief and the wear of a real tread plate (CC0 scan), ~1.2 m a tile; the colour stays the painted deck
+  const plate = pbrSet("metal_plate", [8, 37], { color: false });
+  return std({ map, normalMap: plate.normalMap, normalScale: new THREE.Vector2(0.8, 0.8), roughnessMap: plate.roughnessMap,
+               roughness: 1.05, metalness: 0.35 });
 }
 /** Ship paint with panel seams, streaks and worn edges. */
 function paint(hex, { seams = 1.6, streaks = 0.5, repeat = [1, 1], seed = 3 } = {}) {
@@ -347,7 +350,10 @@ export function createDeck(view, { lifeLabel = "" } = {}) {
   const ship = new THREE.Group();
   scene.add(ship);
   const DECK_Y = 1.6;                 // freeboard above the mean sea level
-  const hullPaint = paint(0xd2541c, { seams: 1.2, streaks: 1, repeat: [6, 1], seed: 5 });
+  const hullPaint = (() => {       // painted steel with rust running from the seams (CC0 scan), tinted to the hull's orange
+    const h = pbrSet("rusty_painted_metal", [0.45, 0.45]);
+    return std({ ...h, color: new THREE.Color(1.25, 0.82, 0.62), roughness: 1, metalness: 0.2 });
+  })();
   const whitePaint = paint(0xe9e6de, { seams: 1.5, streaks: 0.7, repeat: [2, 1], seed: 6 });
   const greyPaint = paint(0x8c9298, { seams: 1.4, streaks: 0.6, seed: 8 });
   const steel = std({ color: 0xa8b0b6, metalness: 0.8, roughness: 0.38 });
@@ -678,7 +684,7 @@ export function createDeck(view, { lifeLabel = "" } = {}) {
   // the binoculars on a bracket outside the bridge's front starboard corner
   // the bridge wing: a teak shelf with a lip on the front starboard corner, the binoculars on it, a lamp over it
   const binoBracket = new THREE.Group(); binoBracket.position.set(HX + 0.3, 1.1, HZ1 - 0.2); ship.add(binoBracket);
-  const teak = std({ color: 0x8a5a32, roughness: 0.55, map: canvasTexture(128, 32, (c, w, h) => { const rr = rng(88); c.fillStyle = "#8a5a32"; c.fillRect(0, 0, w, h); for (let i = 0; i < 40; i++) { c.strokeStyle = `rgba(60,35,15,${0.15 + rr() * 0.25})`; c.beginPath(); const y = rr() * h; c.moveTo(0, y); c.bezierCurveTo(w * 0.3, y + rr() * 4 - 2, w * 0.6, y + rr() * 4 - 2, w, y + rr() * 3 - 1.5); c.stroke(); } }) });
+  const teak = std({ ...pbrSet("plank_flooring_02", [0.6, 0.6]), color: new THREE.Color(1.0, 0.82, 0.66), roughness: 0.9 });
   binoBracket.add(at(mesh(rbox(0.44, 0.035, 0.34, 0.012), teak), 0, 0, 0));
   binoBracket.add(at(mesh(rbox(0.44, 0.035, 0.02, 0.008), teak), 0, 0.03, 0.16));
   binoBracket.add(at(mesh(rbox(0.02, 0.035, 0.34, 0.008), teak), 0.21, 0.03, 0));

@@ -24,3 +24,28 @@ export function loadEnv(renderer, name) {
   }
   return cache.get(name);
 }
+
+// PBR texture sets (Poly Haven CC0, 1k jpg in web/assets/deck): colour + normal (GL) + roughness
+const texLoader = new THREE.TextureLoader();
+const texCache = new Map();
+function tex(path, srgb) {
+  if (!texCache.has(path)) {
+    const t = texLoader.load(path);
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    t.anisotropy = 8;
+    if (srgb) t.colorSpace = THREE.SRGBColorSpace;
+    texCache.set(path, t);
+  }
+  return texCache.get(path);
+}
+/** {map, normalMap, roughnessMap} of a set, each a clone with its own repeat (they share the image). */
+export function pbrSet(name, repeat = [1, 1], { color = true } = {}) {
+  const base = `assets/deck/${name}`;
+  const out = {
+    normalMap: tex(`${base}_nor_gl_1k.jpg`, false).clone(),
+    roughnessMap: tex(`${base}_rough_1k.jpg`, false).clone(),
+  };
+  if (color) out.map = tex(`${base}_diff_1k.jpg`, true).clone();
+  for (const t of Object.values(out)) { t.repeat.set(repeat[0], repeat[1]); t.needsUpdate = true; }
+  return out;
+}
