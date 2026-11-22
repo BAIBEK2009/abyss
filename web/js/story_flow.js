@@ -43,7 +43,7 @@ export function createStoryFlow(ctx) {
       if (b.type === "goal_cards") {
         await speech.idle();
         ctx.walk()?.freeCursor();
-        await goalCards(ctx.ui, b, t("coach_done"));
+        await goalCards(document.body, b, t("coach_done"));      // not in #ui: on foot #ui is hidden (body.walking)
         await send("radio_heard");
         continue;
       }

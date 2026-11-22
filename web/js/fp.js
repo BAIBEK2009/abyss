@@ -284,6 +284,8 @@ export function createFirstPerson(view, { onStep, onLockLost, isBlocked, onLocke
       document.body.classList.remove("fp", "fp-locked");
     },
     setThings(list) { things = list; },
+    /** Tests: the things here, read only (id, where to stand, where to look). */
+    get thingsInfo() { return things.map((t) => ({ id: t.id, stand: t.stand, look: t.look, prompt: !!t.prompt?.() })); },
     set lookOnly(on) { lookOnly = on; if (on) { path = null; keys.clear(); } },
     get lookOnly() { return lookOnly; },
     update, use, unlock, lock,
