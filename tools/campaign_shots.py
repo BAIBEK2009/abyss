@@ -49,6 +49,10 @@ def advance(g, to):
     if to == "act3":
         g.pop_story()
         return
+    if to == "board":                                # every slot found: skip act III in the demo
+        g.skip_act()
+        g.pop_story()
+        return
     g.choose("act3", "fdr_first")
     for _ in range(2):
         g.act({"type": "go", "target": top(g), "tool": "dive"}, live=True)
@@ -87,6 +91,9 @@ if __name__ == "__main__":
                 break
             page.keyboard.press("Enter"); page.wait_for_timeout(400)
         page.wait_for_timeout(800)
+        if args.to == "board":
+            page.evaluate("window.__abyss.table.board.show(window.__abyss.state().campaign.mystery)")
+            page.wait_for_timeout(900)
         name = args.name or f"m10_{args.to}"
         page.screenshot(path=str(args.out / f"{name}.png"))
         if args.pick:

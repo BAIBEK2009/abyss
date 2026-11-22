@@ -327,5 +327,11 @@
  "photo_ship": "The ship «Tulpar» in the port of Aktau",
  "photo_poseidon": "«Poseidon-2» leaves the search square",
  "end_again": "Play again",
- "end_menu": "To the menu"
+ "end_menu": "To the menu",
+ "board_sub": "{n} of {total} found. A red thread joins finds that explain each other.",
+ "board_unknown": "Not found yet",
+ "board_close": "Close · E",
+ "board_tele": "POSEIDON-2 → AEROSTAR|SEARCH UNDER WAY STOP|RECORDING MUST NOT|GET OUT STOP",
+ "board_postponed": "DEFERRED",
+ "btn_board": "Evidence board"
 }

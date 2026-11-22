@@ -28,7 +28,7 @@ export function createWalk(ctx) {
   const tasks = () => camp()?.tasks ?? [];
 
   const blocked = () => busy || document.body.classList.contains("menu-open") || ctx.chapter.open
-    || !!document.querySelector(".gcards, .brief-back, .result-back");
+    || !!document.querySelector(".gcards, .brief-back, .result-back, .board-back:not([hidden]), .choice-back, .ending");
   const fp = createFirstPerson(view, {
     onStep: (kind, run) => sfx.step?.(kind, run),
     onLockLost: () => { if (!document.body.classList.contains("menu-open")) dispatchEvent(new CustomEvent("abyss:menu-open")); },
@@ -65,7 +65,7 @@ export function createWalk(ctx) {
       { id: "stairs_up", ...o.stairs_up, prompt: () => P.stairs_up, use: () => upstairs() },
     ];
     if (o.radio) list.push({ id: "radio_cabin", ...o.radio, prompt: () => t("fp_radio"), use: () => (ctx.onRadio ? ctx.onRadio() : ui.note(t("fp_radio_idle"))) });
-    if (o.board) list.push({ id: "board", ...o.board, prompt: () => P.board, use: () => (ctx.onBoard ? ctx.onBoard() : ui.note(t("fp_board_empty"))) });
+    if (o.board) list.push({ id: "board", ...o.board, prompt: () => P.board, use: () => { fp.unlock?.(); ctx.onBoard(); } });
     for (const k of ["porthole_l", "porthole_r"]) if (o[k]) list.push({ id: k, ...o[k], prompt: () => P.porthole, use: () => ui.note(t(`fp_porthole_${weatherNow()}`), 4200) });
     return list;
   }
@@ -129,6 +129,7 @@ export function createWalk(ctx) {
   }
   function enterCabin(where = "stairs") {
     fp.leave();
+    cabin.drawBoard?.(camp()?.mystery ?? [], ctx.threads ?? []);
     if (deck) { view.useScene(null); }
     view.camera.far = 260;
     view.drive(true); view.setFov(FOV);

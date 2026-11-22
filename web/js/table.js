@@ -18,6 +18,7 @@ import { createWalk } from "./walk.js";
 import { createDescent } from "./descent.js";
 import { showResult } from "./ui/result.js";
 import { showEnding } from "./ui/ending.js";
+import { createBoard, THREADS } from "./ui/board.js";
 import { ICONS } from "./ui/icons.js";
 import { pct, hours } from "./ui/fmt.js";
 import { place, cap } from "./places.js";
@@ -44,7 +45,7 @@ export function createTable(view, map, initialState, { cabin, dive } = {}) {
   const hud = createHud(ui, [
     { id: "stand", icon: ICONS.stand, label: t("btn_stand"), onClick: () => stand() },
     { id: "autopilot", icon: ICONS.autopilot, label: t("btn_autopilot"), onClick: () => toggleAutopilot() },
-    { id: "journal", icon: ICONS.journal, label: t("btn_journal_top"), soon: "M8" },
+    { id: "board", icon: ICONS.journal, label: t("btn_board"), onClick: () => board.show(state.campaign?.mystery ?? []) },
     { id: "hints", icon: ICONS.hints, label: t("btn_hints"), onClick: () => coach.start() },
     { id: "music", icon: ICONS.music, label: t("btn_music"), soon: "M11" },
     { id: "sound", icon: ICONS.sound, label: t("btn_sound"), soon: "M11" },
@@ -61,6 +62,7 @@ export function createTable(view, map, initialState, { cabin, dive } = {}) {
     onHover: (tag, pv) => previewAction(tag?.action, pv),
   });
   const toasts = createToasts(ui);
+  const board = createBoard();
   const radio = createRadio(ui);
   const tip = createCellTip();
 
@@ -116,6 +118,7 @@ export function createTable(view, map, initialState, { cabin, dive } = {}) {
   const walk = createWalk({
     view, cabin, speech, chapter, getState: () => state, flow: () => flow, busy: () => busy,
     onDive: () => diveFromDeck(),
+    onBoard: () => board.show(state.campaign?.mystery ?? []), threads: THREADS,
   });
   const banner = document.getElementById("autopilot-banner");
   banner.textContent = t("autopilot_on");
@@ -401,6 +404,6 @@ export function createTable(view, map, initialState, { cabin, dive } = {}) {
   return {
     get state() { return state; },
     get busy() { return busy; },
-    run, acceptClues, goal, chapter, speech, flow, walk,
+    run, acceptClues, goal, chapter, speech, flow, walk, board,
   };
 }

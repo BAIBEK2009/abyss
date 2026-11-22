@@ -297,6 +297,44 @@ export function createCabin(scene) {
 
   // first person (M12b): metres; the chart sheet (12 units) is about a metre
   const proxyMat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false, colorWrite: false });
+  // the evidence board on the left wall (B5): cork in a wooden frame, a polaroid per find, red threads
+  const boardCanvas = document.createElement("canvas"); boardCanvas.width = 1024; boardCanvas.height = 704;
+  const boardTex = new THREE.CanvasTexture(boardCanvas); boardTex.colorSpace = THREE.SRGBColorSpace; boardTex.anisotropy = 8;
+  {
+    const frame = new THREE.Mesh(new THREE.BoxGeometry(0.6, 11.2, 16.2), walnut([1, 1]));
+    frame.position.set(X0 + 0.35, 6.2, 8); frame.castShadow = true; frame.receiveShadow = true; group.add(frame);
+    const face = new THREE.Mesh(new THREE.PlaneGeometry(15, 10.3), new THREE.MeshStandardMaterial({ map: boardTex, roughness: 0.9 }));
+    face.rotation.y = Math.PI / 2; face.position.set(X0 + 0.68, 6.2, 8); face.receiveShadow = true; group.add(face);
+  }
+  function drawBoard(found = [], threads = []) {
+    const c = boardCanvas.getContext("2d"), W = 1024, H = 704;
+    const g = c.createRadialGradient(W * 0.3, H * 0.2, 40, W / 2, H / 2, W * 0.7);
+    g.addColorStop(0, "#c99c64"); g.addColorStop(1, "#8e6436"); c.fillStyle = g; c.fillRect(0, 0, W, H);
+    const r = rng(9);
+    for (let i = 0; i < 2600; i++) { c.fillStyle = r() < 0.5 ? "rgba(0,0,0,.12)" : "rgba(255,240,210,.1)"; c.fillRect(r() * W, r() * H, 2, 2); }
+    const at = (id) => { const i = id - 1; return [130 + (i % 3) * 382, 150 + Math.floor(i / 3) * 360]; };
+    c.strokeStyle = "#b8322a"; c.lineWidth = 4;
+    for (const [a, b] of threads) {
+      if (!found.includes(a) || !found.includes(b)) continue;
+      const [x1, y1] = at(a), [x2, y2] = at(b);
+      c.beginPath(); c.moveTo(x1, y1 - 120); c.quadraticCurveTo((x1 + x2) / 2, Math.max(y1, y2) - 80, x2, y2 - 120); c.stroke();
+    }
+    for (let id = 1; id <= 6; id++) {
+      const [x, y] = at(id), on = found.includes(id);
+      c.save(); c.translate(x, y); c.rotate([-0.04, 0.03, -0.02, 0.04, -0.03, 0.02][id - 1]);
+      c.fillStyle = "rgba(0,0,0,.35)"; c.fillRect(-118, -128, 244, 270);
+      c.fillStyle = "#f6f1e4"; c.fillRect(-122, -134, 244, 270);
+      c.fillStyle = on ? ["#1d3a44", "#1b3640", "#e9e1cc", "#f3ecd8", "#05080a", "#6a4b2c"][id - 1] : "#3a3530";
+      c.fillRect(-108, -120, 216, 170);
+      c.fillStyle = on ? "#c2412d" : "#8a8170"; c.font = on ? "700 40px Caveat, cursive" : "400 90px Prata, serif"; c.textAlign = "center";
+      c.fillText(on ? String(id) : "?", 0, on ? 112 : 0);
+      c.fillStyle = "#b8322a"; c.beginPath(); c.arc(0, -126, 10, 0, 7); c.fill();
+      c.restore();
+    }
+    boardTex.needsUpdate = true;
+  }
+  drawBoard();
+
   const proxy = (w, h, d, x, y, z) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), proxyMat); m.position.set(x, y, z); group.add(m); return m; };
   const M = 12, q = new THREE.Quaternion(), e = new THREE.Euler();
   const space = {
@@ -313,12 +351,13 @@ export function createCabin(scene) {
     table: { show: [], hit: proxy(28, 3, 22.6, -0.5, 0, -0.5), stand: [0.0, 1.5], look: [0.0, 0.85, 0.2] },
     stairs_up: { show: [stairs], hit: proxy(11, 22, 4, 19, FLOOR_Y + 11, Z1 - 2.5), stand: [1.58, 1.95], look: [1.58, 1.4, 2.5] },
     radio: { show: [], hit: proxy(8, 7, 5, X0 + 6, FLOOR_Y + 11, Z0 + 3.5), stand: [-1.55, -2.35], look: [-2.0, 0.95, -2.9] },
+    board: { show: [], hit: proxy(1.5, 11, 16, X0 + 0.8, 6.2, 8), stand: [-1.75, 0.67], look: [-2.45, 1.35, 0.67] },
     porthole_l: { show: [], hit: proxy(8, 8, 1.5, -13, 6.5, Z0 + 0.6), stand: [-1.08, -2.5], look: [-1.08, 1.4, -3.1] },
     porthole_r: { show: [], hit: proxy(8, 8, 1.5, 13, 6.5, Z0 + 0.6), stand: [1.08, -2.5], look: [1.08, 1.4, -3.1] },
   };
 
   return {
-    group, space, things,
+    group, space, things, drawBoard,
     /** First person: where the captain stands coming down the stairs / getting up from the table. */
     spawn: { stairs: { x: 1.58, z: 1.85, yaw: Math.PI, pitch: -0.12 }, table: { x: 0.0, z: 1.45, yaw: Math.PI, pitch: -0.45 } },
     /** Where the camera stands when the captain gets up from the table: a view of the whole cabin. */
