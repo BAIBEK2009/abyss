@@ -70,6 +70,13 @@ function mixWeather() {
   wind.f.frequency.value = 600 + wxWind * 700;
 }
 
+/** The pause turns everything down to 20 % (A1). */
+export function duck(on) {
+  if (!ac) return;
+  master.gain.cancelScheduledValues(ac.currentTime);
+  master.gain.setTargetAtTime(on ? 0.85 * 0.2 : 0.85, ac.currentTime, 0.08);
+}
+
 export const sfx = {
   crane: () => { tone(180, 300, 1.6, "sawtooth", 0.022); nz(1.6, 900, "bandpass", 0.03, 0, 5); },
   splash: () => { nz(1.2, 900, "lowpass", 0.32); for (let i = 0; i < 9; i++) tone(500 + Math.random() * 700, 1000 + Math.random() * 500, 0.08, "sine", 0.05, 0.3 + i * 0.1); },

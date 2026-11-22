@@ -2,6 +2,8 @@
 // Esc -> Til / Yazyk / Language), a new game. Changing the language reloads the page; the game itself
 // lives in the Python server, so nothing is lost.
 import { el } from "./fmt.js";
+import { clock } from "../clock.js";
+import { duck } from "../audio.js";
 import { t, getLang, LANGS, saveLang } from "../i18n.js";
 
 export function createMenu({ onNewGame, sfx = {}, selfNames = {} }) {
@@ -22,6 +24,7 @@ export function createMenu({ onNewGame, sfx = {}, selfNames = {} }) {
   function show(on) {
     if (on === open) return;
     open = on;
+    clock.pause(on); duck(on);                 // one clock: oxygen, hours, the rival, films stand still (A1)
     if (on) { openedAt = performance.now(); if (document.pointerLockElement) document.exitPointerLock(); }
     else dispatchEvent(new CustomEvent("abyss:menu-closed"));
     sfx.click?.();

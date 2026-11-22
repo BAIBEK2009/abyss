@@ -1,6 +1,7 @@
 // Renderer, lamp, camera, post-processing, HTML pins and the frame loop.
 // Only drawing — the game state always comes from Python.
 import * as THREE from "three";
+import { clock as gameClock } from "./clock.js";
 import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
@@ -265,14 +266,17 @@ export function createView(canvas) {
 
   const frameHooks = [];
   const clock = new THREE.Clock();
+  let gameTime = 0;
   let frames = 0, frameMs = 16.7, lastNow = 0, calls = 0;
   renderer.info.autoReset = false;            // count draw calls over the whole frame (all passes)
   function frame(now) {
     if (lastNow) frameMs += (now - lastNow - frameMs) * 0.05;
     lastNow = now;
     renderer.info.reset();
-    const dt = Math.min(0.05, clock.getDelta());
-    const time = clock.elapsedTime;
+    const raw = Math.min(0.05, clock.getDelta());
+    const dt = gameClock.paused ? 0 : raw;       // the pause freezes the world (A1)
+    gameTime += dt;
+    const time = gameTime;
     const sway = { x: Math.sin(time * 0.55) * 0.12, z: Math.sin(time * 0.37) * 0.08 };   // a gentle swing
     lamp.position.set(LAMP_POS.x + sway.x, LAMP_POS.y, LAMP_POS.z + sway.z);
     for (const fn of frameHooks) fn(dt, time, sway);
@@ -360,6 +364,7 @@ export function createView(canvas) {
     /** Smoothed frame time (ms) and draw calls of the last frame (dev tools). */
     perf: () => ({ ms: +frameMs.toFixed(2), calls, tris: renderer.info.render.triangles }),
     onFrame: (fn) => frameHooks.push(fn),
+    get time() { return gameTime; },          // world seconds (stand still in the pause)
     onResize: (fn) => resizeHooks.push(fn),
     start() { resize(); requestAnimationFrame(frame); },
   };

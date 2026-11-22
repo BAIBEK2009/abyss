@@ -6,6 +6,7 @@
 //     player drives (W/S, A/D), aims the searchlight with the mouse, pings the sonar (Space, -3 s O2),
 //     holds E to grab the box, surfaces with Q. The beacon pinger is louder when close and comes from
 //     the box's side. Oxygen 60 s. The result goes back to Python: found, or the share of seabed seen.
+import { clock, gameFrame, later } from "../clock.js";
 import * as THREE from "three";
 import { canvasTexture } from "../view.js";
 import { anim, ease, sleep } from "../anim.js";
@@ -1015,12 +1016,13 @@ export function createDive(view) {
   // ---- the cockpit and the controls
   const cockpit = createCockpit(document.getElementById("ui").parentElement, {
     onSurface: () => surfaceNow(),
-    onKey: (k, on) => { if (k === "sp" && on) sonarPing(); keys[k] = on; },
+    onKey: (k, on) => { if (clock.paused) return; if (k === "sp" && on) sonarPing(); keys[k] = on; },
   });
   const keys = {};
   const KMAP = { KeyW: "f", ArrowUp: "f", KeyS: "b", ArrowDown: "b", KeyA: "l", ArrowLeft: "l", KeyD: "r", ArrowRight: "r", KeyE: "e", Space: "sp" };
   addEventListener("keydown", (e) => {
     if (mode !== "dive" && mode !== "descent") return;
+    if (clock.paused) return;                                 // no input into the world in the pause (A1)
     if (e.code === "KeyQ") { surfaceNow(); return; }
     const k = KMAP[e.code];
     if (!k) return;
@@ -1134,7 +1136,7 @@ export function createDive(view) {
     sfx.underwater(true);
     if (!quick) cockpit.msg(t("dv_descent", { m: String(BED_M) }), 2600);
     if (quick) { spot.intensity = SPOT_I; cone.visible = true; top.intensity = 0; }      // the film showed the way down
-    else setTimeout(() => { sfx.clack(); spot.intensity = SPOT_I; cone.visible = true; cockpit.msg(t("dv_light"), 1600); }, 1500);
+    else later(1500, () => { sfx.clack(); spot.intensity = SPOT_I; cone.visible = true; cockpit.msg(t("dv_light"), 1600); });
     const y0 = D.y, y1 = bedH(0, 0) + 1.8;
     await anim(quick ? 1.2 : 5.5, (k) => {
       D.y = y0 + (y1 - y0) * ease(k); top.intensity = 1.8 * (1 - k);
@@ -1147,7 +1149,7 @@ export function createDive(view) {
     cockpit.msg(D.task ?? t("dv_bottom"), 3600);              // a story dive: its task from the briefing
     mode = "dive"; D.t0 = T; cockpit.live(true);
     D.onEvent("start"); cockpit.pulseFinder();            // Dana: "the needle of the finder — swim where it points"
-    setTimeout(() => cockpit.hideHelp(), 15000);
+    later(15000, () => cockpit.hideHelp());
   }
 
   function update(dt) {
@@ -1375,13 +1377,13 @@ export function createDive(view) {
     const glare = () => model.lampGlare(lampOn, camera.position);
     lampsOn(false);
     const shot = (dur, fn) => new Promise((res) => {
-      const t0 = performance.now(); let last = t0;
+      const t0 = clock.now(); let last = t0;
       const step = () => {
-        const now = performance.now(), k = Math.min(1, (now - t0) / 1000 / dur);
+        const now = clock.now(), k = Math.min(1, (now - t0) / 1000 / dur);
         fn(k, Math.min(0.05, (now - last) / 1000), now / 1000); last = now;
-        if (k >= 1 || skip()) res(); else requestAnimationFrame(step);
+        if (k >= 1 || skip()) res(); else gameFrame(step);
       };
-      requestAnimationFrame(step);
+      gameFrame(step);
     });
     const tmpV = new THREE.Vector3();
     const Y0 = 60, Y0_SURF = Y0 + 14;
@@ -1514,6 +1516,7 @@ export function createDive(view) {
   }
   /** Test hook: where the dive's main find and the debris lie. */
   const debugWhere = () => ({ hint: [D.bestD, D.strongAt, D.hintT, T, [...(D.sent || [])]].map((v) => (typeof v === "number" ? +v.toFixed(1) : v)), bearing: cockpit.bearing, buoys: buoys.filter((g) => g.visible).map((g) => g.position.toArray()), box: box.visible ? box.position.toArray() : null, debris: debris.filter((g) => g.visible).map((g) => g.position.toArray()),
+    o2: D.o2 == null ? null : +D.o2.toFixed(2), mode, time: +T.toFixed(2),
                              keys: debris.filter((g) => g.visible).map((g) => g.userData.key), rocks: bigRocks.slice().sort((a, b) => b[2] - a[2]).slice(0, 4) });
   return { deep, cinematic, search, leave, debugFaceBox, debugLook, debugWhere, stepPuffs };
 }

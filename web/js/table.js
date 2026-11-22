@@ -20,7 +20,7 @@ import { showResult } from "./ui/result.js";
 import { ICONS } from "./ui/icons.js";
 import { pct, hours } from "./ui/fmt.js";
 import { place, cap } from "./places.js";
-import { fade } from "./anim.js";
+import { fade, sleep } from "./anim.js";
 import { t, plural } from "./i18n.js";
 
 const AUTOPILOT_PAUSE_MS = 1300;
@@ -292,7 +292,7 @@ export function createTable(view, map, initialState, { cabin, dive } = {}) {
     while (autopilot && state.status === "playing") {
       await acceptClues();
       await run(state.advice.advice.action);
-      await new Promise((r) => setTimeout(r, AUTOPILOT_PAUSE_MS));
+      await sleep(AUTOPILOT_PAUSE_MS);
     }
     if (state.status !== "playing") toggleAutopilot(false);
   }

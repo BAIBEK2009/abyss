@@ -4,6 +4,7 @@
 // Poseidon-2, the families) get the radio medallion, the flight recorder its own.
 // A click (or Enter / Space outside the dive) shows the whole line, the next click goes on.
 // In the cockpit and on the autopilot the lines go on by themselves after a reading pause.
+import { clock, later } from "../clock.js";
 import { el } from "./fmt.js";
 import { portrait } from "./art.js";
 import { ICONS } from "./icons.js";
@@ -47,6 +48,7 @@ export function createSpeech(root = document.body) {
       let i = 0, typing = true;
       text.textContent = "";
       const timer = setInterval(() => {
+        if (clock.paused) return;                           // the pause stops the typewriter too
         i += 2;
         text.textContent = full.slice(0, i);
         if (i % 6 === 0) sfx.type?.();
@@ -54,7 +56,7 @@ export function createSpeech(root = document.body) {
       }, 24);
       let autoT = null;
       const done = () => {
-        clearInterval(timer); clearTimeout(autoT);
+        clearInterval(timer); autoT?.();
         removeEventListener("keydown", onKey, true);
         box.onclick = null; current = null;
         resolve();
@@ -64,13 +66,13 @@ export function createSpeech(root = document.body) {
         done();
       };
       const onKey = (e) => {
-        if (place === "cockpit") return;                    // Space is the sonar under water
+        if (place === "cockpit" || clock.paused) return;    // Space is the sonar under water; the pause takes no keys
         // E too: on foot E is "use", and a line on screen must never swallow it into nothing — it turns the line
         if (e.code === "Enter" || e.code === "Space" || (e.code === "KeyE" && !e.repeat)) { e.preventDefault(); e.stopPropagation(); step(); }
       };
       box.onclick = step;
       addEventListener("keydown", onKey, true);
-      if (auto) autoT = setTimeout(done, Math.max(3200, full.length * 55 + 1200));
+      if (auto) autoT = later(Math.max(3200, full.length * 55 + 1200), done);
       current = { done, step };
     });
   }

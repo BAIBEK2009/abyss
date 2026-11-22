@@ -5,6 +5,7 @@
 //   4. the twilight zone: blue to black, the depth races to 950 m, comb jellies; the lamps click on at ~200 m (5 s);
 //   5. the seabed comes up in the light, the skids touch, a cloud of silt (4 s) — then the cockpit.
 // Space skips it. Repeated dives get a short cut (about 8 s).
+import { clock, gameFrame } from "./clock.js";
 import { fade, sleep } from "./anim.js";
 import { sfx } from "./audio.js";
 import { el } from "./ui/fmt.js";
@@ -21,7 +22,7 @@ export function createDescent(view, { getDeck, dive }) {
   async function play() {
     const D = dives++ > 0 ? SHORT : FULL;
     let skipped = false;
-    const onKey = (e) => { if (e.code === "Space" || e.code === "Escape") { e.preventDefault(); skipped = true; } };
+    const onKey = (e) => { if (e.code === "Space" && !clock.paused) { e.preventDefault(); skipped = true; } };   // Esc is the pause
     addEventListener("keydown", onKey, true);
     hint.textContent = t("cine_skip"); hint.hidden = false;
     document.body.classList.add("cine", "descent");
@@ -36,18 +37,18 @@ export function createDescent(view, { getDeck, dive }) {
     deck.launch.onSplash = () => { sfx.splash?.(); sfx.bubbles?.(8); };
     sfx.crane?.(); sfx.outside?.(true);
     const run = (dur, fn) => new Promise((res) => {
-      const t0 = performance.now(); let last = t0;
+      const t0 = clock.now(); let last = t0;
       const step = () => {
-        const now = performance.now(), k = Math.min(1, (now - t0) / 1000 / dur), dt = Math.min(0.05, (now - last) / 1000);
+        const now = clock.now(), k = Math.min(1, (now - t0) / 1000 / dur), dt = Math.min(0.05, (now - last) / 1000);
         last = now;
         deck.update(dt, now / 1000);
         fn(k, dt, now / 1000);
-        if (k >= 1 || skipped) res(); else requestAnimationFrame(step);
+        if (k >= 1 || skipped) res(); else gameFrame(step);
       };
-      requestAnimationFrame(step);
+      gameFrame(step);
     });
-    deck.update(0, performance.now() / 1000);
-    deck.launch.lift(0, 0, performance.now() / 1000, cam);     // the first frame is already the film
+    deck.update(0, clock.now() / 1000);
+    deck.launch.lift(0, 0, clock.now() / 1000, cam);     // the first frame is already the film
     await fade(false);
     await run(D[0], (k, dt, time) => { deck.launch.lift(k, dt, time, cam); if (Math.random() < 0.015) sfx.creak?.(); });
     view.setWaterline(true, 0.5, 0, { scene: deck.scene, hide: deck.aboveWater });
