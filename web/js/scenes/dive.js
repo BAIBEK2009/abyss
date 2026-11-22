@@ -1000,13 +1000,14 @@ export function createDive(view) {
     D = { x: 0, z: 0, y: 0, yaw: 0, vx: 0, vz: 0, turn: 0, o2: O2, max: O2, found: false, grabT: 0, cov: new Set(), pingCD: 0,
           pingerT: 0.6, seen: new Set(), creakT: 4, heartT: 0, tether: 0, shake: 0, desc: 0, t0: 0, tick: 0,
           hasBox: !!sceneInfo.box || !!sceneInfo.find, find: sceneInfo.find || null, hasDebris: !!sceneInfo.debris,
-          debrisSeen: false, anyDebris: false, cine: null, task: sceneInfo.task || null, onEvent: sceneInfo.onEvent || (() => {}) };
+          debrisSeen: false, anyDebris: false, cine: null, fdOff: 0, fdRange: "", fdBars: 0, far: null, task: sceneInfo.task || null, onEvent: sceneInfo.onEvent || (() => {}) };
     box = D.find ? flapFind : recorder;
     recorder.visible = flapFind.visible = false;
     for (const k in keys) keys[k] = false;
     const a = (Math.random() - 0.5) * 2.0, d = 11 + Math.random() * 5;
     const bx = -Math.sin(a) * d, bz = -Math.cos(a) * d;
     box.visible = D.hasBox;
+    D.far = !D.hasBox && D.hasDebris ? { x: -Math.sin(a) * 60, z: -Math.cos(a) * 60 } : null;     // the box lies in the next cell, that way
     if (box.parent !== deep) deep.attach(box);
     box.position.set(bx, bedH(bx, bz) + 0.02, bz); box.rotation.set(0.08, Math.atan2(-bx, -bz) + (Math.random() - 0.5) * 0.6, -0.1);   // the label towards where Nerpa comes from
     // with the box: two pieces lie along the way to it; with debris only: all four, scattered
@@ -1028,6 +1029,14 @@ export function createDive(view) {
       g.position.set(px, bedH(px, pz) + 0.02, pz); g.rotation.set((Math.random() - 0.5) * 0.2, Math.random() * 6, (Math.random() - 0.5) * 0.2);
     });
     cockpit.set({ o2: D.o2, max: D.max, fog: 0, low: false, depth: 0 });
+  }
+
+  const wrapA = (a) => Math.atan2(Math.sin(a), Math.cos(a));
+  /** Where the finder hears a beacon: the main find, or (debris only) far beyond the trail; null on an empty bed. */
+  function beaconSource() {
+    if (box.visible) return { x: box.position.x, y: box.position.y, z: box.position.z, far: false };
+    if (D.hasDebris && D.far) return { x: D.far.x, y: D.y, z: D.far.z, far: true };
+    return null;
   }
 
   function sonarPing() {
@@ -1064,7 +1073,7 @@ export function createDive(view) {
     sfx.creak(); sfx.thud();
     cockpit.msg(D.task ?? t("dv_bottom"), 3600);              // a story dive: its task from the briefing
     mode = "dive"; D.t0 = T; cockpit.live(true);
-    D.onEvent("start");
+    D.onEvent("start"); cockpit.pulseFinder();            // Dana: "the needle of the finder — swim where it points"
     setTimeout(() => cockpit.hideHelp(), 9000);
   }
 
@@ -1121,17 +1130,28 @@ export function createDive(view) {
         if (Math.hypot(px, pz) <= SEARCH_R) D.cov.add(`${Math.round(px / 2)},${Math.round(pz / 2)}`);
       }
     }
-    // the beacon pinger: louder when close, from the box's side; without the box here only a faint far ping
+    // the beacon pinger and the direction finder (22.3 p. 1). The ping is louder when close and comes from the
+    // beacon's side (StereoPanner). The needle points to the beacon from the bow, and it is as honest as a real
+    // hydroacoustic finder: far off the bearing wanders by up to +-25 deg, close by +-3 deg. Without the box here
+    // the finder hears only the faint beacon of the next cell, beyond the trail of debris; on an empty bed nothing.
+    const src = beaconSource(), sdx = src ? src.x - D.x : 0, sdz = src ? src.z - D.z : 0, sd = src ? Math.hypot(sdx, src.y - D.y, sdz) : 0;
+    const trueRel = src ? wrapA(Math.atan2(-sdx, -sdz) - D.yaw) : 0;        // radians, + = to the left of the bow
     if ((D.pingerT -= dt) <= 0) {
       D.pingerT = 1;
-      let vol = 0.06, pan = 0;
-      if (box.visible) {
-        vol = clamp(1.15 - dist / 26, 0.06, 1);
-        let rel = Math.atan2(-dx, -dz) - (D.yaw - mx * 0.36); rel = Math.atan2(Math.sin(rel), Math.cos(rel));
-        pan = -Math.sin(rel);
+      let vol = 0.04, pan = 0;
+      if (src) {
+        vol = src.far ? 0.12 : clamp(1.15 - sd / 26, 0.08, 1);
+        pan = -Math.sin(wrapA(Math.atan2(-sdx, -sdz) - (D.yaw - mx * 0.36)));
+        const amp = src.far ? 35 : 3 + 22 * clamp((sd - 3) / 13, 0, 1);    // deg
+        D.fdOff = D.fdOff * 0.35 + (Math.random() * 2 - 1) * amp * 0.65 * 1.4;
+        D.fdOff = clamp(D.fdOff, -amp, amp);
+        const est = sd * (1 + (Math.random() * 2 - 1) * amp / 160), step = est > 10 ? 5 : 1;
+        D.fdRange = src.far ? t("ck_finder_far", { m: "50" }) : t("ck_finder_dist", { m: String(Math.max(1, Math.round(est / step) * step)) });
+        D.fdBars = src.far ? 1 : clamp(Math.ceil(vol * 5), 1, 5);
       }
-      sfx.pinger(vol, pan); cockpit.pinger(vol);
-    }
+      sfx.pinger(vol, pan); cockpit.pinger(src ? vol : 0.05);
+      cockpit.finder({ bearing: src ? (-trueRel * 180) / Math.PI + D.fdOff : null, bars: src ? D.fdBars : 0, range: src ? D.fdRange : t("ck_finder_none") });
+    } else cockpit.aim(src ? (-trueRel * 180) / Math.PI + D.fdOff : null);
     cockpit.set({ heading: D.yaw - mx * 0.36 });
     if (D.o2 <= 0) oxygenOut();
   }
@@ -1214,7 +1234,7 @@ export function createDive(view) {
     if (mode === "dive" && !cine) update(dt);
     else if (cine) { D.o2 -= dt; }
     if (mode === "dive" || mode === "descent" || mode === "ending") {
-      placeCamera(); cockpit.drawScope(T);
+      placeCamera(); cockpit.drawScope(T); cockpit.stepFinder(dt, T);
       life.update(dt, T, D, mode === "dive" && (keys.f || keys.b));
     }
     rise = mode === "descent" ? D.desc * 3.5 : 0;

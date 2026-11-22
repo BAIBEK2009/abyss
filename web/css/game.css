@@ -482,8 +482,19 @@ body.standing #overlay { opacity: 0; }
 .ck-lbl { font: 12px var(--mono); color: #aab4b8; letter-spacing: 0.04em; text-align: center; }
 .ck-hint { max-width: 190px; line-height: 1.5; }
 .ck-nixie { font: 34px/1 var(--mono); color: #ffb35c; text-shadow: 0 0 8px #ff8a2a, 0 0 20px #ff6a00aa; background: #120a05; border: 2px solid #3b4044; border-radius: 8px; padding: 8px 12px; box-shadow: inset 0 0 14px #000; }
-.ck-led { display: flex; align-items: center; gap: 8px; font: 12px var(--mono); color: #aab4b8; }
-.ck-led i { width: 14px; height: 14px; border-radius: 50%; background: #3a1010; box-shadow: inset 0 0 3px #000; }
+/* the beacon direction finder (22.3 p. 1) */
+.ck-finder { display: flex; flex-direction: column; align-items: center; gap: 6px; border-radius: 14px; padding: 6px; }
+.ck-finder svg { width: 176px; height: 176px; filter: drop-shadow(0 8px 14px #000); }
+.ck-finder.dead .ck-needle { opacity: 0.45; }
+.ck-finder.pulse { animation: fd-pulse 1.1s ease-out 3; }
+@keyframes fd-pulse { 0% { box-shadow: 0 0 0 0 #f2b632cc; } 100% { box-shadow: 0 0 0 22px #f2b63200; } }
+.ck-fd-read { display: flex; align-items: center; gap: 10px; background: #0b0d0e; border: 2px solid #3b4044; border-radius: 6px; padding: 5px 10px; box-shadow: inset 0 0 10px #000; }
+.ck-bars { display: flex; align-items: flex-end; gap: 3px; height: 18px; }
+.ck-bars i { width: 5px; background: #1f2a24; border-radius: 1px; }
+.ck-bars i:nth-child(1) { height: 5px; } .ck-bars i:nth-child(2) { height: 8px; } .ck-bars i:nth-child(3) { height: 11px; } .ck-bars i:nth-child(4) { height: 14px; } .ck-bars i:nth-child(5) { height: 18px; }
+.ck-bars i.on { background: #7fe0a6; box-shadow: 0 0 6px #7fe0a6aa; }
+.ck-fd-dist { font: 700 17px var(--mono); color: #9fe0b0; text-shadow: 0 0 6px #4fd08088; min-width: 4.5em; text-align: center; white-space: nowrap; }
+.ck-finder.dead .ck-fd-dist { color: #6f7d78; text-shadow: none; font-size: 13px; }
 .ck-o2 svg { width: 150px; height: 150px; filter: drop-shadow(0 8px 14px #000); }
 .ck-scope { width: 200px; height: 200px; border-radius: 50%; background: #04130a; border: 5px solid #3b4044; box-shadow: inset 0 0 26px #000, 0 8px 18px #000a; }
 .ck-plate { position: absolute; left: 50%; transform: translateX(-50%); font: 12px var(--mono); color: #b9c2c6; background: #2a2f33; border: 1px solid #4a5156; padding: 4px 12px; border-radius: 3px; box-shadow: 0 2px 3px #000; }
@@ -512,8 +523,8 @@ body.standing #overlay { opacity: 0; }
 @media (pointer: coarse) { .ck-touch { display: grid; } .ck-help { display: none; } }
 .cockpit.narrow .ck-col { top: auto; bottom: 14px; transform: none; flex-direction: row; align-items: flex-end; gap: 10px; }
 .cockpit.narrow .ck-col.l { left: 14px; } .cockpit.narrow .ck-col.r { right: 14px; }
-.cockpit.narrow .ck-o2 svg { width: 104px; height: 104px; } .cockpit.narrow .ck-scope { width: 118px; height: 118px; }
-.cockpit.narrow .ck-hint, .cockpit.narrow .ck-col.r .ck-lbl, .cockpit.narrow .ck-plate { display: none; }
+.cockpit.narrow .ck-o2 svg, .cockpit.narrow .ck-finder svg { width: 104px; height: 104px; } .cockpit.narrow .ck-scope { width: 118px; height: 118px; }
+.cockpit.narrow .ck-hint, .cockpit.narrow .ck-col .ck-lbl, .cockpit.narrow .ck-plate { display: none; }
 .cockpit.narrow .ck-nixie { font-size: 24px; padding: 6px 9px; }
 body.diving #ui > *:not(.toasts), body.diving .letterbox { opacity: 0 !important; pointer-events: none !important; }
 

@@ -26,6 +26,31 @@ function o2Dial(sec, max) {
     <path d="M${cx - Math.cos(ang) * 8} ${cy - Math.sin(ang) * 8}L${cx + Math.cos(ang) * (R0 - 8)} ${cy + Math.sin(ang) * (R0 - 8)}" stroke="#ffb35c" stroke-width="2.6" stroke-linecap="round"/><circle cx="60" cy="60" r="4.5" fill="#9aa3a8"/></svg>`;
 }
 
+// The beacon direction finder (22.3 p. 1): a brass dial, the bow at the top, a needle that points to the beacon
+// relative to the nose of the bathyscaphe; the pinger LED on the bezel. Below it: the signal bars and the range.
+function finderDial() {
+  let ticks = "";
+  for (let i = 0; i < 24; i++) {
+    const a = (i * 15 - 90) * Math.PI / 180, big = i % 6 === 0, r0 = 62, r1 = big ? 52 : 57;
+    ticks += `<line x1="${80 + Math.cos(a) * r0}" y1="${80 + Math.sin(a) * r0}" x2="${80 + Math.cos(a) * r1}" y2="${80 + Math.sin(a) * r1}" stroke="#d9cfa8" stroke-width="${big ? 2.2 : 1}" opacity="${big ? 0.95 : 0.6}"/>`;
+  }
+  return `<svg viewBox="0 0 160 160" aria-hidden="true"><defs>
+      <radialGradient id="fdb" cx="34%" cy="28%"><stop offset="0" stop-color="#f6dc9a"/><stop offset=".45" stop-color="#b8893b"/><stop offset=".85" stop-color="#5e4116"/><stop offset="1" stop-color="#2a1c08"/></radialGradient>
+      <radialGradient id="fdf" cx="50%" cy="40%"><stop offset="0" stop-color="#14201c"/><stop offset="1" stop-color="#050908"/></radialGradient>
+      <radialGradient id="fdg" cx="38%" cy="26%" r="60%"><stop offset="0" stop-color="#fff" stop-opacity=".16"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient></defs>
+    <circle cx="80" cy="80" r="79" fill="url(#fdb)"/><circle cx="80" cy="80" r="71" fill="none" stroke="#3b2a10" stroke-width="2"/>
+    ${[0, 1, 2, 3, 4, 5].map((i) => { const a = (i * 60 + 30) * Math.PI / 180; return `<circle cx="${80 + Math.cos(a) * 75}" cy="${80 + Math.sin(a) * 75}" r="2.2" fill="#3b2a10"/><circle cx="${80 + Math.cos(a) * 75 - 0.6}" cy="${80 + Math.sin(a) * 75 - 0.6}" r="1" fill="#f0d898"/>`; }).join("")}
+    <circle cx="80" cy="80" r="68" fill="url(#fdf)"/>${ticks}
+    <path d="M80 13l-6 10h12z" fill="#ffb35c"/>
+    <text x="80" y="36" text-anchor="middle" font-family="PT Mono" font-size="9" fill="#d9cfa8">${t("ck_finder_bow")}</text>
+    <path d="M80 66c5 0 7 5 7 12v14c0 3-3 5-7 5s-7-2-7-5V78c0-7 2-12 7-12z" fill="none" stroke="#6f8f86" stroke-width="1.4" opacity=".7"/>
+    <g class="ck-needle"><path d="M80 18 L85.5 80 L80 92 L74.5 80Z" fill="#ff6a3a"/><path d="M80 18 L85.5 80 L80 80Z" fill="#ffb07a"/>
+      <path d="M80 92 L83 112 L77 112Z" fill="#8a9aa0"/></g>
+    <circle cx="80" cy="80" r="6" fill="url(#fdb)" stroke="#2a1c08"/>
+    <circle class="ck-fd-led" cx="122" cy="34" r="5" fill="#3a1010" stroke="#2a1c08"/>
+    <circle cx="80" cy="80" r="68" fill="url(#fdg)"/></svg>`;
+}
+
 export function createCockpit(root, handlers) {
   const ck = el("div", "cockpit");
   ck.innerHTML = `
@@ -33,8 +58,9 @@ export function createCockpit(root, handlers) {
     <div class="ck-hdg"><div class="ck-tape"></div><i></i></div>
     <div class="ck-col l">
       <div class="ck-lbl">${t("ck_depth")}</div><div class="ck-nixie">0000</div>
-      <div class="ck-led"><i></i>${t("ck_pinger")}</div>
-      <div class="ck-lbl ck-hint">${t("ck_pinger_hint")}</div>
+      <div class="ck-finder" data-id="finder">${finderDial()}
+        <div class="ck-fd-read"><span class="ck-bars"><i></i><i></i><i></i><i></i><i></i></span><b class="ck-fd-dist">${t("ck_finder_none")}</b></div>
+        <div class="ck-lbl">${t("ck_finder")}</div></div>
     </div>
     <div class="ck-col r">
       <div class="ck-o2"></div>
@@ -107,6 +133,9 @@ export function createCockpit(root, handlers) {
   addEventListener("resize", () => { if (ck.classList.contains("on")) layout(); });
 
   let blips = [], scopeT = -9;
+  // the needle: a spring towards the bearing (deg, + = right of the bow), with overshoot
+  const fd = { a: 0, v: 0, want: 0, on: false };
+  const needle = $(".ck-needle"), led = $(".ck-fd-led"), bars = [...ck.querySelectorAll(".ck-bars i")], dist = $(".ck-fd-dist");
   return {
     el: ck,
     get centreY() { return CY; },
@@ -130,12 +159,32 @@ export function createCockpit(root, handlers) {
       if (fog !== undefined) $(".ck-glass").style.setProperty("--fog", fog.toFixed(2));
       if (low !== undefined) ck.classList.toggle("low", low);
     },
+    /** The pinger LED on the finder's bezel: one flash per ping, brighter when the signal is strong. */
     pinger(vol) {
-      const led = $(".ck-led i");
-      led.style.background = `rgba(255,${80 + vol * 60},40,${0.3 + vol * 0.7})`;
-      led.style.boxShadow = `0 0 ${6 + vol * 14}px rgba(255,90,40,${vol})`;
-      setTimeout(() => { led.style.background = ""; led.style.boxShadow = ""; }, 140);
+      led.setAttribute("fill", `rgb(255,${90 + vol * 80},${40 + vol * 30})`);
+      led.style.filter = `drop-shadow(0 0 ${3 + vol * 7}px rgba(255,90,40,${0.4 + vol * 0.6}))`;
+      setTimeout(() => { led.setAttribute("fill", "#3a1010"); led.style.filter = ""; }, 150);
     },
+    /** The finder's reading: bearing (deg from the bow, + = right) or null without a signal; bars 0..5; range text. */
+    finder({ bearing, bars: n, range }) {
+      this.aim(bearing);
+      bars.forEach((b, i) => b.classList.toggle("on", i < n));
+      dist.textContent = range;
+      ck.querySelector(".ck-finder").classList.toggle("dead", !fd.on);
+    },
+    /** Every frame: where the needle should point (the bow turns, the needle follows at once). */
+    aim(bearing) {
+      fd.on = bearing !== null && bearing !== undefined;
+      if (fd.on) fd.want = fd.a + ((((bearing - fd.a) % 360) + 540) % 360) - 180;    // the shortest way round
+    },
+    stepFinder(dt, now) {
+      if (!fd.on) fd.want = Math.sin(now * 0.31) * 70 + Math.sin(now * 0.83) * 25;     // no signal: the needle hunts
+      fd.v += ((fd.want - fd.a) * 38 - fd.v * 7.5) * Math.min(dt, 0.05);
+      fd.a += fd.v * Math.min(dt, 0.05);
+      needle.setAttribute("transform", `rotate(${fd.a.toFixed(2)} 80 80)`);
+    },
+    /** A short pulse round the finder (Dana points at it). */
+    pulseFinder() { const f = ck.querySelector(".ck-finder"); f.classList.remove("pulse"); void f.offsetWidth; f.classList.add("pulse"); },
     prompt(on, p = 0) { const pr = $(".ck-prompt"); pr.classList.toggle("on", on); pr.style.setProperty("--p", p.toFixed(3)); },
     /** A sonar ping: blips = [{rel (radians, + = left), r (0..1), s (size)}], drawn as the sweep passes. */
     ping(b, now) { blips = b; scopeT = now; },
