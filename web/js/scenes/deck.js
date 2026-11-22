@@ -122,8 +122,9 @@ function glowSprite(hex, size, mult = 3) {
 const emissive = (hex, k = 3) => new THREE.MeshBasicMaterial({ color: new THREE.Color(hex).multiplyScalar(k) });
 
 // ------------------------------------------------------------------ the sea
-const WAVES = [  // direction (x, z), wavelength m, amplitude m, speed
-  [0.8, 0.6, 38, 0.32, 1.0], [-0.3, 1.0, 21, 0.18, 1.0], [0.95, -0.3, 11, 0.09, 1.0], [0.2, 0.98, 6.2, 0.05, 1.0],
+// C4: four Gerstner waves — direction (x, z), wavelength m, amplitude m, speed, steepness (horizontal pull to the crest)
+const WAVES = [
+  [0.8, 0.6, 60, 0.42, 1.0, 0.32], [0.26, 0.97, 31, 0.24, 1.0, 0.28], [0.99, -0.14, 18, 0.11, 1.0, 0.22], [0.5, -0.87, 9, 0.055, 1.0, 0.16],
 ];
 function createSea(moonDir) {
   // a polar grid: fine near the ship, coarse at the horizon (no swimming detail where it matters)
@@ -143,55 +144,62 @@ function createSea(moonDir) {
   const geo = new THREE.BufferGeometry();
   geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
   geo.setIndex(idx);
-  const waveGLSL = WAVES.map(([dx, dz, L, A, s], i) => {
+  // Gerstner: every point circles — it rises and is pulled towards the crest (sharp crests, wide troughs); the
+  // normal comes out of the same sums. h (height), off (horizontal shift), g (slope), cr (crest sharpness)
+  const waveGLSL = WAVES.map(([dx, dz, L, A, s, Q]) => {
     const l = Math.hypot(dx, dz), k = (2 * Math.PI) / L, w = Math.sqrt(9.8 * k) * s;
     return `{ vec2 d = vec2(${(dx / l).toFixed(4)}, ${(dz / l).toFixed(4)}); float ph = dot(d, p) * ${k.toFixed(5)} - t * ${w.toFixed(5)};
-      h += uAmp * ${A.toFixed(4)} * sin(ph); g += uAmp * ${(A * k).toFixed(5)} * cos(ph) * d; }`;
+      float c = cos(ph), sn = sin(ph);
+      h += uAmp * ${A.toFixed(4)} * sn; off += uAmp * ${(Q / k).toFixed(4)} * c * d * ${(1 / 1).toFixed(1)} * min(uAmp, 1.6) / max(uAmp, 0.01);
+      g += uAmp * ${(A * k).toFixed(5)} * c * d; cr += ${Q.toFixed(3)} * sn; }`;
   }).join("\n");
   const mat = new THREE.ShaderMaterial({
     uniforms: { uTime: { value: 0 }, uMoon: { value: moonDir.clone() }, uFogCol: { value: new THREE.Color(0x0b1626) }, uPools: { value: [0, 1, 2, 3].map(() => new THREE.Vector4()) },
                 uAmp: { value: 1 }, uFoam: { value: 0 }, uCloud: { value: 0 }, uMoonVis: { value: 1 }, uFlash: { value: 0 }, uSun: { value: 0 }, uFogD: { value: 0 },
                 uHull: { value: new THREE.Vector4(0, 0, 5.2, 0) }, uHullZ: { value: new THREE.Vector2(STERN, BOW) } },
     vertexShader: /* glsl */`
-      uniform float uTime; uniform float uAmp; varying vec3 vW; varying float vH;
-      void waves(vec2 p, float t, out float h, out vec2 g) { h = 0.0; g = vec2(0.0); ${waveGLSL} }
+      uniform float uTime; uniform float uAmp; varying vec3 vW; varying float vH; varying vec3 vN; varying float vCr;
+      void waves(vec2 p, float t, out float h, out vec2 off, out vec2 g, out float cr) { h = 0.0; off = vec2(0.0); g = vec2(0.0); cr = 0.0; ${waveGLSL} }
       void main() {
         vec4 w = modelMatrix * vec4(position, 1.0);
-        float h; vec2 g; waves(w.xz, uTime, h, g);
+        float h, cr; vec2 off, g; waves(w.xz, uTime, h, off, g, cr);
         float fade = 1.0 - smoothstep(600.0, 2500.0, length(w.xz - cameraPosition.xz));
-        w.y += h * fade; vW = w.xyz; vH = h;
+        w.y += h * fade; w.xz += off * fade; vW = w.xyz; vH = h;
+        vN = normalize(vec3(-g.x * fade, 1.0 - 0.35 * cr * fade, -g.y * fade)); vCr = cr * fade;
         gl_Position = projectionMatrix * viewMatrix * w;
       }`,
     fragmentShader: /* glsl */`
       uniform float uTime; uniform vec3 uMoon; uniform vec3 uFogCol; uniform vec4 uHull; uniform vec2 uHullZ; uniform vec4 uPools[4];
       uniform float uAmp; uniform float uFoam; uniform float uCloud; uniform float uMoonVis; uniform float uFlash; uniform float uSun; uniform float uFogD;
-      varying vec3 vW; varying float vH;
-      void waves(vec2 p, float t, out float h, out vec2 g) { h = 0.0; g = vec2(0.0); ${waveGLSL} }
+      varying vec3 vW; varying float vH; varying vec3 vN; varying float vCr;
       float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
       float vn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
         return mix(mix(hash(i), hash(i + vec2(1, 0)), f.x), mix(hash(i + vec2(0, 1)), hash(i + vec2(1, 1)), f.x), f.y); }
       void main() {
         float dist = length(vW.xz - cameraPosition.xz);
-        float h; vec2 g; waves(vW.xz, uTime, h, g);
-        // small ripples, fading with distance (no shimmer at the horizon)
+        float h = vH;
+        // small ripples: two noise layers scrolling in different directions, fading with distance
         float rf = 1.0 - smoothstep(30.0, 400.0, dist);
-        vec2 q = vW.xz * 1.7 + vec2(uTime * 0.6, uTime * 0.4);
-        g += rf * 0.16 * vec2(vn(q) - vn(q + vec2(0.13, 0.0)), vn(q) - vn(q + vec2(0.0, 0.13))) / 0.13 * 0.08;
-        vec3 n = normalize(vec3(-g.x, 1.0, -g.y));
+        vec2 q = vW.xz * 1.7 + vec2(uTime * 0.6, uTime * 0.4), q2 = vW.xz * 3.1 + vec2(-uTime * 0.45, uTime * 0.7);
+        vec2 rip = vec2(vn(q) - vn(q + vec2(0.13, 0.0)), vn(q) - vn(q + vec2(0.0, 0.13))) + 0.6 * vec2(vn(q2) - vn(q2 + vec2(0.1, 0.0)), vn(q2) - vn(q2 + vec2(0.0, 0.1)));
+        vec3 n = normalize(vN + rf * vec3(-rip.x, 0.0, -rip.y) * 0.1);
         vec3 v = normalize(cameraPosition - vW);
         float fres = 0.02 + 0.98 * pow(1.0 - max(dot(n, v), 0.0), 5.0);
         vec3 r = reflect(-v, n);
         vec3 sky = mix(vec3(0.028, 0.05, 0.09), vec3(0.09, 0.13, 0.2), pow(1.0 - max(r.y, 0.0), 3.0));
         sky = mix(sky, uFogCol * 1.6, uCloud * 0.75);                                     // an overcast sky in the mirror
         sky = mix(sky, vec3(0.95, 0.55, 0.32) * (0.4 + 0.6 * pow(max(dot(r, normalize(vec3(0.9, 0.12, -0.3))), 0.0), 6.0)), uSun * 0.8);   // dawn
-        vec3 deep = vec3(0.006, 0.02, 0.035) + vec3(0.0, 0.02, 0.025) * clamp(vH + 0.3, 0.0, 1.0);
+        // the body of the water: #0B2A3A deep, #1E5A6E where a crest is thin enough for light to pass (scaled by the light)
+        float lightK = 0.18 + 0.5 * uSun + 0.25 * uMoonVis;
+        float thin = smoothstep(0.1, 0.75, vCr) * smoothstep(-0.1, 0.6, vH);
+        vec3 deep = mix(vec3(0.043, 0.165, 0.227), vec3(0.118, 0.353, 0.431), thin) * lightK * 0.35;
         vec3 col = mix(deep, sky, fres);
         float spec = pow(max(dot(r, uMoon), 0.0), 220.0);
         float glint = pow(max(dot(r, uMoon), 0.0), 28.0);
         col += vec3(0.85, 0.9, 1.0) * (spec * 6.0 + glint * 0.18) * uMoonVis;
         col += vec3(0.55, 0.6, 0.75) * uFlash * (0.15 + fres);                            // lightning on the water
         // foam: crests and the water pushed along the hull
-        float crest = smoothstep(0.32, 0.55, h + (vn(vW.xz * 0.35 + uTime * 0.05) - 0.5) * 0.3);
+        float crest = smoothstep(0.55, 0.85, vCr + (vn(vW.xz * 0.35 + uTime * 0.05) - 0.5) * 0.25);
         vec2 hp = vW.xz - uHull.xy;
         float hx = abs(hp.x) - uHull.z * (hp.y > 14.0 ? pow(max(0.0, 1.0 - pow((hp.y - 14.0) / 16.0, 2.0)), 0.7) : 1.0);
         float inZ = step(uHullZ.x - 2.0, hp.y) * step(hp.y, uHullZ.y + 1.5);
@@ -200,7 +208,7 @@ function createSea(moonDir) {
         float foamN = vn(vW.xz * 2.3 + uTime * 0.3) * vn(vW.xz * 5.1 - uTime * 0.2);
         // storm: wind-driven streaks of foam along the swell, and whitecaps on every crest
         float streak = uFoam * smoothstep(0.58, 0.86, vn(vec2(vW.x * 0.09 + vW.z * 0.03, vW.z * 0.4 - vW.x * 0.12) + uTime * 0.05)) * 0.6;
-        float caps = uFoam * smoothstep(0.55 * uAmp, 0.85 * uAmp, h) * 0.9;
+        float caps = uFoam * smoothstep(0.6, 0.9, vCr) * 0.9;
         float foam = clamp(crest * 0.35 + wake * 0.9 + stern * 0.55 + streak + caps, 0.0, 1.0) * smoothstep(0.12, 0.5, foamN);
         col = mix(col, vec3(0.42, 0.47, 0.5), foam * (1.0 - smoothstep(60.0, 300.0, dist)));
         // searchlight pools: the lit swell and the glitter of the light on it
@@ -225,7 +233,7 @@ function createSea(moonDir) {
 export const SEA = { amp: 1 };       // the weather's wave scale (the GLSL takes the same number)
 export function seaHeight(x, z, t) {
   let h = 0;
-  for (const [dx, dz, L, A, s] of WAVES) {
+  for (const [dx, dz, L, A, s] of WAVES) {          // the Gerstner height (the small horizontal shift is left out)
     const l = Math.hypot(dx, dz), k = (2 * Math.PI) / L, w = Math.sqrt(9.8 * k) * s;
     h += SEA.amp * A * Math.sin(((dx / l) * x + (dz / l) * z) * k - t * w);
   }
@@ -1211,7 +1219,7 @@ export function createDeck(view, { lifeLabel = "" } = {}) {
     sea.material.uniforms.uTime.value = time;
     slick.material.uniforms.uTime.value = time;
     // the ship rolls +-3 deg, pitches a little and heaves with the swell (CLAUDE.md 23.2)
-    roll = THREE.MathUtils.degToRad(3) * W.roll * (0.72 * Math.sin(time * 0.52) + 0.28 * Math.sin(time * 0.91 + 1.3));
+    roll = THREE.MathUtils.degToRad(3) * (1 + (W.roll - 1) * 2) * (0.72 * Math.sin(time * 0.52) + 0.28 * Math.sin(time * 0.91 + 1.3));
     pitch = THREE.MathUtils.degToRad(1.1) * (0.5 + 0.5 * W.roll) * Math.sin(time * 0.37 + 0.6);
     heave = (0.22 * Math.sin(time * 0.47) + 0.08 * Math.sin(time * 1.1 + 2)) * Math.sqrt(W.amp);
     ship.position.set(0, DECK_Y + heave, 0);
