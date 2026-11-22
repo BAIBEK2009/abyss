@@ -300,7 +300,7 @@ const soft2 = (rgb) => canvasTexture(64, 64, (g) => {
 
 /** Everything that lives down there (the South Caspian at ~950 m: sparse — sprats, a sturgeon, comb jellies;
  *  no corals, no tropical jellyfish); update(dt, T, D, thrusting) every frame of the dive. */
-function createLife(deep, lampPos) {
+function createLife(deep, lampPos, lampDir) {
   const jellies = [];
   for (let i = 0; i < 6; i++) {           // mnemiopsis drifting a metre or two above the silt
     const c = ctenophore(0.12 + hash(i, 25) * 0.08);
@@ -336,7 +336,31 @@ function createLife(deep, lampPos) {
   const PK = 700, pk = new Float32Array(PK * 3);
   for (let i = 0; i < PK; i++) pk.set([(Math.random() - 0.5) * 12, (Math.random() - 0.5) * 6, (Math.random() - 0.5) * 12], i * 3);
   const pkGeo = new THREE.BufferGeometry(); pkGeo.setAttribute("position", new THREE.BufferAttribute(pk, 3));
-  const plankton = new THREE.Points(pkGeo, new THREE.PointsMaterial({ color: new THREE.Color(0x7fe9ff).multiplyScalar(2), size: 0.07, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending }));
+  // A3: soft round dots of fixed pixel size (1-3 px, a few bigger), dim; bright only inside the searchlight cone
+  const pkSize = new Float32Array(PK);
+  for (let i = 0; i < PK; i++) pkSize[i] = Math.random() < 0.06 ? 3.2 + Math.random() * 1.6 : 1 + Math.random() * 2;
+  pkGeo.setAttribute("aSize", new THREE.BufferAttribute(pkSize, 1));
+  const pkMat = new THREE.ShaderMaterial({
+    uniforms: { opacity: { value: 0 }, uLamp: { value: new THREE.Vector3() }, uDir: { value: new THREE.Vector3(0, 0, -1) }, uPR: { value: Math.min(1.5, devicePixelRatio || 1) } },
+    vertexShader: `attribute float aSize; uniform vec3 uLamp, uDir; uniform float uPR; varying float vLit;
+      void main() {
+        vec3 d = position - uLamp; float L = length(d);
+        float cone = smoothstep(0.86, 0.95, dot(d / max(L, 1e-3), uDir)) * smoothstep(14.0, 2.0, L);
+        vLit = 0.12 + 0.88 * cone;
+        vec4 mv = modelViewMatrix * vec4(position, 1.0);
+        gl_PointSize = aSize * uPR * (0.8 + 0.4 * cone);
+        gl_Position = projectionMatrix * mv;
+      }`,
+    fragmentShader: `uniform float opacity; varying float vLit;
+      void main() {
+        vec2 c = gl_PointCoord - 0.5; float r = dot(c, c) * 4.0;
+        float a = smoothstep(1.0, 0.0, r);
+        if (a < 0.01) discard;
+        gl_FragColor = vec4(vec3(0.55, 0.92, 1.0) * vLit * 1.6, a * opacity * vLit);
+      }`,
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+  });
+  const plankton = new THREE.Points(pkGeo, pkMat);
   plankton.frustumCulled = false; deep.add(plankton);
   const school = { c: new THREE.Vector3(7, 0, -5), a: 0, fish: [] };
   {
@@ -382,7 +406,8 @@ function createLife(deep, lampPos) {
         p.material.opacity = 0.34 * (1 - L) * Math.min(1, p.userData.life * 2.5);
       }
       const sp = Math.hypot(D.vx || 0, D.vz || 0);
-      plankton.material.opacity += (clamp(sp * 0.55 + Math.abs(D.turn || 0) * 0.35, 0, 0.85) - plankton.material.opacity) * Math.min(1, dt * 3);
+      if (lampDir) { pkMat.uniforms.uLamp.value.copy(lampPos()); lampDir(pkMat.uniforms.uDir.value); }
+      const pko = pkMat.uniforms.opacity; pko.value += (clamp(sp * 0.55 + Math.abs(D.turn || 0) * 0.35, 0, 0.85) - pko.value) * Math.min(1, dt * 3);
       for (let i = 0; i < pk.length; i += 3) {
         pk[i + 1] += Math.sin(T + i) * dt * 0.02;
         for (let a = 0; a < 3; a++) {
@@ -462,6 +487,10 @@ export function createDive(view) {
   // the descent film is "shot" from a companion camera with its own small light: a soft fill on Nerpa's flank
   const fill = new THREE.PointLight(0xbfdcff, 0, 14, 2);
   deep.add(fill);
+  // A4: Nerpa's own warm glow (her pilot light and the companion camera's lamp) so the orange reads as orange
+  // in the teal water near the surface, not green
+  const warm = new THREE.PointLight(0xffb072, 0, 3.2, 1.6);
+  deep.add(warm);
   const snow = marineSnow();
   snow.mat.uniforms.uPR.value = view.renderer.getPixelRatio();
   deep.add(snow.points);
@@ -1011,7 +1040,9 @@ export function createDive(view) {
   }
 
   // ---- deep-sea life (CLAUDE.md v3.1, 19 p. 7)
-  const life = createLife(deep, () => spot.position);
+  const _lp = new THREE.Vector3();
+  const life = createLife(deep, () => spot.getWorldPosition(_lp), (out) => {
+    spot.target.getWorldPosition(out); return out.sub(spot.getWorldPosition(_lp)).normalize(); });
 
   // ---- the cockpit and the controls
   const cockpit = createCockpit(document.getElementById("ui").parentElement, {
@@ -1410,7 +1441,7 @@ export function createDive(view) {
     surfPlane.material.uniforms.uSurf.value = Y0 + 14; surfPlane.material.uniforms.uOrg.value.set(0, 0);
     deep.fog.color.set(0x0b3c50); deep.fog.density = 0.022; deep.background.set(0x0c4762);
     top.color.set(0x8fc4dc); top.intensity = 3.6;
-    hemi.color.set(0x3a8fa8); hemi.groundColor.set(0x2f7f90); hemi.intensity = 2.6;      // near the surface light scatters from every side
+    hemi.color.set(0x7ab0bf); hemi.groundColor.set(0x4f7f88); hemi.intensity = 2.0;      // near the surface light scatters from every side (less teal: yellow under teal turns green)
     snow.mat.uniforms.uOn.value = 0; snow.mat.uniforms.uOn2.value = 0; snow.mat.uniforms.uAmb.value = 0.55;
     sounds.under?.();
     await shot(durs[0], (k, dt, time) => {
@@ -1426,9 +1457,10 @@ export function createDive(view) {
       caustic.intensity = 90 * (1 - k * 0.6); causticTex.offset.set(Math.sin(time * 0.31) * 0.2 + time * 0.03, Math.cos(time * 0.27) * 0.2);
       trail.update(dt, time, emitHull, k < 0.12 ? 6 : 1);          // the ballast vents: a burst of air as she goes under
       model.update(dt, time, 0.4);
+      warm.position.copy(nerpa.position).add(tmpV.set(1.6, 1.9, 1.8)); warm.intensity = 14;
       setDepth(k * 12);
     });
-    surf.visible = false; caustic.intensity = 0;
+    surf.visible = false; caustic.intensity = 0; warm.intensity = 0;
     hemi.color.set(0x0d4257); hemi.groundColor.set(0x000000); hemi.intensity = 0.6;
 
     // ---- shot 4: the twilight zone — blue to black, the depth races, comb jellies; the lamps click on at ~200 m
