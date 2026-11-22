@@ -333,5 +333,12 @@
  "board_close": "Close · E",
  "board_tele": "POSEIDON-2 → AEROSTAR|SEARCH UNDER WAY STOP|RECORDING MUST NOT|GET OUT STOP",
  "board_postponed": "DEFERRED",
- "btn_board": "Evidence board"
+ "btn_board": "Evidence board",
+ "mm_sub": "The Caspian. Five days to find the black box of flight AQ-271.",
+ "mm_continue": "Continue",
+ "mm_new": "New game",
+ "mm_demo": "Demo for the defence",
+ "mm_demo_sub": "The whole story in 5 minutes: fast lines, one dive per act",
+ "mm_old_save": "This save is from an older version of the game — please start again.",
+ "btn_skip_act": "Skip to the next act"
 }

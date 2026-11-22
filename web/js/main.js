@@ -10,6 +10,8 @@ import { chosenLang, loadAll, loadLang, saveLang, t } from "./i18n.js";
 import { pickLanguage } from "./ui/language.js";
 import { createMenu } from "./ui/menu.js";
 import { loadStory } from "./story.js";
+import { mainMenu } from "./ui/mainmenu.js";
+import { clearSave } from "./api.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -60,7 +62,10 @@ async function start() {
     $("status").hidden = false;
     return;
   }
-  createMenu({ selfNames, onNewGame: () => api.newGame() });
+  // the main menu (B6, B7): continue / new game / demo; tools and the --demo key go straight in
+  const qs = new URLSearchParams(location.search);
+  if (!qs.has("nointro") && !qs.has("play") && !qs.has("demo")) state = await mainMenu(state, selfNames);
+  createMenu({ selfNames, onNewGame: () => { clearSave(); return api.newCampaign(!!state.campaign?.demo); } });
 
   const view = createView($("scene"));
   view.onResize((w, h) => aimCamera(view, w, h));

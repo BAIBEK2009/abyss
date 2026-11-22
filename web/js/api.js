@@ -3,7 +3,7 @@
 // B7: the campaign is saved in localStorage after every answer (its seed + the log of the captain's calls)
 export const SAVE_KEY = "abyss.save";
 function saveLocal(st) {
-  if (!st?.save) return;
+  if (!st?.save?.log?.length) return;          // a fresh game never overwrites a saved one (the menu offers both)
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(st.save)); } catch { /* private mode: no save */ }
 }
 export function readSave() {

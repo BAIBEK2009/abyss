@@ -135,8 +135,9 @@ class Run:
     # ---------------------------------------------------------------- the run
     def run(self):
         pg = self.page
-        ok = self.step("экран языка (клавиша 1/2/3)", lambda: (
+        ok = self.step("экран языка (1/2/3) и меню (E — новая игра)", lambda: (
             pg.wait_for_selector(".lang-screen", timeout=30000), self.p.key({"kk": "Digit1", "ru": "Digit2", "en": "Digit3"}[self.lang]),
+            pg.wait_for_selector("[data-id=mm-new]", timeout=30000), self.p.key("KeyE"),
             pg.wait_for_selector("body[data-ready='1']", timeout=30000), self.wait(1200)))
         if not ok:
             return

@@ -120,11 +120,32 @@ export function createTable(view, map, initialState, { cabin, dive } = {}) {
     onDive: () => diveFromDeck(),
     onBoard: () => board.show(state.campaign?.mystery ?? []), threads: THREADS,
   });
+  // "Demo for the defence" (B6): lines go on by themselves, a button skips to the next act
+  speech.demo = !!state.campaign?.demo;
+  const skipBtn = document.createElement("button");
+  skipBtn.className = "skip-act"; skipBtn.dataset.id = "skip-act"; skipBtn.hidden = !state.campaign?.demo;
+  skipBtn.innerHTML = `${ICONS.autopilot}<span>${t("btn_skip_act")}</span>`;
+  document.body.append(skipBtn);
+  skipBtn.addEventListener("click", async () => {
+    if (busy || skipBtn.disabled || state.status !== "playing" || state.campaign?.act === "act4") return;
+    skipBtn.disabled = true;
+    try {
+      await flow.busy;
+      const wasPrologue = state.campaign?.act === "prologue";
+      const res = await api.skip();
+      if (wasPrologue && walk.mode !== "table") { walk.toTable(); stand(false, true); document.body.classList.remove("prologue"); }
+      flow.hold(res.story);
+      state = res.state; map.setState(state, { animate: true }); render();
+      await flow.play(res.story);
+      if (state.status !== "playing") finish();
+    } finally { skipBtn.disabled = false; render(); }
+  });
   const banner = document.getElementById("autopilot-banner");
   banner.textContent = t("autopilot_on");
 
   function render() {
     renderSwitch();
+    skipBtn.hidden = !state.campaign?.demo || state.status !== "playing" || state.campaign.act === "act4";
     goal.update(state.campaign);
     walk?.refresh();
     if (state.dive) return;              // under water: the table waits (no previews while the dive is open)
@@ -375,7 +396,7 @@ export function createTable(view, map, initialState, { cabin, dive } = {}) {
   /** The dive: the descent film (23.3-B, five shots from the deck to the seabed), then the cockpit search. */
   let descent = null;
   async function diveScene(scene) {
-    descent ??= createDescent(view, { getDeck: () => walk.getDeck(), dive });
+    descent ??= createDescent(view, { getDeck: () => walk.getDeck(), dive, demo: () => !!state.campaign?.demo });
     toasts.say("grisha", t("toast_crane"), 2600);
     await fade(true);
     await descent.play();

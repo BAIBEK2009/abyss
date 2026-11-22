@@ -13,14 +13,14 @@ import { t } from "./i18n.js";
 
 const FULL = [3, 3, 4, 5, 4.5], SHORT = [1.4, 1.4, 1.6, 2.0, 1.6];
 
-export function createDescent(view, { getDeck, dive }) {
+export function createDescent(view, { getDeck, dive, demo = () => false }) {
   let dives = 0;
   const hint = el("div", "cine-skip");
   hint.hidden = true;
   document.body.append(hint);
 
   async function play() {
-    const D = dives++ > 0 ? SHORT : FULL;
+    const D = dives++ > 0 || demo() ? SHORT : FULL;          // the demo: always the 8 s cut
     let skipped = false;
     const onKey = (e) => { if (e.code === "Space" && !clock.paused) { e.preventDefault(); skipped = true; } };   // Esc is the pause
     addEventListener("keydown", onKey, true);

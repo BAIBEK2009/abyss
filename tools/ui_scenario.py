@@ -28,7 +28,7 @@ BUSY = "window.__abyss.busy()"
 def scenario(pw, out: Path, lang: str, headed: bool) -> list[str]:
     server = make_server(0)
     threading.Thread(target=server.serve_forever, daemon=True).start()
-    url = f"http://127.0.0.1:{server.server_address[1]}/?lang={lang}"
+    url = f"http://127.0.0.1:{server.server_address[1]}/?play=1&lang={lang}"
     errors: list[str] = []
     browser = pw.chromium.launch(channel="chrome", headless=not headed, args=["--use-angle=metal", "--enable-gpu"])
     page = browser.new_page(viewport={"width": 1440, "height": 900})

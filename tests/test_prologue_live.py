@@ -60,8 +60,10 @@ def test_live_prologue(lang):
         page.on("console", lambda m: m.type == "error" and errors.append(m.text))
         page.add_init_script("try { localStorage.setItem('abyss.deckHintsDone','1'); } catch (e) {}")
         page.goto(url)
-        page.wait_for_selector("body[data-ready='1']", timeout=30000)
         p = Player(page, layout="ru" if lang != "en" else "en")   # the Russian layout: E types «у»
+        page.wait_for_selector("[data-id=mm-new]", timeout=30000)
+        p.key("KeyE")                                     # the main menu: E = New game
+        page.wait_for_selector("body[data-ready='1']", timeout=30000)
         page.wait_for_timeout(1000)
         p.key("KeyE")                                     # E skips the chapter card
         page.wait_for_function("() => window.__abyss.walk.mode === 'deck'", timeout=10000)

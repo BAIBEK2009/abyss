@@ -30,9 +30,11 @@ export function createSpeech(root = document.body) {
   root.append(box);
   const face = box.querySelector(".sp-face"), whoEl = box.querySelector(".sp-who"), text = box.querySelector(".sp-text");
   let place = "table", chain = Promise.resolve(), current = null;
+  let demo = false;                     // "Demo for the defence" (B6): every line moves on by itself after 2.5 s
 
   /** Show one line; resolves when the player (or the timer) moves on. */
   function show(line, { auto = false } = {}) {
+    auto = auto || demo;
     return new Promise((resolve) => {
       const id = line.speaker;
       const p = id ? who(id) : null;
@@ -72,13 +74,14 @@ export function createSpeech(root = document.body) {
       };
       box.onclick = step;
       addEventListener("keydown", onKey, true);
-      if (auto) autoT = later(Math.max(3200, full.length * 55 + 1200), done);
+      if (auto) autoT = later(demo ? full.length * 12 + 2500 : Math.max(3200, full.length * 55 + 1200), done);
       current = { done, step };
     });
   }
 
   return {
     /** Where the window sits: "table" (right), "cockpit" (bottom, above the instruments), "deck" (bottom centre). */
+    set demo(v) { demo = !!v; },
     set place(p) { place = p; box.className = box.className.replace(/\bsp-at-\w+/g, "").trim() + ` sp-at-${p}`; },
     get place() { return place; },
     /** Queue a story beat by id (or a {speaker, text} line); resolves when it has been shown. */

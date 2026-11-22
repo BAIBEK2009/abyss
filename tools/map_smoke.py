@@ -20,7 +20,7 @@ out.mkdir(parents=True, exist_ok=True)
 server = make_server(0, campaign=False)
 threading.Thread(target=server.serve_forever, daemon=True).start()
 LANG = sys.argv[2] if len(sys.argv) > 2 else "ru"
-url = f"http://127.0.0.1:{server.server_address[1]}/?lang={LANG}"
+url = f"http://127.0.0.1:{server.server_address[1]}/?play=1&lang={LANG}"
 errors = []
 
 

@@ -25,7 +25,7 @@ if __name__ == "__main__":
     args.out.mkdir(parents=True, exist_ok=True)
     server = make_server(0)
     threading.Thread(target=server.serve_forever, daemon=True).start()
-    url = f"http://127.0.0.1:{server.server_address[1]}/?lang={args.lang}"
+    url = f"http://127.0.0.1:{server.server_address[1]}/?play=1&lang={args.lang}"
     errors = []
 
 TASKS = "window.__abyss.state().campaign.tasks"
