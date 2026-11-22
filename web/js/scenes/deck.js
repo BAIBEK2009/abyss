@@ -1234,6 +1234,32 @@ export function createDeck(view, { lifeLabel = "" } = {}) {
   }
   poseidonNear.visible = false;
 
+  // C10: gulls over the stern by day — eight birds orbit and weave (a light flocking rule: keep apart, follow the
+  // orbit), wings flap in the vertex shader; at night they are gone
+  const gullGeo = new THREE.BufferGeometry();
+  gullGeo.setAttribute("position", new THREE.Float32BufferAttribute([0, 0, 0.18, -0.55, 0.06, -0.05, 0, 0, -0.12, 0, 0, 0.18, 0, 0, -0.12, 0.55, 0.06, -0.05, 0, 0, 0.3, 0, 0.02, -0.25, 0.08, 0, 0], 3));
+  gullGeo.setAttribute("wing", new THREE.Float32BufferAttribute([0, 1, 0, 0, 0, 1, 0, 0, 0], 1));
+  const gullMat = new THREE.ShaderMaterial({ side: THREE.DoubleSide, uniforms: { uT: { value: 0 } },
+    vertexShader: "attribute float wing; uniform float uT; varying float vW; void main() { vec3 p = position; float ph = uT * 7.0 + float(gl_InstanceID) * 1.7; p.y += wing * sin(ph) * 0.35; vW = wing; gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(p, 1.0); }",
+    fragmentShader: "varying float vW; void main() { gl_FragColor = vec4(mix(vec3(0.93), vec3(0.35, 0.36, 0.38), vW * 0.6), 1.0); }" });
+  const gulls = new THREE.InstancedMesh(gullGeo, gullMat, 8); gulls.frustumCulled = false; scene.add(gulls);
+  const gullS = Array.from({ length: 8 }, (_, i) => ({ a: (i / 8) * Math.PI * 2, r: 9 + (i % 3) * 3, h: 9 + (i % 4) * 1.6, sp: 0.25 + (i % 5) * 0.03, w: Math.random() * 6 }));
+  const gm = new THREE.Matrix4(), gq = new THREE.Quaternion(), gp = new THREE.Vector3(), gsc = new THREE.Vector3(1.4, 1.4, 1.4), gup = new THREE.Vector3(0, 1, 0);
+  function updateGulls(dt, time) {
+    gulls.visible = W.sun > 0.5 && W.rain < 0.3;
+    if (!gulls.visible) return;
+    gullMat.uniforms.uT.value = time;
+    gullS.forEach((g2, i) => {
+      for (const o of gullS) if (o !== g2) { const d = Math.atan2(Math.sin(o.a - g2.a), Math.cos(o.a - g2.a)); if (Math.abs(d) < 0.25) g2.a -= Math.sign(d) * dt * 0.1; }   // keep apart
+      g2.a += dt * g2.sp; g2.w += dt;
+      const r = g2.r + Math.sin(g2.w * 0.4) * 2, h = g2.h + Math.sin(g2.w * 0.7) * 1.2;
+      gp.set(Math.cos(g2.a) * r, h, STERN - 4 + Math.sin(g2.a) * r * 0.8);
+      gq.setFromAxisAngle(gup, -g2.a);
+      gm.compose(gp, gq, gsc); gulls.setMatrixAt(i, gm);
+    });
+    gulls.instanceMatrix.needsUpdate = true;
+  }
+
   // the weather (weather.js): rain round the camera, none inside the wheelhouse
   const rain = createRain({ shelter: { min: new THREE.Vector3(-HX - 0.1, -0.5, HZ0 - 0.15), max: new THREE.Vector3(HX + 0.1, HH + 0.4, HZ1 + 0.1) } });
   scene.add(rain.object);
@@ -1276,7 +1302,7 @@ export function createDeck(view, { lifeLabel = "" } = {}) {
     { x: rig.position.x, z: rig.position.z, col: "#ffd36a", s: 7 }, { x: poseidonFar.position.x * 20, z: poseidonFar.position.z * 20, col: "#ff6a50", s: 6 });
   horizon.children.forEach((sp, i) => { if (i < 9 && i % 2 === 0) radarTargets.push({ x: sp.position.x, z: sp.position.z, col: "#7dffb0", s: 4 }); });
   function update(dt, time) {
-    updateScreens(dt, time);
+    updateScreens(dt, time); updateGulls(dt, time);
     sea.material.uniforms.uTime.value = time;
     slick.material.uniforms.uTime.value = time;
     // the ship rolls +-3 deg, pitches a little and heaves with the swell (CLAUDE.md 23.2)
