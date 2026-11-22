@@ -19,7 +19,7 @@ SPOTS = [
     ("deck", "deck", [3.7, -13.2, -0.2, 0.03]),           # from the stern quarter: A-frame, Nerpa, the bridge, the sea
     ("deck_side", "deck", [-3.6, -4.0, 0.15, 0.02]),       # along the port side to the bow, the sea and the moon path
     ("lifeboat", "deck", [3.4, 4.4, 0.95, 0.12]),          # the lifeboat on its davits, close
-    ("bridge", "deck", [-1.2, 9.6, -0.35, -0.22]),         # the radio and the console
+    ("bridge", "deck", [-1.75, 10.35, -0.42, -0.3]),        # the radio and the console, close
     ("porthole", "cabin", None),                           # the cabin's porthole
 ]
 

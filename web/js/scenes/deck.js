@@ -501,9 +501,33 @@ export function createDeck(view, { lifeLabel = "" } = {}) {
     }
   });
   for (const [x, kind] of [[-1.5, "chart"], [0, "radar"], [1.5, "gauges"]]) {
-    const s = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.62), new THREE.MeshBasicMaterial({ map: screenTex(kind), color: new THREE.Color(1, 1, 1).multiplyScalar(1.6) }));
-    s.position.set(x, 1.4, HZ1 - 0.42); s.rotation.y = Math.PI; s.rotation.x = 0.25; consoleG.add(s);
-    const bez = mesh(rbox(1.0, 0.72, 0.08, 0.03), darkSteel); bez.position.set(x, 1.4, HZ1 - 0.38); bez.rotation.x = -0.25; consoleG.add(bez);
+    const tx = screenTex(kind);
+    const s = new THREE.Mesh(new THREE.PlaneGeometry(0.86, 0.56), new THREE.MeshPhysicalMaterial({ color: 0x000000, emissive: 0xffffff, emissiveMap: tx, emissiveIntensity: 1.6,
+      roughness: 0.12, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.08 }));      // the lit picture behind glass: it reflects the bridge
+    s.position.set(x, 1.43, HZ1 - 0.42); s.rotation.y = Math.PI; s.rotation.x = 0.25; consoleG.add(s);
+    const bez = mesh(rbox(1.0, 0.8, 0.08, 0.035), darkSteel); bez.position.set(x, 1.4, HZ1 - 0.38); bez.rotation.x = -0.25; consoleG.add(bez);
+    const keys = new THREE.Group(); keys.position.set(x, 1.4, HZ1 - 0.38); keys.rotation.x = -0.25; consoleG.add(keys);
+    for (let k = 0; k < 7; k++) { const kb = mesh(rbox(0.07, 0.03, 0.02, 0.008), std({ color: k === 6 ? 0x3a6a3a : 0x2c3034, roughness: 0.6 })); kb.position.set(-0.3 + k * 0.1, -0.34, -0.045); keys.add(kb); }
+    const pw = new THREE.Mesh(new THREE.CircleGeometry(0.008, 10), emissive(0x40ff70, 3)); pw.position.set(0.44, -0.34, -0.046); pw.rotation.y = Math.PI; keys.add(pw);
+  }
+  {   // on the sloping console top: the engine telegraph levers (port, starboard), a trackball, rows of lit keys
+    const top = new THREE.Group(); top.position.set(0, 1.07, HZ1 - 0.66); top.rotation.x = 0.35; consoleG.add(top);
+    const black = std({ color: 0x111214, roughness: 0.5 }), chrome = std({ color: 0xd8dde0, metalness: 1, roughness: 0.18 });
+    for (const lx of [1.95, 2.15]) {
+      const slot = mesh(rbox(0.06, 0.012, 0.22, 0.006), black); slot.position.set(lx, 0.01, 0); top.add(slot);
+      const rod = mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.16, 10), chrome); rod.position.set(lx, 0.08, 0.03); rod.rotation.x = -0.35; top.add(rod);
+      const knob = mesh(lathe([[0, -0.02], [0.022, -0.012], [0.024, 0.01], [0.012, 0.025], [0, 0.026]], 16), std({ color: lx < 2 ? 0xb8281e : 0x2a8a3a, roughness: 0.35 }));
+      knob.position.set(lx, 0.16, 0.055); top.add(knob);
+    }
+    const ballRing = mesh(new THREE.TorusGeometry(0.045, 0.01, 8, 24), black); ballRing.rotation.x = -Math.PI / 2; ballRing.position.set(-0.55, 0.01, 0.05); top.add(ballRing);
+    const ball = mesh(new THREE.SphereGeometry(0.04, 20, 12), std({ color: 0x2a3a5a, roughness: 0.15, metalness: 0.2 })); ball.position.set(-0.55, 0.012, 0.05); top.add(ball);
+    const keyM = [0x2c3034, 0x2c3034, 0x3a3020, 0x2c3034];
+    for (let r = 0; r < 2; r++) for (let c = 0; c < 10; c++) {
+      const kb = mesh(rbox(0.05, 0.014, 0.04, 0.006), std({ color: keyM[(r + c) % 4], roughness: 0.6 })); kb.position.set(-0.2 + c * 0.065, 0.012, -0.08 + r * 0.06); top.add(kb);
+    }
+    for (const [lx, col] of [[-1.0, 0xffb040], [-0.95, 0x40ff70], [-0.9, 0x40ff70], [1.6, 0xff4030]]) {
+      const lt = new THREE.Mesh(new THREE.CircleGeometry(0.009, 10), emissive(col, 3)); lt.rotation.x = -Math.PI / 2; lt.position.set(lx, 0.013, -0.1); top.add(lt);
+    }
   }
   const helm = new THREE.Group();
   helm.add(mesh(new THREE.TorusGeometry(0.26, 0.022, 10, 36), std({ color: 0x5a3820, roughness: 0.5 })));
@@ -516,13 +540,52 @@ export function createDeck(view, { lifeLabel = "" } = {}) {
   chair.position.set(0.9, 0, HZ1 - 2.0); house.add(chair);
   // the VHF radio: a set on the left of the console, its scale glows green; a red light blinks on a call
   const radio = new THREE.Group();
-  radio.add(mesh(rbox(0.46, 0.2, 0.3, 0.03), std({ color: 0x23272b, metalness: 0.4, roughness: 0.5 })));
-  const scale = new THREE.Mesh(new THREE.PlaneGeometry(0.24, 0.07), emissive(0x9fe08a, 2.6)); scale.position.set(-0.05, 0.02, -0.152); scale.rotation.y = Math.PI; radio.add(scale);
-  for (const dx of [0.12, 0.18]) { const k = mesh(lathe([[0.022, 0], [0.022, 0.03], [0, 0.03]], 14), steel); k.rotation.x = -Math.PI / 2; k.position.set(dx, 0, -0.15); radio.add(k); }
-  const led = new THREE.Mesh(new THREE.CircleGeometry(0.012, 12), emissive(0xff3020, 5)); led.position.set(0.15, 0.065, -0.152); led.rotation.y = Math.PI; radio.add(led);
-  const ledGlow = glowSprite(0xff3a20, 0.18, 2); ledGlow.position.copy(led.position); radio.add(ledGlow);
-  const handset = mesh(rbox(0.07, 0.2, 0.05, 0.02), std({ color: 0x16181a, roughness: 0.6 })); handset.position.set(-0.3, 0.02, -0.12); handset.rotation.z = 0.15; radio.add(handset);
-  radio.add(mesh(tube([[-0.3, -0.07, -0.12], [-0.28, -0.25, -0.1], [-0.2, -0.3, -0.05], [-0.1, -0.12, 0]], 0.006, 30), rubber));
+  {   // a marine VHF set: a cast body in a U-bracket with thumb screws, the channel display, keys, the red DISTRESS key
+      // under its cover, knurled volume / squelch knobs, a speaker grille; the handset on its hook with a coiled cord
+    const bodyM = std({ color: 0x23272b, metalness: 0.35, roughness: 0.45 }), faceM = std({ color: 0x15171a, roughness: 0.55 });
+    radio.add(mesh(rbox(0.46, 0.2, 0.28, 0.035), bodyM));
+    const face = mesh(rbox(0.44, 0.18, 0.02, 0.02), faceM); face.position.z = -0.145; radio.add(face);
+    for (const sx of [-1, 1]) {                                           // the bracket and its thumb screws
+      const side = mesh(rbox(0.012, 0.16, 0.2, 0.004), std({ color: 0x3a3e42, metalness: 0.7, roughness: 0.4 })); side.position.set(sx * 0.243, -0.01, 0.02); radio.add(side);
+      const thumb = mesh(lathe([[0, 0], [0.024, 0], [0.026, 0.012], [0.012, 0.02], [0, 0.02]], 14), std({ color: 0x1b1b1b, roughness: 0.6 })); thumb.rotation.z = -sx * Math.PI / 2; thumb.position.set(sx * 0.25, 0.0, 0.02); radio.add(thumb);
+    }
+    radio.add(at(mesh(rbox(0.5, 0.012, 0.24, 0.004), std({ color: 0x3a3e42, metalness: 0.7, roughness: 0.4 })), 0, -0.095, 0.02));
+    const lcd = new THREE.Mesh(new THREE.PlaneGeometry(0.17, 0.075), new THREE.MeshBasicMaterial({ map: canvasTexture(256, 112, (g, w, h) => {
+      g.fillStyle = "#9fd88a"; g.fillRect(0, 0, w, h);
+      const gr = g.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, "rgba(255,255,255,.18)"); gr.addColorStop(1, "rgba(0,0,0,.12)"); g.fillStyle = gr; g.fillRect(0, 0, w, h);
+      g.fillStyle = "#14240f"; g.font = "700 74px PT Mono, monospace"; g.textBaseline = "middle"; g.fillText("16", 92, 60);
+      g.font = "700 20px PT Mono, monospace"; g.fillText("CH", 14, 30); g.fillText("25W", 14, 62); g.fillText("DSC", 14, 92);
+      for (let i = 0; i < 5; i++) g.fillRect(200 + i * 9, 86 - i * 8, 6, 10 + i * 8);
+    }), color: new THREE.Color(1, 1, 1).multiplyScalar(1.4) }));
+    lcd.position.set(-0.09, 0.03, -0.156); lcd.rotation.y = Math.PI; radio.add(lcd);
+    const lcdGlass = new THREE.Mesh(new THREE.PlaneGeometry(0.18, 0.085), new THREE.MeshPhysicalMaterial({ color: 0x0, transparent: true, opacity: 0.12, roughness: 0.05, clearcoat: 1 }));
+    lcdGlass.position.set(-0.09, 0.03, -0.158); lcdGlass.rotation.y = Math.PI; radio.add(lcdGlass);
+    const keyM = std({ color: 0x3a3d40, roughness: 0.7 });
+    for (let i = 0; i < 6; i++) { const kb = mesh(rbox(0.026, 0.016, 0.012, 0.005), keyM); kb.position.set(-0.165 + i * 0.03, -0.045, -0.157); radio.add(kb); }
+    const dis = mesh(rbox(0.04, 0.026, 0.012, 0.006), std({ color: 0xc8231b, roughness: 0.4 })); dis.position.set(0.19, 0.055, -0.157); radio.add(dis);
+    const cover = mesh(rbox(0.046, 0.032, 0.012, 0.006), new THREE.MeshPhysicalMaterial({ color: 0xff8a80, transparent: true, opacity: 0.35, roughness: 0.1, clearcoat: 1 }));
+    cover.position.set(0.19, 0.055, -0.165); radio.add(cover);
+    for (const dx of [0.07, 0.13]) {                                     // knurled knobs
+      const k = mesh(new THREE.CylinderGeometry(0.02, 0.021, 0.026, 24), std({ color: 0x1b1d1f, roughness: 0.5 })); k.rotation.x = Math.PI / 2; k.position.set(dx, -0.025, -0.165); radio.add(k);
+      const cap = mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.004, 20), std({ color: 0xb9bec2, metalness: 1, roughness: 0.25 })); cap.rotation.x = Math.PI / 2; cap.position.set(dx, -0.025, -0.179); radio.add(cap);
+    }
+    const grille = new THREE.Mesh(new THREE.PlaneGeometry(0.07, 0.05), std({ roughness: 0.6, map: canvasTexture(128, 80, (g, w, h) => {
+      g.fillStyle = "#1a1c1e"; g.fillRect(0, 0, w, h); g.fillStyle = "#050505";
+      for (let y = 6; y < h - 4; y += 8) for (let x = 6; x < w - 4; x += 8) { g.beginPath(); g.arc(x, y, 2.4, 0, 7); g.fill(); }
+    }) }));
+    grille.position.set(0.185, -0.025, -0.156); grille.rotation.y = Math.PI; radio.add(grille);
+    // the handset on its hook at the left, a coiled cord from it to the set
+    const hook = mesh(rbox(0.05, 0.03, 0.03, 0.008), std({ color: 0x1b1b1b, roughness: 0.6 })); hook.position.set(-0.33, 0.06, -0.08); radio.add(hook);
+    const hs = new THREE.Group(); hs.position.set(-0.33, -0.03, -0.1); hs.rotation.z = 0.08; radio.add(hs);
+    hs.add(mesh(rbox(0.065, 0.17, 0.045, 0.022), std({ color: 0x16181a, roughness: 0.55 })));
+    const ptt = mesh(rbox(0.012, 0.05, 0.025, 0.005), std({ color: 0x2c2e30, roughness: 0.6 })); ptt.position.set(0.035, 0.02, 0); hs.add(ptt);
+    const mic = new THREE.Mesh(new THREE.CircleGeometry(0.022, 20), std({ roughness: 0.7, map: grille.material.map })); mic.position.set(0, 0.04, -0.0231); mic.rotation.y = Math.PI; hs.add(mic);
+    const coil = [];
+    for (let i = 0; i <= 120; i++) { const k = i / 120, a = k * Math.PI * 2 * 14; coil.push([-0.33 + 0.12 * k + Math.cos(a) * 0.012, -0.12 - Math.sin(k * Math.PI) * 0.1 + k * 0.02, -0.1 + 0.06 * k + Math.sin(a) * 0.012]); }
+    radio.add(mesh(tube(coil, 0.0035, 400), rubber));
+  }
+  const led = new THREE.Mesh(new THREE.CircleGeometry(0.008, 12), emissive(0xff3020, 5)); led.position.set(-0.19, 0.068, -0.157); led.rotation.y = Math.PI; radio.add(led);
+  const ledGlow = glowSprite(0xff3a20, 0.12, 2); ledGlow.position.copy(led.position); radio.add(ledGlow);
   radio.position.set(-2.25, 1.22, HZ1 - 0.6); radio.rotation.x = -0.1;
   house.add(radio);
   const radioLight = new THREE.PointLight(0x9fe08a, 0.6, 3, 1.5); radioLight.position.set(-2.25, 1.6, HZ1 - 1.0); house.add(radioLight);
