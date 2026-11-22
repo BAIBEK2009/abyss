@@ -49,7 +49,7 @@ export function createView(canvas) {
 
   // one warm lamp above the chart (soft shadows; it sways a little) + cold moonlight from the porthole
   // (three r170 uses physical light units: the reference r128 values are multiplied by π, decay 0)
-  scene.add(new THREE.HemisphereLight(0x7a8fb8, 0x2a1c10, 0.95));
+  scene.add(new THREE.HemisphereLight(0x9a948a, 0x2a1c10, 0.75));      // warm-neutral fill: the old blue one turned the grey walls violet
   const lamp = new THREE.SpotLight(0xffd3a1, 4.6, 0, 0.8, 0.6, 0);      // a warm pool on the chart, darker edges
   const LAMP_POS = new THREE.Vector3(-5, 7, -8);      // the scene moves it to the visible lamp shade
   lamp.position.copy(LAMP_POS);
@@ -62,7 +62,7 @@ export function createView(canvas) {
   lamp.shadow.camera.near = 6;
   lamp.shadow.camera.far = 30;
   scene.add(lamp, lamp.target);
-  const moon = new THREE.DirectionalLight(0x86a6ff, 1.1);   // cold moonlight from the porthole, right
+  const moon = new THREE.DirectionalLight(0xa8bce0, 0.8);   // cold moonlight from the porthole, right
   moon.position.set(19, 7, -13);
   scene.add(moon);
 

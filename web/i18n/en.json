@@ -340,5 +340,16 @@
  "mm_demo": "Demo for the defence",
  "mm_demo_sub": "The whole story in 5 minutes: fast lines, one dive per act",
  "mm_old_save": "This save is from an older version of the game — please start again.",
- "btn_skip_act": "Skip to the next act"
+ "btn_skip_act": "Skip to the next act",
+ "baro_storm": "STORM",
+ "baro_rain": "RAIN",
+ "baro_change": "CHANGE",
+ "baro_fair": "FAIR",
+ "shelf_pilot": "Caspian Pilot",
+ "shelf_log": "Ship's log",
+ "shelf_tables": "Nautical tables",
+ "shelf_charts": "Chart catalogue",
+ "shelf_signals": "Signal code",
+ "shelf_rules": "COLREGS",
+ "evac_title": "EVACUATION PLAN"
 }

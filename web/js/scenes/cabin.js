@@ -9,6 +9,7 @@ import * as THREE from "three";
 import { canvasTexture, rng } from "../view.js";
 import { walnut, brass, glass, steelPanel, watertightDoor } from "./materials.js";
 import { t } from "../i18n.js";
+import { cabinProps, mergeByMaterial } from "./cabin_props.js";
 import { W as WX } from "../weather.js";      // (W is the cabin width below)
 
 export const FLOOR_Y = -10;
@@ -117,7 +118,7 @@ export function createCabin(scene) {
   const floor = mesh(new THREE.PlaneGeometry(W, D).rotateX(-Math.PI / 2), floorMat, false);
   floor.position.set((X0 + X1) / 2, FLOOR_Y, (Z0 + Z1) / 2);
   group.add(floor);
-  const steelWall = steelPanel({ color: "#c6c9c8", seed: 23 });
+  const steelWall = steelPanel({ color: "#e8dfc8", seed: 23 });       // cream painted steel above the wainscot
   const wall = (w, x, z, ry) => {
     const m = mesh(new THREE.PlaneGeometry(w, H), steelWall.userData.forSize(w / 12, H / 12), false);
     m.position.set(x, FLOOR_Y + H / 2, z); m.rotation.y = ry;
@@ -156,7 +157,7 @@ export function createCabin(scene) {
       const bolt = mesh(new THREE.SphereGeometry(0.22, 10, 8), ringMat);
       bolt.position.set(x + Math.cos(a) * 4.35, y + Math.sin(a) * 4.35, z + 0.25); group.add(bolt);
     }
-    const glow = new THREE.PointLight(0x8fb0ff, 6, 22, 1.6);      // cold moonlight falling in (and the lightning)
+    const glow = new THREE.PointLight(0xb4c8ec, 3, 22, 1.6);      // cool moonlight falling in (and the lightning), not violet
     glow.position.set(x, y, z + 3); group.add(glow); portGlows.push(glow);
   }
 
@@ -178,27 +179,16 @@ export function createCabin(scene) {
     lampR.position.set(X0 + 6, FLOOR_Y + 12, Z0 + 7); group.add(lampR);
   }
 
-  // the ship's wheel on the left wall, the Caspian chart on the right wall, a barrel
+  // the Caspian chart on the right wall, over the bunk, in a wooden frame (the wheel and the barrel are gone: C2)
   {
-    const wheel = new THREE.Group();
-    const wood = std({ color: 0x5a3820, roughness: 0.6 });
-    wheel.add(mesh(new THREE.TorusGeometry(3.2, 0.32, 12, 48), wood));
-    wheel.add(mesh(new THREE.CylinderGeometry(0.7, 0.7, 0.8, 20).rotateX(Math.PI / 2), ringMat));
-    for (let i = 0; i < 8; i++) {
-      const a = (i / 8) * Math.PI * 2;
-      const spoke = mesh(new THREE.CylinderGeometry(0.16, 0.2, 8.2, 8), wood);
-      spoke.rotation.z = a; wheel.add(spoke);
-    }
-    wheel.position.set(X0 + 0.9, 5, -12); wheel.rotation.y = Math.PI / 2;
-    group.add(wheel);
     const chartW = new THREE.Mesh(new THREE.PlaneGeometry(14, 10), std({ map: caspianChart(), roughness: 0.9 }));
-    chartW.position.set(X1 - 0.1, 5, -14); chartW.rotation.y = -Math.PI / 2; group.add(chartW);
-    const barrel = new THREE.Group();
-    const staves = mesh(new THREE.CylinderGeometry(3, 3, 8, 24), std({ color: 0x6a4428, roughness: 0.75 }));
-    barrel.add(staves);
-    for (const y of [-2.8, 2.8]) { const band = mesh(new THREE.TorusGeometry(3.05, 0.18, 8, 32).rotateX(Math.PI / 2), std({ color: 0x2a2a2a, metalness: 0.6, roughness: 0.5 })); band.position.y = y; barrel.add(band); }
-    barrel.position.set(X1 - 5, FLOOR_Y + 4, Z0 + 6); group.add(barrel);
+    chartW.position.set(X1 - 0.35, 8.6, -21); chartW.rotation.y = -Math.PI / 2; group.add(chartW);
+    const fr = std({ color: 0x3a2214, roughness: 0.55 });
+    for (const [w, h, y, z] of [[15, 0.6, 13.8, -21], [15, 0.6, 3.4, -21], [0.6, 11, 8.6, -28.2], [0.6, 11, 8.6, -13.8]]) {
+      const m = mesh(new THREE.BoxGeometry(0.4, h, w === 15 ? 15 : 0.6), fr); m.position.set(X1 - 0.3, y, z); group.add(m);
+    }
   }
+  const props = cabinProps(group, { X0, X1, Z0, Z1, FLOOR_Y, CEIL_Y });
 
   // an oil lantern on the far wall between the portholes: a little warmth on the planks
   {
@@ -262,7 +252,7 @@ export function createCabin(scene) {
   }
 
   // the brass lamp over the table; the scene's spotlight sits in its bulb
-  const lamp = new THREE.Group();
+  const lamp = new THREE.Group(); lamp.userData.noMerge = true;     // it swings
   {
     const cord = mesh(new THREE.CylinderGeometry(0.06, 0.06, CEIL_Y - 16.2, 6), std({ color: 0x1a1612 }), false);
     cord.position.y = (CEIL_Y - 16.2) / 2 + 1.2; lamp.add(cord);
@@ -302,9 +292,9 @@ export function createCabin(scene) {
   const boardTex = new THREE.CanvasTexture(boardCanvas); boardTex.colorSpace = THREE.SRGBColorSpace; boardTex.anisotropy = 8;
   {
     const frame = new THREE.Mesh(new THREE.BoxGeometry(0.6, 11.2, 16.2), walnut([1, 1]));
-    frame.position.set(X0 + 0.35, 6.2, 8); frame.castShadow = true; frame.receiveShadow = true; group.add(frame);
+    frame.position.set(X0 + 0.35, 7.2, 8); frame.castShadow = true; frame.receiveShadow = true; group.add(frame);
     const face = new THREE.Mesh(new THREE.PlaneGeometry(15, 10.3), new THREE.MeshStandardMaterial({ map: boardTex, roughness: 0.9 }));
-    face.rotation.y = Math.PI / 2; face.position.set(X0 + 0.68, 6.2, 8); face.receiveShadow = true; group.add(face);
+    face.rotation.y = Math.PI / 2; face.position.set(X0 + 0.68, 7.2, 8); face.receiveShadow = true; group.add(face);
   }
   function drawBoard(found = [], threads = []) {
     const c = boardCanvas.getContext("2d"), W = 1024, H = 704;
@@ -340,8 +330,8 @@ export function createCabin(scene) {
   const space = {
     scale: M, eye: 1.65, step: "wood",
     poly: [[-2.35, -3.0], [2.35, -3.0], [2.35, 2.36], [-2.35, 2.36]],
-    colliders: [[-1.25, -1.02, 1.17, 0.94], [-2.55, -3.25, -1.72, -2.72], [1.82, -2.95, 2.36, -2.4],
-                [-2.55, -0.42, -2.36, -0.25], [2.36, -0.42, 2.55, -0.25], [1.05, 2.0, 1.15, 2.6], [2.05, 2.0, 2.15, 2.6]],
+    colliders: [[-1.25, -1.02, 1.17, 0.94], [-2.55, -3.25, -1.72, -2.72],
+                [-2.55, -0.42, -2.36, -0.25], [2.36, -0.42, 2.55, -0.25], [1.05, 2.0, 1.15, 2.6], [2.05, 2.0, 2.15, 2.6], ...props.colliders],
     floor: [floor],
     toWorld: (x, y, z, out) => out.set(x, FLOOR_Y + y, z),
     toLocal: (w, out) => out.set(w.x, w.y - FLOOR_Y, w.z),
@@ -356,6 +346,7 @@ export function createCabin(scene) {
     porthole_r: { show: [], hit: proxy(8, 8, 1.5, 13, 6.5, Z0 + 0.6), stand: [1.08, -2.5], look: [1.08, 1.4, -3.1] },
   };
 
+  mergeByMaterial(group);           // the static cabin: one mesh per material (C2: draw calls)
   return {
     group, space, things, drawBoard,
     /** First person: where the captain stands coming down the stairs / getting up from the table. */
@@ -367,7 +358,7 @@ export function createCabin(scene) {
       pu.uT.value = time; pu.uCloud.value = WX.cloud; pu.uRain.value = WX.rain; pu.uFlash.value = WX.flash; pu.uAmp.value = WX.amp;
       pu.uFog.value = WX.haze; pu.uSun.value = WX.sun; pu.uMoon.value = WX.moon; pu.uFogCol.value.copy(WX.fogCol);
       pu.uRoll.value = Math.sin(time * 0.52) * 0.05 * WX.roll;
-      for (const g of portGlows) { g.intensity = 6 * (0.3 + 0.7 * WX.moon) + 10 * WX.sun + 60 * WX.flash; g.color.setRGB(0.56 + 0.44 * WX.sun, 0.69, 1 - 0.4 * WX.sun); }
+      for (const g of portGlows) { g.intensity = 3 * (0.3 + 0.7 * WX.moon) + 10 * WX.sun + 60 * WX.flash; g.color.setRGB(0.72 + 0.28 * WX.sun, 0.79, 0.92 - 0.3 * WX.sun); }
       lamp.position.x = -1.2 + (sway?.x ?? 0);
       lamp.position.z = -1.8 + (sway?.z ?? 0);
       const p = dustGeo.attributes.position;
