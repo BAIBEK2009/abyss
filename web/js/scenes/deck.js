@@ -106,13 +106,17 @@ function paint(hex, { seams = 1.6, streaks = 0.5, repeat = [1, 1], seed = 3 } = 
 /** A soft round sprite (halos, lights far away). */
 const SOFT = canvasTexture(64, 64, (g) => {
   const gr = g.createRadialGradient(32, 32, 0, 32, 32, 32);
-  gr.addColorStop(0, "rgba(255,255,255,1)"); gr.addColorStop(0.25, "rgba(255,255,255,.55)"); gr.addColorStop(1, "rgba(255,255,255,0)");
+  gr.addColorStop(0, "rgba(255,255,255,1)"); gr.addColorStop(0.06, "rgba(255,255,255,.75)"); gr.addColorStop(0.18, "rgba(255,255,255,.26)");
+  gr.addColorStop(0.42, "rgba(255,255,255,.07)"); gr.addColorStop(1, "rgba(255,255,255,0)");
   g.fillStyle = gr; g.fillRect(0, 0, 64, 64);
 });
+/** Every lamp halo: its size and strength follow the haze (small and crisp on a clear night, wide in fog and rain). */
+const HALOS = [];
 function glowSprite(hex, size, mult = 3) {
   const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: SOFT, color: new THREE.Color(hex).multiplyScalar(mult), transparent: true,
                                                          depthWrite: false, blending: THREE.AdditiveBlending, fog: false }));
   s.scale.setScalar(size);
+  HALOS.push({ s, size, mult });
   return s;
 }
 const emissive = (hex, k = 3) => new THREE.MeshBasicMaterial({ color: new THREE.Color(hex).multiplyScalar(k) });
@@ -207,6 +211,7 @@ function createSea(moonDir) {
         }
         // into the night haze at the horizon
         col = mix(col, uFogCol, smoothstep(300.0, 4500.0, dist));
+        col = clamp(col, 0.0, 24.0);          // no NaN / overflow into the bloom
         gl_FragColor = vec4(col, 1.0);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
@@ -935,6 +940,8 @@ export function createDeck(view, { lifeLabel = "" } = {}) {
     if (W.flash > 0.99) ku.uBolt.value.set((Math.random() - 0.5) * 1.6, (Math.random() - 0.2) * 1.6);
     sky.userData.stars.material.opacity = W.stars * (1 - W.cloud * 0.8);
     sky.userData.moon.material.opacity = W.moon; sky.userData.halo.material.opacity = W.moon;
+    const hz = 0.55 + 0.9 * W.haze + 0.35 * W.rain;
+    for (const h of HALOS) if (h.s !== sky.userData.halo) { h.s.scale.setScalar(h.size * hz); h.s.material.opacity = Math.min(1, 0.65 + 0.35 * hz); }
     scene.fog.color.copy(W.fogCol); scene.fog.density = W.fogD;
     moonLight.color.copy(MOON_C).lerp(SUN_C, W.sun);
     moonLight.position.copy(moonDir).lerp(SUN_DIR, W.sun).normalize().multiplyScalar(100);

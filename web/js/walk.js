@@ -98,7 +98,7 @@ export function createWalk(ctx) {
     hideBino(); fp.lookOnly = false;
     // no bloom on the deck: the sea's moon path overflows the half-float buffer and bloom turns it into
     // black blocks; the lights have their own soft halos (sprites)
-    view.useScene(deck.scene, { bloom: false });
+    view.useScene(deck.scene, { bloom: true });     // a light bloom on the lamps (the sea is clamped: no black blocks)
     view.camera.far = 9000; view.setFov(FOV);
     mode = "deck";
     document.body.classList.add("walking", "on-deck");
