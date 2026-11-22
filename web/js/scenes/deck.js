@@ -19,6 +19,8 @@ import { steelPanel, watertightDoor } from "./materials.js";
 import { lightPool } from "./lightpool.js";
 import { loadEnv, pbrSet } from "./envmap.js";
 import { lifeboat } from "./lifeboat.js";
+import { W } from "../weather.js";
+import { createRain } from "./rain.js";
 import { createNerpa } from "./nerpa.js";
 import { t } from "../i18n.js";
 
@@ -140,13 +142,14 @@ function createSea(moonDir) {
   const waveGLSL = WAVES.map(([dx, dz, L, A, s], i) => {
     const l = Math.hypot(dx, dz), k = (2 * Math.PI) / L, w = Math.sqrt(9.8 * k) * s;
     return `{ vec2 d = vec2(${(dx / l).toFixed(4)}, ${(dz / l).toFixed(4)}); float ph = dot(d, p) * ${k.toFixed(5)} - t * ${w.toFixed(5)};
-      h += ${A.toFixed(4)} * sin(ph); g += ${(A * k).toFixed(5)} * cos(ph) * d; }`;
+      h += uAmp * ${A.toFixed(4)} * sin(ph); g += uAmp * ${(A * k).toFixed(5)} * cos(ph) * d; }`;
   }).join("\n");
   const mat = new THREE.ShaderMaterial({
     uniforms: { uTime: { value: 0 }, uMoon: { value: moonDir.clone() }, uFogCol: { value: new THREE.Color(0x0b1626) }, uPools: { value: [0, 1, 2, 3].map(() => new THREE.Vector4()) },
+                uAmp: { value: 1 }, uFoam: { value: 0 }, uCloud: { value: 0 }, uMoonVis: { value: 1 }, uFlash: { value: 0 }, uSun: { value: 0 },
                 uHull: { value: new THREE.Vector4(0, 0, 5.2, 0) }, uHullZ: { value: new THREE.Vector2(STERN, BOW) } },
     vertexShader: /* glsl */`
-      uniform float uTime; varying vec3 vW; varying float vH;
+      uniform float uTime; uniform float uAmp; varying vec3 vW; varying float vH;
       void waves(vec2 p, float t, out float h, out vec2 g) { h = 0.0; g = vec2(0.0); ${waveGLSL} }
       void main() {
         vec4 w = modelMatrix * vec4(position, 1.0);
@@ -157,6 +160,7 @@ function createSea(moonDir) {
       }`,
     fragmentShader: /* glsl */`
       uniform float uTime; uniform vec3 uMoon; uniform vec3 uFogCol; uniform vec4 uHull; uniform vec2 uHullZ; uniform vec4 uPools[4];
+      uniform float uAmp; uniform float uFoam; uniform float uCloud; uniform float uMoonVis; uniform float uFlash; uniform float uSun;
       varying vec3 vW; varying float vH;
       void waves(vec2 p, float t, out float h, out vec2 g) { h = 0.0; g = vec2(0.0); ${waveGLSL} }
       float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -174,11 +178,14 @@ function createSea(moonDir) {
         float fres = 0.02 + 0.98 * pow(1.0 - max(dot(n, v), 0.0), 5.0);
         vec3 r = reflect(-v, n);
         vec3 sky = mix(vec3(0.028, 0.05, 0.09), vec3(0.09, 0.13, 0.2), pow(1.0 - max(r.y, 0.0), 3.0));
+        sky = mix(sky, uFogCol * 1.6, uCloud * 0.75);                                     // an overcast sky in the mirror
+        sky = mix(sky, vec3(0.95, 0.55, 0.32) * (0.4 + 0.6 * pow(max(dot(r, normalize(vec3(0.9, 0.12, -0.3))), 0.0), 6.0)), uSun * 0.8);   // dawn
         vec3 deep = vec3(0.006, 0.02, 0.035) + vec3(0.0, 0.02, 0.025) * clamp(vH + 0.3, 0.0, 1.0);
         vec3 col = mix(deep, sky, fres);
         float spec = pow(max(dot(r, uMoon), 0.0), 220.0);
         float glint = pow(max(dot(r, uMoon), 0.0), 28.0);
-        col += vec3(0.85, 0.9, 1.0) * (spec * 6.0 + glint * 0.18) ;
+        col += vec3(0.85, 0.9, 1.0) * (spec * 6.0 + glint * 0.18) * uMoonVis;
+        col += vec3(0.55, 0.6, 0.75) * uFlash * (0.15 + fres);                            // lightning on the water
         // foam: crests and the water pushed along the hull
         float crest = smoothstep(0.32, 0.55, h + (vn(vW.xz * 0.35 + uTime * 0.05) - 0.5) * 0.3);
         vec2 hp = vW.xz - uHull.xy;
@@ -187,7 +194,10 @@ function createSea(moonDir) {
         float wake = inZ * (1.0 - smoothstep(0.0, 2.6, max(hx, 0.0))) * smoothstep(-0.2, 0.3, hx + 0.6);
         float stern = smoothstep(uHullZ.x, uHullZ.x - 40.0, hp.y) * (1.0 - smoothstep(4.0, 9.0 + (uHullZ.x - hp.y) * 0.15, abs(hp.x)));
         float foamN = vn(vW.xz * 2.3 + uTime * 0.3) * vn(vW.xz * 5.1 - uTime * 0.2);
-        float foam = clamp(crest * 0.35 + wake * 0.9 + stern * 0.55, 0.0, 1.0) * smoothstep(0.12, 0.5, foamN);
+        // storm: wind-driven streaks of foam along the swell, and whitecaps on every crest
+        float streak = uFoam * smoothstep(0.58, 0.86, vn(vec2(vW.x * 0.09 + vW.z * 0.03, vW.z * 0.4 - vW.x * 0.12) + uTime * 0.05)) * 0.6;
+        float caps = uFoam * smoothstep(0.55 * uAmp, 0.85 * uAmp, h) * 0.9;
+        float foam = clamp(crest * 0.35 + wake * 0.9 + stern * 0.55 + streak + caps, 0.0, 1.0) * smoothstep(0.12, 0.5, foamN);
         col = mix(col, vec3(0.42, 0.47, 0.5), foam * (1.0 - smoothstep(60.0, 300.0, dist)));
         // searchlight pools: the lit swell and the glitter of the light on it
         for (int i = 0; i < 4; i++) {
@@ -207,11 +217,12 @@ function createSea(moonDir) {
   return sea;
 }
 /** The same waves in JS: the height of the sea at a point (for things that float). */
+export const SEA = { amp: 1 };       // the weather's wave scale (the GLSL takes the same number)
 export function seaHeight(x, z, t) {
   let h = 0;
   for (const [dx, dz, L, A, s] of WAVES) {
     const l = Math.hypot(dx, dz), k = (2 * Math.PI) / L, w = Math.sqrt(9.8 * k) * s;
-    h += A * Math.sin(((dx / l) * x + (dz / l) * z) * k - t * w);
+    h += SEA.amp * A * Math.sin(((dx / l) * x + (dz / l) * z) * k - t * w);
   }
   return h;
 }
@@ -220,15 +231,35 @@ function createSky(moonDir) {
   const g = new THREE.Group();
   const dome = new THREE.Mesh(new THREE.SphereGeometry(6000, 48, 24), new THREE.ShaderMaterial({
     side: THREE.BackSide, depthWrite: false, fog: false,
-    uniforms: { uMoon: { value: moonDir } },
+    uniforms: { uMoon: { value: moonDir }, uTime: { value: 0 }, uCloud: { value: 0.1 }, uFlash: { value: 0 }, uMoonVis: { value: 1 },
+                uFogCol: { value: new THREE.Color(0x0b1626) }, uSun: { value: 0 }, uBolt: { value: new THREE.Vector2(0.4, 0.2) } },
     vertexShader: "varying vec3 vD; void main() { vD = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }",
     fragmentShader: /* glsl */`
-      uniform vec3 uMoon; varying vec3 vD;
+      uniform vec3 uMoon; uniform float uTime; uniform float uCloud; uniform float uFlash; uniform float uMoonVis; uniform vec3 uFogCol;
+      uniform float uSun; uniform vec2 uBolt; varying vec3 vD;
+      float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+      float vn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+        return mix(mix(hash(i), hash(i + vec2(1, 0)), f.x), mix(hash(i + vec2(0, 1)), hash(i + vec2(1, 1)), f.x), f.y); }
+      float fbm(vec2 p) { float a = 0.5, s = 0.0; for (int i = 0; i < 5; i++) { s += a * vn(p); p = p * 2.03 + 7.1; a *= 0.5; } return s; }
       void main() {
         float up = max(vD.y, 0.0);
         vec3 col = mix(vec3(0.045, 0.075, 0.12), vec3(0.008, 0.016, 0.04), pow(up, 0.45));
-        col += vec3(0.05, 0.065, 0.09) * pow(max(dot(vD, uMoon), 0.0), 18.0);
-        col = mix(col, vec3(0.04, 0.07, 0.115), 1.0 - smoothstep(-0.02, 0.06, vD.y));
+        col += vec3(0.05, 0.065, 0.09) * pow(max(dot(vD, uMoon), 0.0), 18.0) * uMoonVis;
+        // dawn: a warm band at the horizon towards the sun (east), rising into a pale sky
+        vec3 sunD = normalize(vec3(0.9, 0.06, -0.3));
+        float toSun = max(dot(normalize(vec3(vD.x, 0.0, vD.z)), normalize(vec3(sunD.x, 0.0, sunD.z))), 0.0);
+        vec3 dawn = mix(vec3(0.95, 0.52, 0.28) * (0.55 + 0.9 * pow(toSun, 3.0)), vec3(0.32, 0.42, 0.6), smoothstep(0.0, 0.45, up));
+        dawn += vec3(1.0, 0.75, 0.45) * pow(max(dot(vD, sunD), 0.0), 60.0) * 2.5;
+        col = mix(col, dawn, uSun);
+        // clouds: a moving layer low over the sea, dense and dark in the storm; lightning lights them from inside
+        vec2 cp = vD.xz / (vD.y + 0.12) * 1.6 + vec2(uTime * 0.012, uTime * 0.004);
+        float n = fbm(cp), cov = smoothstep(1.0 - uCloud * 0.95, 1.05 - uCloud * 0.45, n + uCloud * 0.35);
+        vec3 cloud = mix(uFogCol * 1.2, mix(vec3(0.62, 0.66, 0.74), vec3(0.95, 0.72, 0.55), uSun) * (0.12 + 0.25 * uSun + 0.08 * (1.0 - uCloud)), n);
+        float lit = uFlash * (0.35 + 1.6 * exp(-dot(vD.xz - uBolt, vD.xz - uBolt) * 6.0)) * (0.5 + n);
+        cloud += vec3(0.75, 0.8, 1.0) * lit;
+        col = mix(col, cloud, cov * smoothstep(-0.05, 0.08, vD.y));
+        col += vec3(0.12, 0.14, 0.2) * uFlash * 0.4;
+        col = mix(col, uFogCol, 1.0 - smoothstep(-0.02, 0.06 + uCloud * 0.1, vD.y));
         gl_FragColor = vec4(col, 1.0);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
@@ -257,11 +288,13 @@ function createSky(moonDir) {
       for (let i = 0; i < 26; i++) { c.fillStyle = `rgba(150,150,140,${0.12 + rr() * 0.2})`; c.beginPath(); c.arc(40 + rr() * 176, 40 + rr() * 176, 6 + rr() * 26, 0, 7); c.fill(); }
     }), color: new THREE.Color(1, 1, 1).multiplyScalar(2.2), transparent: true }));
   moon.position.copy(moonDir).multiplyScalar(5200);
+  g.userData = { dome, stars, moon };
   moon.lookAt(0, 0, 0);
   g.add(moon);
   const halo = glowSprite(0xaec4ff, 900, 0.5);
   halo.position.copy(moon.position);
   g.add(halo);
+  g.userData.halo = halo;
   return g;
 }
 
@@ -342,7 +375,8 @@ export function createDeck(view, { lifeLabel = "" } = {}) {
   scene.add(sky);
   const sea = createSea(moonDir);
   scene.add(sea);
-  scene.add(new THREE.HemisphereLight(0x3c4656, 0x0c0e10, 0.42));     // cold night fill, no violet cast
+  const hemi = new THREE.HemisphereLight(0x3c4656, 0x0c0e10, 0.42);    // cold night fill, no violet cast
+  scene.add(hemi);
   const moonLight = new THREE.DirectionalLight(0x9db4ff, 0.65);
   moonLight.position.copy(moonDir).multiplyScalar(100);
   scene.add(moonLight);
@@ -887,13 +921,44 @@ export function createDeck(view, { lifeLabel = "" } = {}) {
   let radioCall = false;
   // 13 lamps on board, 5 real point lights near the camera (+1 fading): see lightpool.js
   const pool = lightPool(scene, { slots: 5, exclude: [heliFill] });
+  // the weather (weather.js): rain round the camera, none inside the wheelhouse
+  const rain = createRain({ shelter: { min: new THREE.Vector3(-HX - 0.1, -0.5, HZ0 - 0.15), max: new THREE.Vector3(HX + 0.1, HH + 0.4, HZ1 + 0.1) } });
+  scene.add(rain.object);
+  const MOON_C = new THREE.Color(0x9db4ff), SUN_C = new THREE.Color(0xffa860), SUN_DIR = new THREE.Vector3(0.9, 0.12, -0.3).normalize();
+  const HEMI_SKY = new THREE.Color(0x3c4656), HEMI_DAWN = new THREE.Color(0x8a7a8a), lampList = [];
+  let envName = "night";
+  function applyWeather(time) {
+    const su = sea.material.uniforms, ku = sky.userData.dome.material.uniforms;
+    SEA.amp = W.amp; su.uAmp.value = W.amp; su.uFoam.value = W.foam; su.uCloud.value = W.cloud; su.uMoonVis.value = W.moon;
+    su.uFlash.value = W.flash; su.uSun.value = W.sun; su.uFogCol.value.copy(W.fogCol);
+    ku.uTime.value = time; ku.uCloud.value = W.cloud; ku.uFlash.value = W.flash; ku.uMoonVis.value = W.moon; ku.uSun.value = W.sun; ku.uFogCol.value.copy(W.fogCol);
+    if (W.flash > 0.99) ku.uBolt.value.set((Math.random() - 0.5) * 1.6, (Math.random() - 0.2) * 1.6);
+    sky.userData.stars.material.opacity = W.stars * (1 - W.cloud * 0.8);
+    sky.userData.moon.material.opacity = W.moon; sky.userData.halo.material.opacity = W.moon;
+    scene.fog.color.copy(W.fogCol); scene.fog.density = W.fogD;
+    moonLight.color.copy(MOON_C).lerp(SUN_C, W.sun);
+    moonLight.position.copy(moonDir).lerp(SUN_DIR, W.sun).normalize().multiplyScalar(100);
+    moonLight.intensity = 0.65 * W.moon + 2.6 * W.sun + 0.12 * (1 - W.moon) + 7 * W.flash;
+    hemi.color.copy(HEMI_SKY).lerp(HEMI_DAWN, W.sun);
+    hemi.intensity = 0.42 + 0.5 * W.sun + 2.5 * W.flash;
+    scene.environmentIntensity = ENV_I * W.env * (1 + W.flash * 2);
+    if (W.envName !== envName) { envName = W.envName; loadEnv(view.renderer, envName).then((t) => { if (t && envName === W.envName) scene.environment = t; }); }
+    deckMat.roughness = 1.05 - 0.78 * W.wet;                        // wet steel: the lamps shine in it
+    deckMat.normalScale.setScalar(0.8 - 0.35 * W.wet);
+    // the rain catches the lamps near the camera
+    lampList.length = 0;
+    for (const l of pool.real) if (l.intensity > 0.05) lampList.push({ pos: l.position, k: Math.min(1, l.intensity / 3) });
+    for (const f of floods) lampList.push({ pos: f.getWorldPosition(tmpW), k: 1.2 });
+    rain.update(view.camera, lampList.slice(0, 6), W.rain, W.wind, time, ship, W.flash);
+  }
+  const tmpW = new THREE.Vector3();
   function update(dt, time) {
     sea.material.uniforms.uTime.value = time;
     slick.material.uniforms.uTime.value = time;
     // the ship rolls +-3 deg, pitches a little and heaves with the swell (CLAUDE.md 23.2)
-    roll = THREE.MathUtils.degToRad(3) * (0.72 * Math.sin(time * 0.52) + 0.28 * Math.sin(time * 0.91 + 1.3));
-    pitch = THREE.MathUtils.degToRad(1.1) * Math.sin(time * 0.37 + 0.6);
-    heave = 0.22 * Math.sin(time * 0.47) + 0.08 * Math.sin(time * 1.1 + 2);
+    roll = THREE.MathUtils.degToRad(3) * W.roll * (0.72 * Math.sin(time * 0.52) + 0.28 * Math.sin(time * 0.91 + 1.3));
+    pitch = THREE.MathUtils.degToRad(1.1) * (0.5 + 0.5 * W.roll) * Math.sin(time * 0.37 + 0.6);
+    heave = (0.22 * Math.sin(time * 0.47) + 0.08 * Math.sin(time * 1.1 + 2)) * Math.sqrt(W.amp);
     ship.position.set(0, DECK_Y + heave, 0);
     ship.rotation.set(pitch, 0, roll, "ZXY");
     ship.updateMatrixWorld(true);
@@ -908,12 +973,12 @@ export function createDeck(view, { lifeLabel = "" } = {}) {
     // spray: a burst at the bow when it dips into a swell
     sprayT -= dt;
     if (sprayT < 0) {
-      sprayT = 2.5 + Math.random() * 3.5;
+      sprayT = (2.5 + Math.random() * 3.5) / (1 + 2.5 * W.wind);
       let n = 0;
-      for (let i = 0; i < SPN && n < 90; i++) if (spl[i] < 0) {
+      for (let i = 0; i < SPN && n < 90 * (1 + 1.5 * W.wind); i++) if (spl[i] < 0) {
         const s = Math.random() < 0.5 ? -1 : 1;
         spp.set([s * (1.5 + Math.random() * 2.5), -0.8, 24 + Math.random() * 4], i * 3);
-        spv.set([s * (1 + Math.random() * 2), 3 + Math.random() * 3.5, -0.5 + Math.random()], i * 3);
+        spv.set([s * (1 + Math.random() * 2), (3 + Math.random() * 3.5) * (1 + 0.5 * W.wind), -0.5 + Math.random() - 7 * W.wind * Math.random()], i * 3);
         spl[i] = 1.2 + Math.random() * 0.6; n++;
       }
     }
@@ -954,6 +1019,7 @@ export function createDeck(view, { lifeLabel = "" } = {}) {
     }
     sea.material.uniforms.uHull.value.set(0, 0, 5.2, 0);
     pool.update(view.camera.position, dt);
+    applyWeather(time);
   }
   update(0, 0);
 

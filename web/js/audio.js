@@ -2,7 +2,8 @@
 // pinger with stereo panning (v3.1, 19 p. 6), sonar, splash, bubbles, hull creaks, the heartbeat at
 // low oxygen, thrusters, the manipulator. Music and the table sounds come in M11.
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-let ac = null, master, noise, amb, under, drone, thr, wind;
+let ac = null, master, noise, amb, under, drone, thr, wind, rain, rainLo;
+let outdoors = false, wxRain = 0, wxWind = 0.15;
 
 function loop(freq, vol, lfo, type = "lowpass") {
   const s = ac.createBufferSource(); s.buffer = noise; s.loop = true;
@@ -28,6 +29,8 @@ export function initAudio() {
   under = loop(170, 0);
   thr = loop(300, 0, 0, "bandpass");
   wind = loop(900, 0, 0.07, "bandpass");     // the wind on the open deck (M12b)
+  rain = loop(5200, 0, 0.0, "highpass");      // rain: a hiss of drops ...
+  rainLo = loop(1400, 0, 0.23, "bandpass");   // ... and their patter on steel
   const o = ac.createOscillator(); drone = ac.createGain();
   o.type = "sine"; o.frequency.value = 44; drone.gain.value = 0; o.connect(drone); drone.connect(master); o.start();
 }
@@ -57,6 +60,15 @@ function nz(dur, freq, type = "bandpass", vol = 0.15, delay = 0, q = 1, pan = 0)
   s.start(t, Math.random()); s.stop(t + dur + 0.05);
 }
 const ramp = (p, v, tc = 0.3) => { if (ac && p) p.setTargetAtTime(v, ac.currentTime, tc); };
+
+function mixWeather() {
+  if (!ac) return;
+  const o = outdoors ? 1 : 0.35;
+  ramp(rain.g.gain, wxRain * 0.07 * o, 0.8); ramp(rainLo.g.gain, wxRain * 0.05 * o, 0.8);
+  rain.f.frequency.value = outdoors ? 5200 : 2600;                 // through the hull: duller
+  ramp(wind.g.gain, outdoors ? 0.02 + wxWind * 0.11 : wxWind * 0.02, 0.8);
+  wind.f.frequency.value = 600 + wxWind * 700;
+}
 
 export const sfx = {
   crane: () => { tone(180, 300, 1.6, "sawtooth", 0.022); nz(1.6, 900, "bandpass", 0.03, 0, 5); },
@@ -89,7 +101,21 @@ export const sfx = {
     else { tone(110 + Math.random() * 30, 70, 0.09, "sine", 0.1 * v, 0, p); nz(0.07, 700 + Math.random() * 300, "bandpass", 0.06 * v, 0, 2, p); }
   },
   /** Outside: the wind and the sea louder; inside: muffled. */
-  outside(on) { if (!ac) return; ramp(wind.g.gain, on ? 0.035 : 0, 0.8); ramp(amb.g.gain, on ? 0.06 : 0.03, 0.8); },
+  outside(on) { outdoors = on; if (!ac) return; mixWeather(); ramp(amb.g.gain, on ? 0.06 : 0.03, 0.8); },
+  /** The weather's sound (weather.js, every frame): rain 0..1, wind 0..1; louder on deck, muffled below. */
+  weather(r, w) {
+    if (Math.abs(r - wxRain) < 0.01 && Math.abs(w - wxWind) < 0.01) return;
+    wxRain = r; wxWind = w; mixWeather();
+  },
+  /** Thunder: a crack, then a long low roll. */
+  thunder() {
+    if (!ac) return;
+    const k = outdoors ? 1 : 0.5;
+    nz(0.35, 1800, "bandpass", 0.12 * k, 0, 0.8);
+    nz(3.6, 140, "lowpass", 0.55 * k, 0.05, 0.7);
+    nz(2.4, 320, "lowpass", 0.25 * k, 0.4, 0.9);
+    tone(55, 32, 2.8, "sine", 0.25 * k, 0.1);
+  },
   crackle: () => { nz(0.5, 1500, "bandpass", 0.05, 0, 0.6); tone(1250, 1250, 0.05, "sine", 0.03, 0.1); tone(1250, 1250, 0.05, "sine", 0.03, 0.3); },
   hatch: () => { tone(90, 50, 0.4, "square", 0.05); nz(0.5, 300, "lowpass", 0.2, 0.05); },
   thud: () => { tone(70, 35, 0.5, "sine", 0.3); nz(0.6, 220, "lowpass", 0.2); },

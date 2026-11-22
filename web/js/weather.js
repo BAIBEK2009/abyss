@@ -1,0 +1,60 @@
+// Weather that works for the story (CLAUDE.md 21.2, 23): a calm night in the prologue and act I, the storm in act II,
+// night fog in act III, dawn in act IV. One set of numbers W, eased towards the target state over a few seconds;
+// every scene reads W each frame (the deck: sea, sky, fog, rain, lights, roll; the cabin porthole; the sound).
+// ?weather=calm|storm|fog|dawn forces a state (for checking).
+import * as THREE from "three";
+import { sfx } from "./audio.js";
+
+const C = (hex) => new THREE.Color(hex);
+export const STATES = {
+  calm: { amp: 1, foam: 0, cloud: 0.12, rain: 0, wind: 0.15, roll: 1, fogD: 0.00042, fogCol: C(0x0b1626), moon: 1, stars: 1,
+          env: 1, envName: "night", wet: 0, lightning: 0, sun: 0, haze: 0, grade: 0 },
+  storm: { amp: 2.6, foam: 1, cloud: 1, rain: 1, wind: 1, roll: 2.1, fogD: 0.0042, fogCol: C(0x0a1118), moon: 0, stars: 0,
+           env: 0.55, envName: "overcast", wet: 1, lightning: 1, sun: 0, haze: 0.35, grade: 1 },
+  fog: { amp: 0.7, foam: 0, cloud: 0.8, rain: 0, wind: 0.05, roll: 0.8, fogD: 0.02, fogCol: C(0x1a242c), moon: 0.25, stars: 0,
+         env: 0.7, envName: "overcast", wet: 0.45, lightning: 0, sun: 0, haze: 1, grade: 2 },
+  dawn: { amp: 0.85, foam: 0, cloud: 0.35, rain: 0, wind: 0.2, roll: 0.9, fogD: 0.0007, fogCol: C(0x9a7a6a), moon: 0, stars: 0,
+          env: 1.4, envName: "night", wet: 0.1, lightning: 0, sun: 1, haze: 0.25, grade: 3 },
+};
+export const ACT_WEATHER = { prologue: "calm", act1: "calm", act2: "storm", act3: "fog", act4: "dawn" };
+
+const forced = (() => { try { return new URLSearchParams(location.search).get("weather"); } catch { return null; } })();
+export const W = { name: "calm", flash: 0 };
+for (const [k, v] of Object.entries(STATES.calm)) W[k] = v instanceof THREE.Color ? v.clone() : v;
+let target = STATES.calm, rate = 0.3, nextBolt = 8, thunderAt = -1;
+if (forced && STATES[forced]) { W.name = forced; target = STATES[forced]; snap(); }
+
+function snap() {
+  for (const [k, v] of Object.entries(target)) { if (v instanceof THREE.Color) W[k].copy(v); else W[k] = v; }
+}
+
+/** Move to a state over ~sec seconds (no-op if already there; ?weather= wins over the story). */
+export function setWeather(name, sec = 6) {
+  if (forced && STATES[forced]) name = forced;
+  if (!STATES[name] || name === W.name) return;
+  W.name = name; target = STATES[name]; rate = 3 / Math.max(0.1, sec);
+  if (sec <= 0) snap();
+}
+export const weatherForAct = (act) => ACT_WEATHER[act] ?? "calm";
+
+let time = 0;
+/** Every frame: ease W, throw lightning (a flash, the thunder 1-3 s later), feed the sound. */
+export function updateWeather(dt) {
+  time += dt;
+  const k = 1 - Math.exp(-dt * rate);
+  for (const [key, v] of Object.entries(target)) {
+    if (typeof v === "number") W[key] += (v - W[key]) * k;
+    else if (v instanceof THREE.Color) W[key].lerp(v, k);
+    else W[key] = v;
+  }
+  W.flash = Math.max(0, W.flash - dt * 5.5);
+  if (W.lightning > 0.5 && (nextBolt -= dt) <= 0) {
+    nextBolt = 5 + Math.random() * 9;
+    W.flash = 1;
+    W.boltAt = time;
+    thunderAt = time + 1 + Math.random() * 2;
+    setTimeout(() => { W.flash = Math.max(W.flash, 0.7); }, 120);          // a double stroke
+  }
+  if (thunderAt > 0 && time >= thunderAt) { thunderAt = -1; sfx.thunder?.(); }
+  sfx.weather?.(W.rain, W.wind);
+}

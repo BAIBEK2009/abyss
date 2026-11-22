@@ -28,24 +28,28 @@ export function loadEnv(renderer, name) {
 // PBR texture sets (Poly Haven CC0, 1k jpg in web/assets/deck): colour + normal (GL) + roughness
 const texLoader = new THREE.TextureLoader();
 const texCache = new Map();
+/** One image per file; clones (each with its own repeat) are flagged for upload once the image has arrived. */
 function tex(path, srgb) {
   if (!texCache.has(path)) {
-    const t = texLoader.load(path);
-    t.wrapS = t.wrapT = THREE.RepeatWrapping;
-    t.anisotropy = 8;
-    if (srgb) t.colorSpace = THREE.SRGBColorSpace;
-    texCache.set(path, t);
+    const entry = { waiting: [] };
+    entry.t = texLoader.load(path, () => { for (const c of entry.waiting) c.needsUpdate = true; entry.waiting = null; });
+    entry.t.wrapS = entry.t.wrapT = THREE.RepeatWrapping;
+    entry.t.anisotropy = 8;
+    if (srgb) entry.t.colorSpace = THREE.SRGBColorSpace;
+    texCache.set(path, entry);
   }
   return texCache.get(path);
+}
+function cloneOf(path, srgb, repeat) {
+  const e = tex(path, srgb), c = e.t.clone();
+  c.repeat.set(repeat[0], repeat[1]);
+  if (e.waiting) e.waiting.push(c); else c.needsUpdate = true;
+  return c;
 }
 /** {map, normalMap, roughnessMap} of a set, each a clone with its own repeat (they share the image). */
 export function pbrSet(name, repeat = [1, 1], { color = true } = {}) {
   const base = `assets/deck/${name}`;
-  const out = {
-    normalMap: tex(`${base}_nor_gl_1k.jpg`, false).clone(),
-    roughnessMap: tex(`${base}_rough_1k.jpg`, false).clone(),
-  };
-  if (color) out.map = tex(`${base}_diff_1k.jpg`, true).clone();
-  for (const t of Object.values(out)) { t.repeat.set(repeat[0], repeat[1]); t.needsUpdate = true; }
+  const out = { normalMap: cloneOf(`${base}_nor_gl_1k.jpg`, false, repeat), roughnessMap: cloneOf(`${base}_rough_1k.jpg`, false, repeat) };
+  if (color) out.map = cloneOf(`${base}_diff_1k.jpg`, true, repeat);
   return out;
 }

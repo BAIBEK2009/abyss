@@ -9,6 +9,7 @@ import * as THREE from "three";
 import { canvasTexture, rng } from "../view.js";
 import { walnut, brass, glass, steelPanel, watertightDoor } from "./materials.js";
 import { t } from "../i18n.js";
+import { W as WX } from "../weather.js";      // (W is the cabin width below)
 
 export const FLOOR_Y = -10;
 const CEIL_Y = 18, X0 = -30, X1 = 30, Z0 = -38, Z1 = 30;
@@ -20,30 +21,67 @@ function mesh(geo, mat, cast = true) {
   return m;
 }
 
-/** Night sea through a porthole: sky, moon with a halo, moonlit path on the waves. */
-function nightSea(seed) {
-  return canvasTexture(512, 512, (g, w, h) => {
-    const r = rng(seed);
-    const sky = g.createLinearGradient(0, 0, 0, h * 0.55);
-    sky.addColorStop(0, "#050a18"); sky.addColorStop(1, "#1b2c4a");
-    g.fillStyle = sky; g.fillRect(0, 0, w, h * 0.55);
-    for (let i = 0; i < 140; i++) { g.fillStyle = `rgba(255,255,255,${r() * 0.8})`; g.fillRect(r() * w, r() * h * 0.5, 1.4, 1.4); }
-    const mx = w * (0.3 + r() * 0.4), my = h * 0.2;
-    const halo = g.createRadialGradient(mx, my, 0, mx, my, 120);
-    halo.addColorStop(0, "rgba(220,230,255,.55)"); halo.addColorStop(1, "rgba(220,230,255,0)");
-    g.fillStyle = halo; g.fillRect(0, 0, w, h);
-    g.fillStyle = "#f4f1e6"; g.beginPath(); g.arc(mx, my, 22, 0, 7); g.fill();
-    const sea = g.createLinearGradient(0, h * 0.55, 0, h);
-    sea.addColorStop(0, "#0e1c30"); sea.addColorStop(1, "#04080f");
-    g.fillStyle = sea; g.fillRect(0, h * 0.55, w, h * 0.45);
-    for (let i = 0; i < 520; i++) {                         // the moon path on the waves
-      const y = h * 0.56 + Math.pow(r(), 1.6) * h * 0.44, spread = 10 + (y - h * 0.55) * 0.7;
-      const x = mx + (r() - 0.5) * spread * 2;
-      g.fillStyle = `rgba(210,225,255,${0.25 + r() * 0.5})`; g.fillRect(x, y, 4 + r() * 12, 1.4);
-    }
+/** The sea through a porthole, alive with the weather (weather.js): the sky with clouds and the moon or the dawn,
+ *  the horizon rolling with the ship, the swell with whitecaps, lightning, rain running down the glass. */
+const portholeUniforms = { uT: { value: 0 }, uSeed: { value: 0 }, uCloud: { value: 0.1 }, uRain: { value: 0 }, uFlash: { value: 0 },
+  uAmp: { value: 1 }, uFog: { value: 0 }, uSun: { value: 0 }, uMoon: { value: 1 }, uRoll: { value: 0 }, uFogCol: { value: new THREE.Color() } };
+function portholeMaterial(seed) {
+  const u = { ...portholeUniforms, uSeed: { value: seed } };
+  return new THREE.ShaderMaterial({
+    uniforms: u,
+    vertexShader: "varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }",
+    fragmentShader: /* glsl */`
+      uniform float uT, uSeed, uCloud, uRain, uFlash, uAmp, uFog, uSun, uMoon, uRoll; uniform vec3 uFogCol; varying vec2 vUv;
+      float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+      float vn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+        return mix(mix(hash(i), hash(i + vec2(1, 0)), f.x), mix(hash(i + vec2(0, 1)), hash(i + vec2(1, 1)), f.x), f.y); }
+      float fbm(vec2 p) { float a = 0.5, s = 0.0; for (int i = 0; i < 4; i++) { s += a * vn(p); p = p * 2.1 + 3.7; a *= 0.5; } return s; }
+      void main() {
+        vec2 p = vUv - 0.5;
+        // rain on the glass: drops that run down and smear what is behind them
+        float drops = 0.0; vec2 off = vec2(0.0);
+        if (uRain > 0.01) {
+          for (int i = 0; i < 3; i++) {
+            float fi = float(i);
+            vec2 g = vec2(p.x * (9.0 + fi * 4.0), p.y * 3.0 + uT * (0.25 + fi * 0.12) + hash(vec2(floor(p.x * (9.0 + fi * 4.0)), fi)) * 7.0);
+            vec2 c = fract(g) - 0.5; float on = step(0.72, hash(floor(g) + fi));
+            float head = smoothstep(0.12, 0.05, length(c * vec2(1.0, 2.4) + vec2(0.0, 0.12)));       // a drop ...
+            float trail = smoothstep(0.035, 0.0, abs(c.x)) * smoothstep(-0.1, 0.45, c.y) * 0.35;     // ... and its wet trail above
+            drops += (head + trail) * on; off += c * head * on * 0.05;
+          }
+          drops *= uRain; off *= uRain;
+        }
+        vec2 q = p + off;
+        float a = uRoll; q = vec2(q.x * cos(a) - q.y * sin(a), q.x * sin(a) + q.y * cos(a));
+        float hor = 0.02 + sin(uT * 0.5 + uSeed) * 0.015 * uAmp;
+        vec3 col;
+        if (q.y > hor) {          // the sky
+          float up = (q.y - hor) * 2.0;
+          col = mix(vec3(0.1, 0.17, 0.3), vec3(0.02, 0.04, 0.1), up);
+          vec2 mp = vec2(0.12 * sin(uSeed), 0.28);
+          col += vec3(0.9, 0.92, 1.0) * (smoothstep(0.045, 0.04, length(q - mp)) + 0.25 * exp(-length(q - mp) * 9.0)) * uMoon;
+          col = mix(col, mix(vec3(1.0, 0.6, 0.35), vec3(0.45, 0.55, 0.75), up), uSun);
+          float n = fbm(q * vec2(4.0, 9.0) + vec2(uT * 0.02, 0.0) + uSeed);
+          float cov = smoothstep(1.0 - uCloud, 1.0 - uCloud * 0.5, n + uCloud * 0.3);
+          col = mix(col, uFogCol * 1.5 + vec3(0.6, 0.65, 0.75) * uFlash * (0.6 + n), cov);
+        } else {                  // the sea
+          float d = (hor - q.y) * 6.0 + 0.05;
+          float w = fbm(vec2(q.x * 14.0 / d + uT * 0.4, 1.0 / d * 3.0 + uT * 0.6) + uSeed);
+          col = mix(vec3(0.02, 0.05, 0.09), vec3(0.06, 0.1, 0.16), w);
+          col = mix(col, vec3(0.5, 0.55, 0.6), smoothstep(0.62, 0.8, w) * smoothstep(1.2, 2.2, uAmp));      // whitecaps
+          col += vec3(0.8, 0.85, 0.95) * pow(w, 6.0) * uMoon * 0.6 * smoothstep(0.2, 0.0, abs(q.x - 0.12 * sin(uSeed)));
+          col = mix(col, vec3(0.8, 0.45, 0.25) * 0.5, uSun * 0.6);
+          col += vec3(0.4, 0.45, 0.55) * uFlash * 0.4;
+        }
+        col = mix(col, uFogCol * 1.4, uFog * (0.6 + 0.4 * smoothstep(0.0, 0.2, abs(q.y - hor))));
+        col += vec3(0.16, 0.19, 0.22) * drops;
+        col *= 1.0 + uFlash * 1.5;
+        gl_FragColor = vec4(col, 1.0);
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+      }`,
   });
 }
-
 function caspianChart() {
   return canvasTexture(512, 360, (g, w, h) => {
     g.fillStyle = "#e6d6b0"; g.fillRect(0, 0, w, h);
@@ -104,10 +142,10 @@ export function createCabin(scene) {
 
   // two portholes on the far wall: night sea and the moon behind thick glass in a bolted brass ring
   const ringMat = brass();
+  const portGlows = [];
   for (const [x, seed] of [[-13, 3], [13, 9]]) {
     const y = 6.5, z = Z0 + 0.05;
-    const view = new THREE.Mesh(new THREE.CircleGeometry(3.3, 48), new THREE.MeshBasicMaterial({ map: nightSea(seed), toneMapped: true }));
-    view.material.color.setScalar(1.6);
+    const view = new THREE.Mesh(new THREE.CircleGeometry(3.3, 48), portholeMaterial(seed));
     view.position.set(x, y, z + 0.02); group.add(view);
     const lens = new THREE.Mesh(new THREE.CircleGeometry(3.3, 48), glass());
     lens.position.set(x, y, z + 0.25); group.add(lens);
@@ -118,8 +156,8 @@ export function createCabin(scene) {
       const bolt = mesh(new THREE.SphereGeometry(0.22, 10, 8), ringMat);
       bolt.position.set(x + Math.cos(a) * 4.35, y + Math.sin(a) * 4.35, z + 0.25); group.add(bolt);
     }
-    const glow = new THREE.PointLight(0x8fb0ff, 6, 22, 1.6);      // cold moonlight falling in
-    glow.position.set(x, y, z + 3); group.add(glow);
+    const glow = new THREE.PointLight(0x8fb0ff, 6, 22, 1.6);      // cold moonlight falling in (and the lightning)
+    glow.position.set(x, y, z + 3); group.add(glow); portGlows.push(glow);
   }
 
   // the green radio on a cabinet in the far-left corner (its scale glows)
@@ -283,6 +321,11 @@ export function createCabin(scene) {
     /** Where the camera stands when the captain gets up from the table: a view of the whole cabin. */
     standPose: { target: new THREE.Vector3(1, 2.5, -10), dist: 41, tilt: 15, yaw: 20 },
     update(dt, time, sway) {
+      const pu = portholeUniforms;
+      pu.uT.value = time; pu.uCloud.value = WX.cloud; pu.uRain.value = WX.rain; pu.uFlash.value = WX.flash; pu.uAmp.value = WX.amp;
+      pu.uFog.value = WX.haze; pu.uSun.value = WX.sun; pu.uMoon.value = WX.moon; pu.uFogCol.value.copy(WX.fogCol);
+      pu.uRoll.value = Math.sin(time * 0.52) * 0.05 * WX.roll;
+      for (const g of portGlows) { g.intensity = 6 * (0.3 + 0.7 * WX.moon) + 10 * WX.sun + 60 * WX.flash; g.color.setRGB(0.56 + 0.44 * WX.sun, 0.69, 1 - 0.4 * WX.sun); }
       lamp.position.x = -1.2 + (sway?.x ?? 0);
       lamp.position.z = -1.8 + (sway?.z ?? 0);
       const p = dustGeo.attributes.position;
