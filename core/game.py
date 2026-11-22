@@ -553,6 +553,13 @@ class Game:
         self._after_story()
         return self.pop_story()
 
+    def set_focus(self, kind: str) -> None:
+        """Act III: the "Data / Voice" switch over the tracing paper — which recorder the officers work for."""
+        if self.boxes is None or kind not in self.boxes or self.boxes[kind] is not None:
+            raise GameError("bad_focus")
+        self.log.append(["focus", kind])
+        self.focus = kind
+
     def drop_decoy(self) -> list:
         """Act II: a decoy buoy pings like a black box at the ship's position; the rival's Bayes believes it."""
         if not (self.campaign and self.campaign.act == "act2" and self.decoy == "ready" and self.rival and self.status == "playing"):
@@ -616,6 +623,8 @@ class Game:
                 g.choose(*args)
             elif kind == "decoy":
                 g.drop_decoy()
+            elif kind == "focus":
+                g.set_focus(args[0])
             elif kind == "skip":
                 g.skip_act()
         g.pop_story()

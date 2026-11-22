@@ -390,6 +390,74 @@ export function createMap(view, state) {
     emitter(root, puffTex, 0xdcd6ca, 16, (v) => aurora.body.localToWorld(v.copy(aurora.funnelTop))),
     emitter(root, puffTex, 0x5e5c5c, 16, (v) => rival.body.localToWorld(v.copy(rival.funnelTop))),
   ];
+  // ---- act II: the storm front over the chart (17.5) — low dark clouds over the storm cells, faint ones where
+  // it will be in 6 hours with a pencil note; act II's decoy buoy (an orange spar buoy with a blinking light)
+  // paper-craft storm clouds: three flattened balls each, opaque, casting their shadow on the chart
+  const storm = new THREE.Group(); root.add(storm);
+  const stormPuffs = [];
+  const cloudMat = std({ color: 0x59606b, roughness: 0.95 }), cloudMatLight = std({ color: 0x9aa1aa, roughness: 0.95 });
+  const ball = new THREE.SphereGeometry(0.32, 14, 10);
+  for (let i = 0; i < 46; i++) {
+    const sp = new THREE.Group();
+    for (const [x, z, r] of [[-0.18, 0.02, 1], [0.16, -0.05, 1.15], [0.02, 0.14, 0.85]]) {
+      const m = mesh(ball, cloudMat); m.position.set(x, 0, z); m.scale.set(r, r * 0.55, r); sp.add(m);
+    }
+    sp.userData = { ph: Math.random() * 6.28, dz: Math.random() - 0.5, s: 0.85 + Math.random() * 0.35, k: 0, goal: 0, home: new THREE.Vector3(), light: false };
+    sp.visible = false;
+    storm.add(sp); stormPuffs.push(sp);
+  }
+  const stormNote = document.createElement("div");
+  stormNote.className = "storm-note"; stormNote.hidden = true;
+  const stormAnchor = new THREE.Vector3();
+  pin(stormNote, stormAnchor, "at");
+  function setStorm(info) {
+    const now = info?.cells ?? [], next = (info?.next ?? []).filter(([x, y]) => !now.some((c) => c[0] === x && c[1] === y));
+    const cells = [...now.map((c) => [c, 1]), ...next.map((c) => [c, 0.5])];
+    stormPuffs.forEach((sp, i) => {
+      const it = cells[i];
+      sp.userData.goal = it ? it[1] : 0;
+      if (it) {
+        const [u, v] = centre(it[0]); sp.userData.home.copy(toWorld(u + sp.userData.dz * 0.3, v + sp.userData.dz * 0.25));
+        const light = it[1] < 1;
+        if (light !== sp.userData.light) { sp.userData.light = light; sp.children.forEach((m) => { m.material = light ? cloudMatLight : cloudMat; }); }
+      }
+    });
+    stormNote.hidden = !next.length;
+    if (next.length) {
+      const [u, v] = centre(next[Math.floor(next.length / 2)]);
+      stormAnchor.copy(toWorld(u, v)).setY(1.4);
+      stormNote.textContent = t("storm_note", { h: info.in });
+    }
+  }
+  const decoy = new THREE.Group();
+  {
+    const body = mesh(new THREE.LatheGeometry([[0, 0], [0.09, 0.02], [0.1, 0.12], [0.06, 0.32], [0.02, 0.52], [0, 0.54]].map(([a, b]) => new THREE.Vector2(a, b)), 18),
+      std({ color: 0xff6a1a, roughness: 0.5 }));
+    const band = mesh(new THREE.CylinderGeometry(0.083, 0.095, 0.05, 18), std({ color: 0xf2f2ea, roughness: 0.4 }));
+    band.position.y = 0.18;
+    const lamp = new THREE.Sprite(new THREE.SpriteMaterial({ map: soft("255,190,90"), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+    lamp.position.y = 0.6; lamp.scale.setScalar(0.5);
+    decoy.add(body, band, lamp); decoy.userData.lamp = lamp; decoy.visible = false;
+    root.add(decoy);
+  }
+  function setDecoy(cell) {
+    decoy.visible = Array.isArray(cell);
+    if (!decoy.visible) return;
+    const [u, v] = centre(cell);
+    decoy.position.copy(toWorld(u + 0.28, v - 0.28)).setY(kalka.heightAt(u + 0.28, v - 0.28));
+  }
+  view.onFrame((dt, time) => {
+    for (const sp of stormPuffs) {
+      const d = sp.userData;
+      d.k += (d.goal - d.k) * Math.min(1, dt * 1.2);
+      sp.visible = d.k > 0.02;
+      if (!sp.visible) continue;
+      sp.position.set(d.home.x + Math.sin(time * 0.3 + d.ph) * 0.12, 1.5 + Math.sin(time * 0.5 + d.ph) * 0.06, d.home.z + Math.cos(time * 0.23 + d.ph) * 0.08);
+      const k = d.k * d.s * 0.58; sp.scale.set(k, k * 0.8, k);
+    }
+    if (decoy.visible) decoy.userData.lamp.material.opacity = (time * 1.2) % 1 < 0.15 ? 1 : 0.15;
+  });
+
   function nameTag(cls, name, sub) {
     const el = document.createElement("div");
     el.className = `ship-tag ${cls}`;
@@ -496,6 +564,8 @@ export function createMap(view, state) {
       if (st.rival) placeShip(ships.rival, st.rival.pos);
     }
     showPlans(st);
+    setStorm(st.campaign?.storm);
+    setDecoy(st.campaign?.decoy);
     return p;
   }
 
@@ -662,7 +732,7 @@ export function createMap(view, state) {
     return kalka.pick(ray.ray);
   }
 
-  showPlans(state);
+  showPlans(state); setStorm(state.campaign?.storm); setDecoy(state.campaign?.decoy);
   return {
     setState, play, cellAt, setRoute,
     hover: kalka.hover, target: kalka.target,

@@ -28,7 +28,7 @@ const SPEAKER = {                       // who explains which event (CLAUDE.md 6
   sonar_echo: "vera", sonar_silence: "vera", dive_debris: "vera", dive_empty: "vera", dive_seen: "vera",
   clue_applied: "vera", clue_rejected: "vera",
   rival_dive_empty: "lev", beacon_low: "lev", reef: "lev",
-  refuel: "grisha", tow: "grisha",
+  refuel: "grisha", tow: "grisha", sonar_storm: "vera",
 };
 
 export function createTable(view, map, initialState, { cabin, dive } = {}) {
@@ -210,6 +210,15 @@ export function createTable(view, map, initialState, { cabin, dive } = {}) {
     cinema(true);
     try {
       const before = state;
+      if (action.type === "decoy") {                 // act II: the decoy buoy goes over the side here
+        const res = await api.decoy();
+        await map.play(res.events, before, { onEvent: speak });
+        flow.hold(res.story);
+        state = res.state; map.setState(state); render();
+        await flow.play(res.story);
+        cinema(false);
+        return;
+      }
       const live = !!dive && !autopilot && action.tool === "dive";
       const res = await api.act(action, live);
       storyThisTurn = (res.story || []).some((i) => i.beat);

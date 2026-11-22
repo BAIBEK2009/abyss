@@ -766,3 +766,8 @@ body.descent #ui, body.descent #overlay, body.descent .goal, body.descent .speec
 .cine-depth b { font: 400 34px/1 var(--mono); color: #ffb35a; text-shadow: 0 0 10px #ff8a2a99, 0 0 2px #ffcf8a; letter-spacing: 0.06em; }
 .cine-skip { position: fixed; right: 4vw; bottom: calc(8.5vh + 26px); z-index: 60; font: 600 13px var(--print); color: #d8e2e4cc; pointer-events: none; }
 .cine-skip[hidden] { display: none; }
+
+/* ---- act II: the storm note on the chart (pencil, "storm in 6 h") */
+.storm-note { pointer-events: none; font: 700 19px/1 var(--hand, "Caveat"), cursive; color: #3a3f4a; white-space: nowrap;
+  translate: -50% -50%; text-shadow: 0 0 3px #efe6d2, 0 0 6px #efe6d2; border-bottom: 1.5px dashed #3a3f4a88; padding: 0 4px 2px; }
+.storm-note[hidden] { display: none; }

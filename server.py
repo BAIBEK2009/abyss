@@ -17,6 +17,7 @@ it asks this server for state, sends the captain's decisions here and animates t
     POST /api/choice  {key, option}      -> {story, state}  (act III: which recorder first; act IV: the ending)
     POST /api/decoy   {}                 -> {events, story, state}  (act II: drop the decoy buoy here)
     POST /api/skip    {}                 -> {story, state}  (demo only: skip to the next act)
+    POST /api/focus   {kind}             -> {state}         (act III: the "Data / Voice" switch)
     POST /api/load    {save}             -> state           (a saved game from localStorage, replayed)
 
     action = {"type": "go", "target": [x, y], "tool": "sonar" | "dive" | null} | {"type": "home"}
@@ -131,6 +132,9 @@ class Handler(SimpleHTTPRequestHandler):
                 if path == "/api/choice":
                     story = game.choose(str(body.get("key", "")), str(body.get("option", "")))
                     return self.send_json({"story": story, "state": game.state()})
+                if path == "/api/focus":
+                    game.set_focus(str(body.get("kind", "")))
+                    return self.send_json({"state": game.state()})
                 if path == "/api/decoy":
                     events = game.drop_decoy()
                     return self.send_json({"events": events, "story": game.pop_story(), "state": game.state()})

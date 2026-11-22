@@ -858,6 +858,57 @@ export function createDive(view) {
   }
   flapFind.visible = false;
   deep.add(flapFind);
+  // act II's find (17.5, act2_dive_tail): the tail section — a broken fuselage cone and the fin with the fictional
+  // livery stripe, torn off flat on impact; much bigger than the flap (the same skins and torn edges)
+  const tailFind = new THREE.Group();
+  {
+    const skin = aluSkin({ stripe: true, base: "#e7eaeb", seed: 41 }), skin2 = aluSkin({ seed: 43 });
+    const alu = siltMat(std({ map: skin.map, normalMap: skin.normalMap, roughness: 0.38, metalness: 0.7, side: THREE.DoubleSide }));
+    const alu2 = siltMat(std({ map: skin2.map, normalMap: skin2.normalMap, roughness: 0.42, metalness: 0.65, side: THREE.DoubleSide }));
+    // the cone of the rear fuselage, open at the torn front end
+    const pts = [];
+    for (let i = 0; i <= 12; i++) { const k = i / 12; pts.push(new THREE.Vector2(0.95 * (1 - 0.72 * k * k) + 0.04, k * 4.2)); }
+    const cone = new THREE.Mesh(new THREE.LatheGeometry(pts, 28, 0, Math.PI * 1.55), alu2);
+    cone.rotation.z = Math.PI / 2; cone.rotation.x = 0.35; cone.position.set(1.9, 0.62, 0); tailFind.add(cone);
+    // the fin: a tall torn plate, a little bent, with the turquoise stripe
+    const fin = new THREE.Mesh(tornPlate(2.4, 2.1, 17, 0.08), alu);
+    fin.rotation.set(Math.PI / 2 - 0.12, 0, -0.18); fin.position.set(2.6, 1.85, 0.05); tailFind.add(fin);
+    const stab = new THREE.Mesh(tornPlate(2.2, 0.8, 23, 0.06), alu2);            // a horizontal stabiliser, half buried
+    stab.rotation.set(-0.08, 0.3, 0.1); stab.position.set(3.1, 0.28, 1.2); tailFind.add(stab);
+    const reg = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 0.36), new THREE.MeshStandardMaterial({ transparent: true, roughness: 0.4, polygonOffset: true, polygonOffsetFactor: -2,
+      map: canvasTexture(512, 132, (c, w, h) => { c.clearRect(0, 0, w, h); c.fillStyle = "#1d2228"; c.font = "800 96px Onest, sans-serif"; c.textAlign = "center"; c.fillText("UP-AQ271", w / 2, 100); }) }));
+    reg.position.set(1.2, 0.95, 0.9); reg.rotation.y = 0.05; tailFind.add(reg);
+    const wire = std({ color: 0x222222, roughness: 0.6 });
+    for (let k = 0; k < 4; k++) tailFind.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([new THREE.Vector3(-0.1, 0.5 + k * 0.08, -0.3 + k * 0.2), new THREE.Vector3(-0.8, 0.3, 0.1 * k), new THREE.Vector3(-1.6, 0.02, -0.4 + k * 0.3)]), 14, 0.02, 5), wire));
+    tailFind.scale.setScalar(1.1);
+    tailFind.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+  }
+  tailFind.visible = false;
+  deep.add(tailFind);
+  // act III's second recorder (17.6): the voice recorder — the same orange case, blue reflective bands, its own label
+  const recUD = recorder.userData; recorder.userData = {};
+  const cvrRec = recorder.clone(true);
+  recorder.userData = recUD;
+  {
+    const blue = siltShader(std({ color: 0x2c63c8, roughness: 0.45, metalness: 0 }), 0x8a7f6c, 0.4);
+    const lab = new THREE.MeshStandardMaterial({ roughness: 0.4, polygonOffset: true, polygonOffsetFactor: -2,
+      map: canvasTexture(512, 300, (c, w, h) => {
+        c.fillStyle = "#ff4f00"; c.fillRect(0, 0, w, h);
+        c.fillStyle = "#151515"; c.textAlign = "center";
+        c.font = "800 46px Onest, sans-serif"; c.fillText("COCKPIT VOICE", w / 2, 74);
+        c.fillText("RECORDER", w / 2, 128);
+        c.font = "700 36px Onest, sans-serif"; c.fillText("DO NOT OPEN", w / 2, 188);
+        c.font = "800 44px PT Mono, monospace"; c.fillText("AQ-271", w / 2, 258);
+      }) });
+    cvrRec.traverse((o) => {
+      if (!o.isMesh) return;
+      if (o.geometry.type === "PlaneGeometry") o.material = lab;
+      else if (o.material?.color && o.material.color.getHex() === 0xd9d9d2) o.material = blue;
+    });
+    cvrRec.userData = { led: cvrRec.children.find((o) => o.geometry?.type === "SphereGeometry"), ll: cvrRec.children.find((o) => o.isPointLight) };
+  }
+  cvrRec.visible = false;
+  deep.add(cvrRec);
   // the manipulator arm, a child of the camera during the search (it reaches out to grab)
   const claw = new THREE.Group();
   {
@@ -1078,8 +1129,9 @@ export function createDive(view) {
           pingerT: 0.6, seen: new Set(), creakT: 4, heartT: 0, tether: 0, shake: 0, desc: 0, t0: 0, tick: 0,
           hasBox: !!sceneInfo.box || !!sceneInfo.find, find: sceneInfo.find || null, hasDebris: !!sceneInfo.debris,
           debrisSeen: false, anyDebris: false, cine: null, fdOff: 0, fdRange: "", fdBars: 0, far: null, track: [[0, 0]], marks: [], buoys: [], hintT: -99, bestD: null, strongAt: null, sent: new Set(), o2Warn: false, story: !!sceneInfo.find, task: sceneInfo.task || null, onEvent: sceneInfo.onEvent || (() => {}) };
-    box = D.find ? flapFind : recorder;
-    recorder.visible = flapFind.visible = false;
+    box = D.find === "act2_dive_tail" ? tailFind : D.find ? flapFind : sceneInfo.kind === "cvr" ? cvrRec : recorder;
+    D.kind = sceneInfo.kind || null;
+    recorder.visible = flapFind.visible = tailFind.visible = cvrRec.visible = false;
     for (const k in keys) keys[k] = false;
     const a = (Math.random() - 0.5) * 2.8, d = 14 + Math.random() * 3;
     const bx = -Math.sin(a) * d, bz = -Math.cos(a) * d;
@@ -1325,7 +1377,7 @@ export function createDive(view) {
     await anim(1.0, (k) => { claw.position.lerpVectors(p0, p1, ease(k)); claw.userData.fL.rotation.y = 0.5 * k; claw.userData.fR.rotation.y = -0.5 * k; });
     camera.attach(box);
     await anim(0.4, (k) => { claw.userData.fL.rotation.y = 0.5 - 0.45 * k; claw.userData.fR.rotation.y = -0.5 + 0.45 * k; });
-    sfx.found(); cockpit.msg(t(D.find ? "dv_got_find" : "dv_got_box"), 3000);
+    sfx.found(); cockpit.msg(t(D.find ? "dv_got_find" : D.kind === "cvr" ? "dv_got_cvr" : "dv_got_box"), 3000);
     const c0 = claw.position.clone(), b0 = box.position.clone(), c1 = new THREE.Vector3(0.25, -0.42, -1.1);
     anim(1.2, (k) => { claw.position.lerpVectors(c0, c1, ease(k)); box.position.copy(b0).add(c1.clone().sub(c0).multiplyScalar(ease(k))); });
     await sleep(900);
@@ -1339,7 +1391,7 @@ export function createDive(view) {
     const cine = mode === "dive" && D.cine !== null && D.cine !== undefined;
     if (cine) {
       D.cine += dt;                                          // real seconds
-      if (D.cine >= CINE_S) { D.cine = null; D.cap = { id: cockpit.msg(t(D.find ? "dv_seen_find" : "dv_seen_box"), 4000), of: box }; }
+      if (D.cine >= CINE_S) { D.cine = null; D.cap = { id: cockpit.msg(t(D.find === "act2_dive_tail" ? "dv_seen_tail" : D.find ? "dv_seen_find" : D.kind === "cvr" ? "dv_seen_cvr" : "dv_seen_box"), 4000), of: box }; }
     }
     dt *= cine ? 0.5 : 1;                                    // slow motion 0.5x while the beam finds the box
     T += dt;

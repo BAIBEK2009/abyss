@@ -33,6 +33,10 @@ export function tagList(st, target) {
                 action: { type: "go", target, tool: null } });
   }
   if (!atBase) tags.push({ id: "home", icon: TAG_ICONS.home, label: t("tag_home"), desc: t("desc_home"), action: { type: "home" } });
+  // act II (17.5): the decoy buoy, once — its cost is fixed (1 h), its effect shows on the rival's dashed line
+  if (st.campaign?.decoy === "ready" && !target)
+    tags.push({ id: "decoy_here", icon: TAG_ICONS.sonar, label: t("tag_decoy", here), desc: t("desc_decoy"), action: { type: "decoy" },
+                fixed: { hours: 1 } });
   return tags;
 }
 
@@ -59,6 +63,10 @@ export function createActions(root, handlers) {
     if (advised) b.classList.add("advised", "rec");
     let chips = "";
     let foot = "";
+    if (tag.fixed) {
+      chips += chip(t("chip_hours", { h: hours(tag.fixed.hours) }));
+      foot = `<span class="tag-rival urgent">${t("decoy_effect")}</span>`;
+    }
     if (pv) {
       chips += chip(t("chip_hours", { h: hours(pv.hours) }));
       chips += tag.action.type === "home" ? chip(t("chip_refuel")) : chip(t("chip_fuel", { f: pv.fuel }));
@@ -98,7 +106,7 @@ export function createActions(root, handlers) {
         : t("hint_none", place(st, st.pos));
       const tags = tagList(st, target);
       // no previews while a move runs (the tags are disabled and hidden; a dive in progress would refuse them)
-      const previews = busy ? tags.map(() => null) : await Promise.all(tags.map((tg) => preview(tg.action).catch(() => null)));
+      const previews = busy ? tags.map(() => null) : await Promise.all(tags.map((tg) => (tg.fixed ? null : preview(tg.action).catch(() => null))));
       if (my !== seq) return;                       // a newer update replaced this one
       const advice = st.advice?.advice?.action;
       row.replaceChildren(...tags.map((tg, i) => renderTag(tg, previews[i], st, sameAction(tg.action, advice))));

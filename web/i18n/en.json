@@ -302,5 +302,15 @@
  "fp_porthole_night": "Night. A calm sea, the moon over the water, the lights of the boats to the south.",
  "fp_porthole_storm": "A storm. Waves hit the side, water runs down the glass.",
  "fp_porthole_fog": "Fog. Nothing can be seen beyond twenty metres.",
- "fp_porthole_dawn": "Dawn. The sea is pink, «Poseidon-2» lies close by."
+ "fp_porthole_dawn": "Dawn. The sea is pink, «Poseidon-2» lies close by.",
+ "dv_seen_tail": "The tail section! The fin with the stripe — swim closer.",
+ "dv_seen_cvr": "The second recorder — the voice recorder, blue bands. Swim closer.",
+ "dv_got_cvr": "The voice recorder is in the arm! Surfacing.",
+ "tag_decoy": "Drop the decoy buoy {at}",
+ "desc_decoy": "The buoy pings like a black box. «Poseidon»'s Bayes will trust the echo and turn to it.",
+ "decoy_effect": "Once per act. Watch the red dashed line.",
+ "storm_note": "storm in {h} h",
+ "warn_storm_sonar": "The sonar is deaf in the storm",
+ "warn_storm_route": "Course through the storm: a cell costs three times as much",
+ "toast_sonar_storm": "The storm drowned the echo {at} — <b>nothing heard</b>. The map did not change."
 }
