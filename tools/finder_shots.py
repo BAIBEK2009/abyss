@@ -109,7 +109,7 @@ with sync_playwright() as pw:
         page.wait_for_timeout(3500)
         shot(page, "finder_near")
     if where.get("buoys"):
-        face(where["buoys"][0], 4.0, 0.25)
+        face(where["buoys"][0], 4.6, 0.05)
         page.wait_for_timeout(1800)
         shot(page, "buoy")
     b.close()

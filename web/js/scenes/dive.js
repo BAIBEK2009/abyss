@@ -965,6 +965,49 @@ export function createDive(view) {
       const lid = new THREE.Mesh(rbox(1.2, 0.04, 0.48, 0.02), siltMat(std({ color: 0xc8cbc9, roughness: 0.5 }))); lid.position.set(0, 0.33, 0.32); lid.rotation.x = -0.9; g.add(lid); });
     mkProp((g) => { for (let k = 0; k < 7; k++) g.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([new THREE.Vector3(-0.8, 0.02, k * 0.025), new THREE.Vector3(-0.2, 0.12 + Math.sin(k) * 0.05, 0.1 + k * 0.02), new THREE.Vector3(0.5, 0.02, -0.05 + k * 0.03), new THREE.Vector3(1.0, 0.1, 0.1)]), 24, 0.008, 4), k % 3 ? wireM : std({ color: 0x2f6aa0, roughness: 0.5 }))); });
   }
+  // ---- three transponder buoys on the seabed at the edge of the search zone (22.3 p. 4): the ship drops them
+  // before a dive, as on real searches. Each stands on a tripod: a grey transducer housing with a black head, an
+  // orange float with a white reflective band on a short line above it, a strobe on top that blinks.
+  const buoys = [];
+  {
+    const orange = std({ color: 0xff6a1a, roughness: 0.45, metalness: 0.05 }), white = std({ color: 0xe8e6de, roughness: 0.35 });
+    const grey = std({ color: 0x7c8388, roughness: 0.4, metalness: 0.7 }), black = std({ color: 0x15171a, roughness: 0.6 });
+    const steel = std({ color: 0x5a6066, roughness: 0.5, metalness: 0.8 });
+    const lathe = (pts, seg = 28) => new THREE.LatheGeometry(pts.map(([a, b]) => new THREE.Vector2(a, b)), seg);
+    const glowTex = soft2("255,170,90");
+    for (let i = 0; i < 3; i++) {
+      const g = new THREE.Group();
+      for (let k = 0; k < 3; k++) {                                     // the tripod stand
+        const a = (k / 3) * Math.PI * 2;
+        g.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([new THREE.Vector3(Math.cos(a) * 0.42, 0.02, Math.sin(a) * 0.42),
+          new THREE.Vector3(Math.cos(a) * 0.2, 0.3, Math.sin(a) * 0.2), new THREE.Vector3(Math.cos(a) * 0.09, 0.42, Math.sin(a) * 0.09)]), 8, 0.022, 6), steel));
+        const foot = new THREE.Mesh(lathe([[0, 0], [0.06, 0], [0.065, 0.02], [0.04, 0.04], [0, 0.04]], 12), steel);
+        foot.position.set(Math.cos(a) * 0.42, 0, Math.sin(a) * 0.42); g.add(foot);
+      }
+      const housing = new THREE.Mesh(lathe([[0, 0.36], [0.085, 0.36], [0.095, 0.38], [0.095, 0.66], [0.085, 0.68], [0.05, 0.69], [0, 0.69]]), grey); g.add(housing);
+      for (const y of [0.44, 0.62]) { const r = new THREE.Mesh(new THREE.TorusGeometry(0.097, 0.008, 6, 28), steel); r.rotation.x = Math.PI / 2; r.position.y = y; g.add(r); }
+      const head = new THREE.Mesh(lathe([[0, 0.68], [0.07, 0.68], [0.08, 0.72], [0.07, 0.78], [0.04, 0.8], [0, 0.81]]), black); g.add(head);
+      const line = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([new THREE.Vector3(0, 0.8, 0), new THREE.Vector3(0.02, 0.88, 0.01), new THREE.Vector3(0, 0.95, 0)]), 8, 0.007, 5), std({ color: 0xd8c27a, roughness: 0.8 }));
+      g.add(line);
+      const float = new THREE.Mesh(lathe([[0, 0.93], [0.15, 0.94], [0.25, 1.0], [0.29, 1.11], [0.28, 1.23], [0.21, 1.31], [0.1, 1.36], [0, 1.37]]), orange); g.add(float);
+      const band = new THREE.Mesh(new THREE.TorusGeometry(0.292, 0.022, 6, 32), white); band.rotation.x = Math.PI / 2; band.position.y = 1.13; g.add(band);
+      const ledMat = new THREE.MeshStandardMaterial({ color: 0x331a08, emissive: 0xffa040, emissiveIntensity: 0, roughness: 0.2 });
+      const led = new THREE.Mesh(lathe([[0, 1.355], [0.04, 1.355], [0.04, 1.39], [0.03, 1.42], [0, 1.43]], 14), ledMat); g.add(led);
+      const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0, fog: false }));
+      glow.scale.setScalar(1.1); glow.position.y = 1.42; g.add(glow);
+      g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+      g.userData = { ledMat, glow, phase: i * 0.37 };
+      g.visible = false; deep.add(g); buoys.push(g);
+    }
+  }
+  function blinkBuoys(time) {
+    for (const g of buoys) {
+      if (!g.visible) continue;
+      const ph = (time * 0.8 + g.userData.phase) % 1, on = ph < 0.08 || (ph > 0.16 && ph < 0.22);   // a double flash
+      g.userData.ledMat.emissiveIntensity = on ? 6 : 0.1; g.userData.glow.material.opacity = on ? 0.9 : 0;
+    }
+  }
+
   // ---- deep-sea life (CLAUDE.md v3.1, 19 p. 7)
   const life = createLife(deep, () => spot.position);
 
@@ -1028,6 +1071,12 @@ export function createDive(view) {
       g.position.set(px, bedH(px, pz) + 0.02, pz); g.rotation.set((Math.random() - 0.5) * 0.2, Math.random() * 6, (Math.random() - 0.5) * 0.2);
     });
     cockpit.set({ o2: D.o2, max: D.max, fog: 0, low: false, depth: 0 });
+    const b0 = Math.random() * Math.PI * 2;
+    D.buoys = buoys.map((g, i) => {
+      const ba = b0 + (i / 3) * Math.PI * 2, px = Math.cos(ba) * SEARCH_R, pz = Math.sin(ba) * SEARCH_R;
+      g.position.set(px, bedH(px, pz) - 0.03, pz); g.rotation.set(0, Math.random() * 6, 0); g.visible = true;
+      return [px, pz];
+    });
     cockpit.tasks(D.hasBox ? ["dv_task_trail", "dv_task_find"] : D.hasDebris ? ["dv_task_trail"] : []);
   }
 
@@ -1250,6 +1299,7 @@ export function createDive(view) {
     beamUniforms.uT.value = time;
     bubbleCol.update(dt, time, (v) => v.copy(bubbleCol.at).add(new THREE.Vector3((Math.random() - 0.5) * 0.3, 0, (Math.random() - 0.5) * 0.3)));
     if (mode === "dive") stepPuffs(dt);
+    blinkBuoys(time);
   });
   let active = false;
 
@@ -1439,7 +1489,7 @@ export function createDive(view) {
     return true;
   }
   /** Test hook: where the dive's main find and the debris lie. */
-  const debugWhere = () => ({ box: box.visible ? box.position.toArray() : null, debris: debris.filter((g) => g.visible).map((g) => g.position.toArray()),
+  const debugWhere = () => ({ buoys: buoys.filter((g) => g.visible).map((g) => g.position.toArray()), box: box.visible ? box.position.toArray() : null, debris: debris.filter((g) => g.visible).map((g) => g.position.toArray()),
                              keys: debris.filter((g) => g.visible).map((g) => g.userData.key), rocks: bigRocks.slice().sort((a, b) => b[2] - a[2]).slice(0, 4) });
   return { deep, cinematic, search, leave, debugFaceBox, debugLook, debugWhere, stepPuffs };
 }
