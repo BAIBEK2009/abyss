@@ -318,5 +318,14 @@
  "kalka_cvr": "Voice",
  "voice_beacon": "Voice beacon",
  "choice_keys": "Click a card or press its number",
- "toast_cvr_dead": "The voice recorder's beacon has gone silent. Without a signal it <b>cannot be found now</b>."
+ "toast_cvr_dead": "The voice recorder's beacon has gone silent. Without a signal it <b>cannot be found now</b>.",
+ "fp_act4": "There will be no more dives. The decision is made here, on deck.",
+ "paper_name": "The Caspian Herald",
+ "paper_issue": "Daily newspaper · Aktau",
+ "paper_date": "Day six after the crash",
+ "photo_recorders": "The recorders of flight AQ-271 on the deck of «Tulpar»",
+ "photo_ship": "The ship «Tulpar» in the port of Aktau",
+ "photo_poseidon": "«Poseidon-2» leaves the search square",
+ "end_again": "Play again",
+ "end_menu": "To the menu"
 }

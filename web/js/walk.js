@@ -52,7 +52,8 @@ export function createWalk(ctx) {
     return [
       { id: "radio", ...o.radio, prompt: () => (radioDue() ? P.radio : t("fp_radio")), use: gate(radioDue, answerRadio, why("fp_radio_idle")) },
       { id: "binoculars", ...o.binoculars, prompt: () => P.binoculars, use: gate(() => !radioDue(), takeBinoculars, why("fp_need_radio")) },
-      { id: "stairs", ...o.stairs, prompt: () => P.stairs, use: gate(() => !prologue() || tasks()[1], () => ctx.flow().downstairs(), why(tasks()[0] ? "fp_need_bino" : "fp_need_radio")) },
+      { id: "stairs", ...o.stairs, prompt: () => P.stairs, use: gate(() => (!prologue() || tasks()[1]) && camp()?.act !== "act4", () => ctx.flow().downstairs(),
+                                                                          () => ui.note(t(camp()?.act === "act4" ? "fp_act4" : tasks()[0] ? "fp_need_bino" : "fp_need_radio"))) },
       { id: "nerpa", ...o.nerpa, prompt: () => P.nerpa, use: gate(canDive, () => ctx.onDive(), () => ui.note(t(noDiveWhy()))) },
       { id: "workshop", ...o.workshop, prompt: () => P.workshop, use: () => (ctx.onWorkshop ? ctx.onWorkshop() : ui.note(t("fp_workshop"))) },
     ];
@@ -72,12 +73,13 @@ export function createWalk(ctx) {
   function noDiveWhy() {
     const st = ctx.getState();
     if (prologue()) return "fp_need_table";
+    if (camp()?.act === "act4") return "fp_act4";
     if (st.status !== "playing") return "fp_game_over";
     return "fp_nerpa_busy";
   }
   function canDive() {
     const st = ctx.getState();
-    return !prologue() && st.status === "playing" && !st.dive && !ctx.busy();
+    return !prologue() && camp()?.act !== "act4" && st.status === "playing" && !st.dive && !ctx.busy();
   }
 
   // ---------------------------------------------------------------- the waypoint: the next step

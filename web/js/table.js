@@ -1,6 +1,6 @@
 // The navigator's table screen: owns the mission state from Python, the "a move is under way" flag,
 // event playback on the map and the table UI (HUD, rival banner, officers, action tags, toasts).
-import { api } from "./api.js";
+import { api, clearSave } from "./api.js";
 import { createHud } from "./ui/hud.js";
 import { createRivalBanner } from "./ui/rival.js";
 import { createOfficers } from "./ui/officers.js";
@@ -17,6 +17,7 @@ import { createStoryFlow } from "./story_flow.js";
 import { createWalk } from "./walk.js";
 import { createDescent } from "./descent.js";
 import { showResult } from "./ui/result.js";
+import { showEnding } from "./ui/ending.js";
 import { ICONS } from "./ui/icons.js";
 import { pct, hours } from "./ui/fmt.js";
 import { place, cap } from "./places.js";
@@ -308,6 +309,17 @@ export function createTable(view, map, initialState, { cabin, dive } = {}) {
     if (finished) return;
     finished = true;
     toggleAutopilot(false);
+    const ending = state.campaign?.ending ?? (state.campaign && state.status === "lost" ? "lost" : null);
+    if (ending) {                                     // the campaign: a newspaper page, not the score card (B4)
+      walk.freeCursor?.();
+      setTimeout(() => showEnding(ending, {
+        photo: (() => { try { return view.renderer.domElement.toDataURL("image/jpeg", 0.82); } catch { return null; } })(),
+        mystery: state.campaign.mystery,
+        onAgain: async () => { clearSave(); await api.newCampaign(!!state.campaign.demo); location.replace(location.pathname + "?play=1"); },
+        onMenu: () => { clearSave(); location.replace(location.pathname); },
+      }), 1200);
+      return;
+    }
     setTimeout(() => showResult(ui, state, {
       onAgain: async () => { await api.newGame(state.seed); location.reload(); },
       onNew: async () => { await api.newGame(null); location.reload(); },

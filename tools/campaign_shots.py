@@ -25,6 +25,12 @@ def top(g):
 def advance(g, to):
     for ev in PROLOGUE:
         g.story_event(ev)
+    if to == "lost":                                 # the beacon dies before anything is raised
+        g.act({"type": "go", "target": top(g), "tool": "sonar"})
+        g.hours = 119
+        g.act({"type": "go", "target": top(g), "tool": "dive"})
+        g.pop_story()
+        return
     g.act({"type": "go", "target": top(g), "tool": "sonar"})
     g.act({"type": "go", "target": top(g), "tool": "dive"})          # act I: the flap
     if to.startswith("act2"):
@@ -57,9 +63,12 @@ if __name__ == "__main__":
     ap.add_argument("--lang", default="ru")
     ap.add_argument("--name", default=None)
     ap.add_argument("--wait", type=int, default=4000)
+    ap.add_argument("--pick", type=int, default=0, help="act IV: press this number on the choice, then shoot the ending")
     args = ap.parse_args()
     args.out.mkdir(parents=True, exist_ok=True)
     server = make_server(0, demo=args.to in ("act3", "act4", "board"))
+    if args.to == "lost":
+        server = make_server(0)
     advance(server.game, args.to)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     url = f"http://127.0.0.1:{server.server_address[1]}/?lang={args.lang}&nointro=1"
@@ -80,6 +89,22 @@ if __name__ == "__main__":
         page.wait_for_timeout(800)
         name = args.name or f"m10_{args.to}"
         page.screenshot(path=str(args.out / f"{name}.png"))
+        if args.pick:
+            page.keyboard.press(f"Digit{args.pick}")
+            page.wait_for_timeout(1500)
+            for _ in range(10):
+                if not page.evaluate("!!document.querySelector('.speech:not([hidden])')"):
+                    break
+                page.keyboard.press("Enter"); page.wait_for_timeout(400)
+            page.wait_for_selector(".ending.talk", timeout=20000)
+            page.wait_for_timeout(1500)
+            ending = page.evaluate("window.__abyss.state().campaign.ending")
+            page.screenshot(path=str(args.out / f"m10_ending_{ending}.png"))
+            print("shot ending", ending)
+        if args.to == "lost":
+            page.wait_for_selector(".ending.talk", timeout=20000)
+            page.wait_for_timeout(1500)
+            page.screenshot(path=str(args.out / "m10_ending_lost.png"))
         print("shot", name, "|", page.evaluate("JSON.stringify(window.__abyss.state().campaign.storm || null).slice(0, 120)"))
         b.close()
     server.shutdown()

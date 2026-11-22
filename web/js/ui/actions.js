@@ -99,7 +99,7 @@ export function createActions(root, handlers) {
     /** Rebuild tags for the current state / target (fetches previews). */
     async update(st, target, busy, preview) {
       const my = ++seq;
-      bar.hidden = st.status !== "playing";
+      bar.hidden = st.status !== "playing" || st.campaign?.act === "act4";      // act IV: the deck, no moves (no previews)
       if (bar.hidden) return;
       hint.innerHTML = target
         ? t("hint_target", { ...place(st, target), p: pct(st.P[target[1]][target[0]]) })

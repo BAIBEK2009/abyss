@@ -805,3 +805,40 @@ body.cine .kalka-switch { opacity: 0; pointer-events: none; }
 .cvr-screen.on { opacity: 1; }
 .cvr-screen canvas { width: min(900px, 90vw); height: auto; }
 body:has(.cvr-screen.on) .speech { z-index: 56; }
+
+/* ---- B4 / C13: the ending — a newspaper page on the table, then Aigerim on the radio */
+.ending { position: fixed; inset: 0; z-index: 70; display: grid; place-items: center; background: radial-gradient(ellipse at 50% 40%, #3a2a1acc, #0b0805f2);
+  opacity: 0; transition: opacity 1s; overflow: auto; padding: 24px 16px; }
+.ending.on { opacity: 1; }
+.ending .paper { position: relative; width: min(860px, 94vw); padding: 26px 34px 22px; color: #1e1c19; rotate: -1.2deg;
+  background:
+    radial-gradient(ellipse at 20% 10%, #0000 60%, #6b55301c), radial-gradient(ellipse at 90% 90%, #0000 55%, #5a46281f),
+    repeating-linear-gradient(0deg, #0000 0 3px, #00000006 3px 4px), linear-gradient(#ece3cf, #e2d6bc);
+  box-shadow: 0 30px 70px #000c, 0 2px 0 #fff4 inset; transform: translateY(40px) scale(0.96); transition: transform 2.4s cubic-bezier(.2,.8,.2,1); }
+.ending.on .paper { transform: translateY(0) scale(1); animation: paper-drift 18s ease-in-out 2.4s infinite alternate; }
+@keyframes paper-drift { to { transform: translate(-6px, -4px) scale(1.012) rotate(0.3deg); } }
+.ending header { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.ending header h1 { font: 400 clamp(30px, 5vw, 54px)/1 "Prata", serif; margin: 0; letter-spacing: 0.02em; text-align: center; flex: 1; }
+.ending header small { font: 600 11px var(--print); text-transform: uppercase; letter-spacing: 0.08em; opacity: 0.7; max-width: 22%; }
+.ending .rule { height: 6px; margin: 10px 0 14px; border-top: 3px double #1e1c19; border-bottom: 1px solid #1e1c19; }
+.ending h2 { font: 800 clamp(20px, 3vw, 31px)/1.12 "Onest", sans-serif; text-transform: uppercase; margin: 0 0 16px; letter-spacing: -0.01em; }
+.ending .stamp { position: absolute; right: 26px; top: 92px; rotate: 9deg; padding: 4px 12px; border: 3px solid #c2412d; color: #c2412d; font: 800 20px var(--print);
+  text-transform: uppercase; opacity: 0.85; }
+.ending .cols { display: grid; grid-template-columns: 1fr 1.4fr 1fr; gap: 18px; align-items: start; }
+.ending .col i { display: block; height: 7px; margin: 0 0 7px; background: #1e1c1938; border-radius: 1px; }
+.ending .col .sub { display: block; height: 11px; width: 60%; margin: 12px 0 10px; background: #1e1c1966; }
+.ending figure { margin: 0; }
+.ending figure img, .ending figure .ph { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; display: block; filter: grayscale(1) contrast(1.15) sepia(0.25); background: #8a8170; }
+.ending figcaption { font: italic 500 12px/1.3 "Cormorant Garamond", serif; margin-top: 5px; }
+.ending .board { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; border-top: 1px solid #1e1c1966; padding-top: 10px; }
+.ending .board span { font: 600 11px var(--print); padding: 2px 8px; border: 1px solid #1e1c1955; border-radius: 2px; opacity: 0.45; }
+.ending .board span.on { opacity: 1; border-color: #c2412d; color: #8e2a1a; }
+.ending .radio-end { width: min(620px, 92vw); margin-top: 18px; padding: 14px 18px; border-radius: 6px; background: #12201acc; border: 1px solid #5fa77a66; color: #d8f2df;
+  opacity: 0; transform: translateY(10px); transition: opacity 0.8s, transform 0.8s; }
+.ending.talk .radio-end { opacity: 1; transform: none; }
+.radio-end small { font: 600 12px var(--print); color: #7fe0a0; text-transform: uppercase; letter-spacing: 0.06em; }
+.radio-end p { font: 500 17px/1.45 "PT Mono", monospace; margin: 6px 0 12px; }
+.end-btns { display: flex; gap: 10px; flex-wrap: wrap; }
+.end-btns button { border: 0; border-radius: 4px; padding: 9px 18px; cursor: pointer; font: 700 15px var(--print); background: linear-gradient(#f0d48e, #c69a4c); color: #2a1c0a; }
+.end-btns button + button { background: #ffffff1a; color: #f3e6c4; }
+@media (max-width: 700px) { .ending .cols { grid-template-columns: 1fr; } .ending .stamp { top: 70px; } }
