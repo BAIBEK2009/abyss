@@ -17,6 +17,7 @@ import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { canvasTexture, rng } from "../view.js";
 import { steelPanel, watertightDoor } from "./materials.js";
 import { lightPool } from "./lightpool.js";
+import { loadEnv } from "./envmap.js";
 import { createNerpa } from "./nerpa.js";
 import { t } from "../i18n.js";
 
@@ -321,6 +322,7 @@ function binocularsModel() {
 }
 
 // ------------------------------------------------------------------ the scene
+const ENV_I = 0.7;          // the night HDRI's strength (tuned by eye: a night, not a studio)
 export function createDeck(view, { lifeLabel = "" } = {}) {
   const scene = new THREE.Scene();
   scene.fog = new THREE.FogExp2(0x0b1626, 0.00042);
@@ -328,6 +330,8 @@ export function createDeck(view, { lifeLabel = "" } = {}) {
     const pm = new THREE.PMREMGenerator(view.renderer);
     scene.environment = pm.fromScene(new RoomEnvironment(), 0.04).texture;
     scene.environmentIntensity = 0.22;
+    // ...until the real night sky (HDRI) is loaded: then steel, paint and glass reflect the sky
+    loadEnv(view.renderer, "night").then((tex) => { if (tex) { scene.environment = tex; scene.environmentIntensity = ENV_I; } });
   }
   const moonDir = new THREE.Vector3(-0.38, 0.33, 0.86).normalize();     // south-south-west, low: the moon path runs to the crash site
   const sky = createSky(moonDir);
