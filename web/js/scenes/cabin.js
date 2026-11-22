@@ -312,6 +312,9 @@ export function createCabin(scene) {
   const things = {
     table: { show: [], hit: proxy(28, 3, 22.6, -0.5, 0, -0.5), stand: [0.0, 1.5], look: [0.0, 0.85, 0.2] },
     stairs_up: { show: [stairs], hit: proxy(11, 22, 4, 19, FLOOR_Y + 11, Z1 - 2.5), stand: [1.58, 1.95], look: [1.58, 1.4, 2.5] },
+    radio: { show: [], hit: proxy(8, 7, 5, X0 + 6, FLOOR_Y + 11, Z0 + 3.5), stand: [-1.55, -2.35], look: [-2.0, 0.95, -2.9] },
+    porthole_l: { show: [], hit: proxy(8, 8, 1.5, -13, 6.5, Z0 + 0.6), stand: [-1.08, -2.5], look: [-1.08, 1.4, -3.1] },
+    porthole_r: { show: [], hit: proxy(8, 8, 1.5, 13, 6.5, Z0 + 0.6), stand: [1.08, -2.5], look: [1.08, 1.4, -3.1] },
   };
 
   return {

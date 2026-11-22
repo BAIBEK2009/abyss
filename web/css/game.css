@@ -733,6 +733,12 @@ body.fp .fp-hint:not([hidden]) { display: block; position: fixed; left: 50%; top
   padding: 10px 18px; border-radius: 6px; background: rgba(14, 12, 9, 0.8); border: 1px solid #c3944766; color: #f3e6c4;
   font: 600 15.5px/1.35 var(--print); text-align: center; pointer-events: none; }
 .fp-hint.in { animation: fp-hint 5.6s ease both; }
+.fp-note { display: none; }
+body.fp .fp-note:not([hidden]) { display: block; position: fixed; left: 50%; top: calc(50% + 80px); translate: -50% 0; z-index: 31; max-width: min(560px, 90vw);
+  padding: 9px 16px; border-radius: 6px; background: rgba(14, 12, 9, 0.84); border-left: 3px solid #ffcf5a; color: #f6ead0;
+  font: 500 15px/1.4 var(--print); text-align: center; pointer-events: none; }
+.fp-note.in { animation: fp-note 0.25s ease both; }
+@keyframes fp-note { from { opacity: 0; translate: -50% 6px; } }
 @keyframes fp-hint { 0% { opacity: 0; translate: -50% -8px; } 8%, 88% { opacity: 1; translate: -50% 0; } 100% { opacity: 0; } }
 /* the binoculars: two overlapping circles, the rest black */
 .bino { position: fixed; inset: 0; z-index: 28; pointer-events: none; }

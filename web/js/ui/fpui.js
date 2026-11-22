@@ -18,7 +18,10 @@ export function createFpUi(view, { onUse } = {}) {
   marker.hidden = true;
   const hint = el("div", "fp-hint");
   hint.hidden = true;
-  document.body.append(dot, prompt, marker, hint);
+  const notice = el("div", "fp-note");       // what E did when it cannot do the thing yet (A2: never "nothing happened")
+  notice.hidden = true;
+  document.body.append(dot, prompt, marker, hint, notice);
+  let noteT = 0;
   const arrow = marker.querySelector(".fp-arrow"), dist = marker.querySelector(".fp-dist");
 
   let target = null;              // { world: () => Vector3 }
@@ -76,5 +79,12 @@ export function createFpUi(view, { onUse } = {}) {
       dot.classList.toggle("on", !!text);
     },
     hints,
+    /** A short line under the crosshair for 3 s: why this cannot be done now / what is there. */
+    note(text, ms = 3200) {
+      notice.textContent = text; notice.hidden = false;
+      notice.classList.remove("in"); void notice.offsetWidth; notice.classList.add("in");
+      const id = ++noteT;
+      setTimeout(() => { if (id === noteT) notice.hidden = true; }, ms);
+    },
   };
 }

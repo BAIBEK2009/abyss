@@ -289,5 +289,18 @@
  "fp_metres": "{m} m",
  "bino_zoom": "Mouse wheel — zoom",
  "sign_exit": "ШЫҒУ / ВЫХОД",
- "cine_skip": "Space — skip the descent"
+ "cine_skip": "Space — skip the descent",
+ "fp_radio": "VHF radio",
+ "fp_radio_idle": "Channel 16 is quiet. If anyone calls, the radio will crackle and blink — Aigerim will call you herself.",
+ "fp_need_radio": "Answer the radio call first — it is crackling on the bridge.",
+ "fp_need_bino": "Look south through the binoculars first — they are on the bridge wing.",
+ "fp_need_table": "First go to the chart table in the cabin: Dana will show you where to dive.",
+ "fp_nerpa_busy": "«Nerpa» cannot go down right now: wait for the move to finish.",
+ "fp_game_over": "The search is over — there will be no more dives.",
+ "fp_workshop": "Murat-aga's workshop. An upgrade for «Nerpa» can be picked between acts.",
+ "fp_board_empty": "The evidence board is empty for now: finds from the seabed will go up here.",
+ "fp_porthole_night": "Night. A calm sea, the moon over the water, the lights of the boats to the south.",
+ "fp_porthole_storm": "A storm. Waves hit the side, water runs down the glass.",
+ "fp_porthole_fog": "Fog. Nothing can be seen beyond twenty metres.",
+ "fp_porthole_dawn": "Dawn. The sea is pink, «Poseidon-2» lies close by."
 }

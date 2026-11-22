@@ -43,21 +43,37 @@ export function createWalk(ctx) {
   addEventListener("abyss:menu-closed", () => { if (fp.active && matchMedia("(pointer: fine)").matches) fp.lock(); });
 
   // ---------------------------------------------------------------- things to use
+  // Every thing always has its "[E] ..." (A2): when it cannot be used yet, E says why instead of nothing.
+  const why = (key) => () => ui.note(t(key));
+  const gate = (ok, use, no) => () => (ok() ? use() : no());
   function deckThings() {
     const o = deck.objects, P = prompts();
+    const radioDue = () => prologue() && !tasks()[0];
     return [
-      { id: "radio", ...o.radio, prompt: () => (prologue() && !tasks()[0] ? P.radio : null), use: answerRadio },
-      { id: "binoculars", ...o.binoculars, prompt: () => (!prologue() || tasks()[0] ? P.binoculars : null), use: takeBinoculars },
-      { id: "stairs", ...o.stairs, prompt: () => (!prologue() || tasks()[1] ? P.stairs : null), use: () => ctx.flow().downstairs() },
-      { id: "nerpa", ...o.nerpa, prompt: () => (canDive() ? P.nerpa : null), use: () => ctx.onDive() },
+      { id: "radio", ...o.radio, prompt: () => (radioDue() ? P.radio : t("fp_radio")), use: gate(radioDue, answerRadio, why("fp_radio_idle")) },
+      { id: "binoculars", ...o.binoculars, prompt: () => P.binoculars, use: gate(() => !radioDue(), takeBinoculars, why("fp_need_radio")) },
+      { id: "stairs", ...o.stairs, prompt: () => P.stairs, use: gate(() => !prologue() || tasks()[1], () => ctx.flow().downstairs(), why(tasks()[0] ? "fp_need_bino" : "fp_need_radio")) },
+      { id: "nerpa", ...o.nerpa, prompt: () => P.nerpa, use: gate(canDive, () => ctx.onDive(), () => ui.note(t(noDiveWhy()))) },
+      { id: "workshop", ...o.workshop, prompt: () => P.workshop, use: () => (ctx.onWorkshop ? ctx.onWorkshop() : ui.note(t("fp_workshop"))) },
     ];
   }
   function cabinThings() {
     const o = cabin.things, P = prompts();
-    return [
-      { id: "table", ...o.table, prompt: () => (!prologue() || tasks()[2] ? P.table : null), use: () => ctx.flow().sitAtTable() },
-      { id: "stairs_up", ...o.stairs_up, prompt: () => (!prologue() || tasks()[2] ? P.stairs_up : null), use: () => upstairs() },
+    const list = [
+      { id: "table", ...o.table, prompt: () => P.table, use: () => ctx.flow().sitAtTable() },
+      { id: "stairs_up", ...o.stairs_up, prompt: () => P.stairs_up, use: () => upstairs() },
     ];
+    if (o.radio) list.push({ id: "radio_cabin", ...o.radio, prompt: () => t("fp_radio"), use: () => (ctx.onRadio ? ctx.onRadio() : ui.note(t("fp_radio_idle"))) });
+    if (o.board) list.push({ id: "board", ...o.board, prompt: () => P.board, use: () => (ctx.onBoard ? ctx.onBoard() : ui.note(t("fp_board_empty"))) });
+    for (const k of ["porthole_l", "porthole_r"]) if (o[k]) list.push({ id: k, ...o[k], prompt: () => P.porthole, use: () => ui.note(t(`fp_porthole_${weatherNow()}`), 4200) });
+    return list;
+  }
+  const weatherNow = () => ({ prologue: "night", act1: "night", act2: "storm", act3: "fog", act4: "dawn" }[camp()?.act] ?? "night");
+  function noDiveWhy() {
+    const st = ctx.getState();
+    if (prologue()) return "fp_need_table";
+    if (st.status !== "playing") return "fp_game_over";
+    return "fp_nerpa_busy";
   }
   function canDive() {
     const st = ctx.getState();
@@ -183,7 +199,8 @@ export function createWalk(ctx) {
     fp.lookOnly = true;
     view.outline([]); ui.setPrompt(null);
     zoom = 4; seenT = 0;
-    stage = prologue() && !tasks()[1] ? 0 : 3;
+    // put down half-way: the lines go on from where they stopped (stage is kept), the tick comes after the last one
+    if (!prologue() || tasks()[1]) stage = 3;
     if (!bino) {
       bino = el("div", "bino", `<svg class="bino-svg" aria-hidden="true"></svg>
         <div class="bino-top"></div><div class="bino-bottom"></div>
