@@ -131,13 +131,13 @@ function pennantTex() {
  * Builds everything into `group`. room = {X0, X1, Z0, Z1, FLOOR_Y, CEIL_Y}. Returns {colliders (metres), lamp}.
  */
 /** Static meshes of a group, merged by material (one draw call per material, shadows too). */
-export function mergeByMaterial(group) {
+export function mergeByMaterial(group, { shallow = false } = {}) {
   group.updateMatrixWorld(true);
   const inv = new THREE.Matrix4().copy(group.matrixWorld).invert();
   const buckets = new Map(), drop = [];
   const skip = new Set();
   group.traverse((o) => { if (o.userData.noMerge) o.traverse((c) => skip.add(c)); });
-  group.traverse((o) => {
+  (shallow ? (fn) => group.children.slice().forEach(fn) : (fn) => group.traverse(fn))((o) => {
     if (skip.has(o) || !o.isMesh || o.isInstancedMesh || Array.isArray(o.material) || o.material.transparent) return;
     const g = (o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone());
     for (const k of Object.keys(g.attributes)) if (!["position", "normal", "uv"].includes(k)) g.deleteAttribute(k);

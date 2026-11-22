@@ -19,10 +19,16 @@ export const STATES = {
   dawn: { amp: 0.85, foam: 0, cloud: 0.35, rain: 0, wind: 0.2, roll: 0.9, fogD: 0.0007, fogCol: C(0x9a7a6a), moon: 0, stars: 0,
           env: 1.4, envName: "night", wet: 0.1, lightning: 0, sun: 1, haze: 0.25,
           sat: 1.12, con: 1.04, shR: 0.022, shG: -0.01, shB: 0.042, hiR: 0.065, hiG: 0.025, hiB: -0.045 },
+  // act I (C5): morning — the sun 15 degrees up, a clear pale-blue sky, golden light
+  morning: { amp: 0.95, foam: 0, cloud: 0.32, rain: 0, wind: 0.25, roll: 1, fogD: 0.00035, fogCol: C(0xa9bccb), moon: 0, stars: 0,
+             env: 1.7, envName: "night", wet: 0, lightning: 0, sun: 1, haze: 0.1, day: 1,
+             sat: 1.08, con: 1.03, shR: -0.005, shG: 0.008, shB: 0.025, hiR: 0.045, hiG: 0.02, hiB: -0.03 },
 };
-export const ACT_WEATHER = { prologue: "calm", act1: "calm", act2: "storm", act3: "fog", act4: "dawn" };
+for (const st of Object.values(STATES)) st.day ??= 0;
+export const ACT_WEATHER = { prologue: "calm", act1: "morning", act2: "storm", act3: "fog", act4: "dawn" };
 
-const forced = (() => { try { return new URLSearchParams(location.search).get("weather"); } catch { return null; } })();
+// ?weather= or ?time=night|morning|storm|fog|dawn (C5: for checking and screenshots)
+const forced = (() => { try { const q = new URLSearchParams(location.search); const v = q.get("weather") || q.get("time"); return v === "night" ? "calm" : v; } catch { return null; } })();
 export const W = { name: "calm", flash: 0 };
 for (const [k, v] of Object.entries(STATES.calm)) W[k] = v instanceof THREE.Color ? v.clone() : v;
 let target = STATES.calm, rate = 0.3, nextBolt = 8, thunderAt = -1;
@@ -33,7 +39,7 @@ function snap() {
 }
 
 /** Move to a state over ~sec seconds (no-op if already there; ?weather= wins over the story). */
-export function setWeather(name, sec = 6) {
+export function setWeather(name, sec = 30) {          // the light changes over 30 s when the act changes
   if (forced && STATES[forced]) name = forced;
   if (!STATES[name] || name === W.name) return;
   W.name = name; target = STATES[name]; rate = 3 / Math.max(0.1, sec);

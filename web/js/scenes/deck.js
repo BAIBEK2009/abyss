@@ -22,6 +22,7 @@ import { lifeboat } from "./lifeboat.js";
 import { W } from "../weather.js";
 import { createRain } from "./rain.js";
 import { createNerpa } from "./nerpa.js";
+import { mergeByMaterial } from "./cabin_props.js";
 import { t } from "../i18n.js";
 
 const std = (o) => new THREE.MeshStandardMaterial(o);
@@ -155,7 +156,7 @@ function createSea(moonDir) {
   }).join("\n");
   const mat = new THREE.ShaderMaterial({
     uniforms: { uTime: { value: 0 }, uMoon: { value: moonDir.clone() }, uFogCol: { value: new THREE.Color(0x0b1626) }, uPools: { value: [0, 1, 2, 3].map(() => new THREE.Vector4()) },
-                uAmp: { value: 1 }, uFoam: { value: 0 }, uCloud: { value: 0 }, uMoonVis: { value: 1 }, uFlash: { value: 0 }, uSun: { value: 0 }, uFogD: { value: 0 },
+                uAmp: { value: 1 }, uFoam: { value: 0 }, uCloud: { value: 0 }, uMoonVis: { value: 1 }, uFlash: { value: 0 }, uSun: { value: 0 }, uFogD: { value: 0 }, uDay: { value: 0 },
                 uHull: { value: new THREE.Vector4(0, 0, 5.2, 0) }, uHullZ: { value: new THREE.Vector2(STERN, BOW) } },
     vertexShader: /* glsl */`
       uniform float uTime; uniform float uAmp; varying vec3 vW; varying float vH; varying vec3 vN; varying float vCr;
@@ -170,7 +171,7 @@ function createSea(moonDir) {
       }`,
     fragmentShader: /* glsl */`
       uniform float uTime; uniform vec3 uMoon; uniform vec3 uFogCol; uniform vec4 uHull; uniform vec2 uHullZ; uniform vec4 uPools[4];
-      uniform float uAmp; uniform float uFoam; uniform float uCloud; uniform float uMoonVis; uniform float uFlash; uniform float uSun; uniform float uFogD;
+      uniform float uAmp; uniform float uFoam; uniform float uCloud; uniform float uMoonVis; uniform float uFlash; uniform float uSun; uniform float uFogD; uniform float uDay;
       varying vec3 vW; varying float vH; varying vec3 vN; varying float vCr;
       float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
       float vn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
@@ -193,7 +194,8 @@ function createSea(moonDir) {
         float lightK = 0.18 + 0.5 * uSun + 0.25 * uMoonVis;
         float thin = smoothstep(0.1, 0.75, vCr) * smoothstep(-0.1, 0.6, vH);
         vec3 deep = mix(vec3(0.043, 0.165, 0.227), vec3(0.118, 0.353, 0.431), thin) * lightK * 0.35;
-        vec3 col = mix(deep, sky, fres);
+        sky = mix(sky, mix(vec3(0.6, 0.68, 0.74), vec3(0.3, 0.48, 0.72), max(r.y, 0.0)) + vec3(1.0, 0.85, 0.6) * pow(max(dot(r, normalize(vec3(0.9, 0.27, -0.3))), 0.0), 400.0) * 12.0, uDay);
+        vec3 col = mix(deep * (1.0 + 4.0 * uDay), sky, fres);
         float spec = pow(max(dot(r, uMoon), 0.0), 220.0);
         float glint = pow(max(dot(r, uMoon), 0.0), 28.0);
         col += vec3(0.85, 0.9, 1.0) * (spec * 6.0 + glint * 0.18) * uMoonVis;
@@ -245,11 +247,11 @@ function createSky(moonDir) {
   const dome = new THREE.Mesh(new THREE.SphereGeometry(6000, 48, 24), new THREE.ShaderMaterial({
     side: THREE.BackSide, depthWrite: false, fog: false,
     uniforms: { uMoon: { value: moonDir }, uTime: { value: 0 }, uCloud: { value: 0.1 }, uFlash: { value: 0 }, uMoonVis: { value: 1 },
-                uFogCol: { value: new THREE.Color(0x0b1626) }, uSun: { value: 0 }, uBolt: { value: new THREE.Vector2(0.4, 0.2) }, uHaze: { value: 0 } },
+                uFogCol: { value: new THREE.Color(0x0b1626) }, uSun: { value: 0 }, uBolt: { value: new THREE.Vector2(0.4, 0.2) }, uHaze: { value: 0 }, uDay: { value: 0 } },
     vertexShader: "varying vec3 vD; void main() { vD = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }",
     fragmentShader: /* glsl */`
       uniform vec3 uMoon; uniform float uTime; uniform float uCloud; uniform float uFlash; uniform float uMoonVis; uniform vec3 uFogCol;
-      uniform float uSun; uniform vec2 uBolt; uniform float uHaze; varying vec3 vD;
+      uniform float uSun; uniform vec2 uBolt; uniform float uHaze; uniform float uDay; varying vec3 vD;
       float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
       float vn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
         return mix(mix(hash(i), hash(i + vec2(1, 0)), f.x), mix(hash(i + vec2(0, 1)), hash(i + vec2(1, 1)), f.x), f.y); }
@@ -259,15 +261,24 @@ function createSky(moonDir) {
         vec3 col = mix(vec3(0.045, 0.075, 0.12), vec3(0.008, 0.016, 0.04), pow(up, 0.45));
         col += vec3(0.05, 0.065, 0.09) * pow(max(dot(vD, uMoon), 0.0), 18.0) * uMoonVis;
         // dawn: a warm band at the horizon towards the sun (east), rising into a pale sky
-        vec3 sunD = normalize(vec3(0.9, 0.06, -0.3));
+        vec3 sunD = normalize(vec3(0.9, mix(0.06, 0.27, uDay), -0.3));
         float toSun = max(dot(normalize(vec3(vD.x, 0.0, vD.z)), normalize(vec3(sunD.x, 0.0, sunD.z))), 0.0);
         vec3 dawn = mix(vec3(0.95, 0.52, 0.28) * (0.55 + 0.9 * pow(toSun, 3.0)), vec3(0.32, 0.42, 0.6), smoothstep(0.0, 0.45, up));
         dawn += vec3(1.0, 0.75, 0.45) * pow(max(dot(vD, sunD), 0.0), 60.0) * 2.5;
+        // morning: a clear sky, deep blue overhead, pale and warm at the horizon, a white-gold sun with a halo
+        vec3 day = mix(vec3(0.6, 0.67, 0.72), vec3(0.2, 0.38, 0.66), smoothstep(0.0, 0.5, up));
+        day += vec3(1.0, 0.86, 0.6) * (pow(max(dot(vD, sunD), 0.0), 900.0) * 30.0 + pow(max(dot(vD, sunD), 0.0), 12.0) * 0.45);
+        dawn = mix(dawn, day, uDay);
         col = mix(col, dawn, uSun);
         // clouds: a moving layer low over the sea, dense and dark in the storm; lightning lights them from inside
         vec2 cp = vD.xz / (vD.y + 0.12) * 1.6 + vec2(uTime * 0.012, uTime * 0.004);
         float n = fbm(cp), cov = smoothstep(1.0 - uCloud * 0.95, 1.05 - uCloud * 0.45, n + uCloud * 0.35);
-        vec3 cloud = mix(uFogCol * 1.2, mix(vec3(0.62, 0.66, 0.74), vec3(0.95, 0.72, 0.55), uSun) * (0.12 + 0.25 * uSun + 0.08 * (1.0 - uCloud)), n);
+        // a second, higher and slower layer (parallax): thin streaks, lit by the sun's side
+        vec2 cp2 = vD.xz / (vD.y + 0.3) * 0.9 + vec2(uTime * 0.004, -uTime * 0.002);
+        float n2 = fbm(cp2 * vec2(1.0, 3.0)), cov2 = smoothstep(0.62, 0.9, n2) * (0.35 + 0.4 * uCloud) * smoothstep(0.02, 0.2, vD.y);
+        col = mix(col, mix(uFogCol * 1.3, vec3(1.0, 0.9, 0.78) * (0.3 + 0.7 * uSun), 0.4 + 0.5 * uSun) * (0.5 + 0.5 * max(dot(vD, sunD), 0.0)), cov2 * (1.0 - uCloud * 0.6));
+        vec3 cloud = mix(uFogCol * 1.2, mix(vec3(0.62, 0.66, 0.74), mix(vec3(0.95, 0.72, 0.55), vec3(1.0, 0.97, 0.92), uDay), uSun) * (0.12 + 0.25 * uSun + 0.55 * uDay + 0.08 * (1.0 - uCloud)), n);
+        cloud += vec3(1.0, 0.85, 0.6) * pow(max(dot(vD, sunD), 0.0), 6.0) * 0.5 * uSun * (1.0 - n);      // edges lit by the sun
         float lit = uFlash * (0.35 + 1.6 * exp(-dot(vD.xz - uBolt, vD.xz - uBolt) * 6.0)) * (0.5 + n);
         cloud += vec3(0.75, 0.8, 1.0) * lit;
         col = mix(col, cloud, cov * smoothstep(-0.05, 0.08, vD.y));
@@ -1164,6 +1175,14 @@ export function createDeck(view, { lifeLabel = "" } = {}) {
     workshop: { show: [cont], hit: proxy(2.6, 2.7, 6.2, -3.08, 1.3, -6.0), stand: [-1.2, -9.6], look: [-3.08, 1.3, -9.0] },
   };
 
+  // the static wheelhouse: one mesh per material (draw calls); what can be outlined or moves stays as it is
+  for (const o of Object.values(objects)) for (const sh of o.show) {
+    sh.userData.noMerge = true;
+    if (sh !== nerpa && sh !== cradle) mergeByMaterial(sh);          // merged inside itself: the outline still finds it
+  }
+  mergeByMaterial(house);
+  mergeByMaterial(ship, { shallow: true });                           // the rails, posts, bollards, lamps standing on the deck
+
   // ---------------- motion: the roll of the ship and everything that lives
   const tmp = new THREE.Vector3();
   let roll = 0, pitch = 0, heave = 0;
@@ -1179,14 +1198,14 @@ export function createDeck(view, { lifeLabel = "" } = {}) {
   // the weather (weather.js): rain round the camera, none inside the wheelhouse
   const rain = createRain({ shelter: { min: new THREE.Vector3(-HX - 0.1, -0.5, HZ0 - 0.15), max: new THREE.Vector3(HX + 0.1, HH + 0.4, HZ1 + 0.1) } });
   scene.add(rain.object);
-  const MOON_C = new THREE.Color(0x9db4ff), SUN_C = new THREE.Color(0xffa860), SUN_DIR = new THREE.Vector3(0.9, 0.12, -0.3).normalize();
+  const MOON_C = new THREE.Color(0x9db4ff), SUN_C = new THREE.Color(0xffa860), SUN_DIR = new THREE.Vector3(0.9, 0.12, -0.3).normalize(), DAY_C = new THREE.Color(0xffe2b8);
   const HEMI_SKY = new THREE.Color(0x3c4656), HEMI_DAWN = new THREE.Color(0x8a7a8a), lampList = [];
   let envName = "night";
   function applyWeather(time) {
     const su = sea.material.uniforms, ku = sky.userData.dome.material.uniforms;
     SEA.amp = W.amp; su.uAmp.value = W.amp; su.uFoam.value = W.foam; su.uCloud.value = W.cloud; su.uMoonVis.value = W.moon;
-    su.uFlash.value = W.flash; su.uSun.value = W.sun; su.uFogCol.value.copy(W.fogCol); su.uFogD.value = W.fogD * 0.6;
-    ku.uTime.value = time; ku.uCloud.value = W.cloud; ku.uFlash.value = W.flash; ku.uMoonVis.value = W.moon; ku.uSun.value = W.sun; ku.uFogCol.value.copy(W.fogCol); ku.uHaze.value = W.haze * 0.85;
+    su.uFlash.value = W.flash; su.uSun.value = W.sun; su.uDay.value = W.day; su.uFogCol.value.copy(W.fogCol); su.uFogD.value = W.fogD * 0.6;
+    ku.uTime.value = time; ku.uCloud.value = W.cloud; ku.uFlash.value = W.flash; ku.uMoonVis.value = W.moon; ku.uSun.value = W.sun; ku.uDay.value = W.day; ku.uFogCol.value.copy(W.fogCol); ku.uHaze.value = W.haze * 0.85;
     if (W.flash > 0.99) ku.uBolt.value.set((Math.random() - 0.5) * 1.6, (Math.random() - 0.2) * 1.6);
     sky.userData.stars.material.opacity = W.stars * (1 - W.cloud * 0.8);
     sky.userData.moon.material.opacity = W.moon; sky.userData.halo.material.opacity = W.moon;
@@ -1194,11 +1213,12 @@ export function createDeck(view, { lifeLabel = "" } = {}) {
     const hz = 0.55 + 0.9 * W.haze + 0.35 * W.rain;
     for (const h of HALOS) if (h.s !== sky.userData.halo) { h.s.scale.setScalar(h.size * hz); h.s.material.opacity = Math.min(1, 0.65 + 0.35 * hz); }
     scene.fog.color.copy(W.fogCol); scene.fog.density = W.fogD;
-    moonLight.color.copy(MOON_C).lerp(SUN_C, W.sun);
+    SUN_DIR.set(0.9, 0.12 + 0.3 * W.day, -0.3).normalize();                       // the morning sun stands higher (C5)
+    moonLight.color.copy(MOON_C).lerp(SUN_C, W.sun).lerp(DAY_C, W.day);
     moonLight.position.copy(moonDir).lerp(SUN_DIR, W.sun).normalize().multiplyScalar(100);
-    moonLight.intensity = 0.65 * W.moon + 2.6 * W.sun + 0.12 * (1 - W.moon) + 7 * W.flash;
+    moonLight.intensity = 0.65 * W.moon + 2.6 * W.sun + 1.8 * W.day + 0.12 * (1 - W.moon) + 7 * W.flash;
     hemi.color.copy(HEMI_SKY).lerp(HEMI_DAWN, W.sun);
-    hemi.intensity = 0.42 + 0.5 * W.sun + 2.5 * W.flash;
+    hemi.intensity = 0.42 + 0.5 * W.sun + 0.9 * W.day + 2.5 * W.flash;
     scene.environmentIntensity = ENV_I * W.env * (1 + W.flash * 2);
     if (W.envName !== envName) { envName = W.envName; loadEnv(view.renderer, envName).then((t) => { if (t && envName === W.envName) scene.environment = t; }); }
     deckMat.roughness = 1.05 - 0.78 * W.wet;                        // wet steel: the lamps shine in it
