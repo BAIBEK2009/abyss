@@ -1147,7 +1147,7 @@ export function createDive(view) {
     cockpit.msg(D.task ?? t("dv_bottom"), 3600);              // a story dive: its task from the briefing
     mode = "dive"; D.t0 = T; cockpit.live(true);
     D.onEvent("start"); cockpit.pulseFinder();            // Dana: "the needle of the finder — swim where it points"
-    setTimeout(() => cockpit.hideHelp(), 9000);
+    setTimeout(() => cockpit.hideHelp(), 15000);
   }
 
   function update(dt) {

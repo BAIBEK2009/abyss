@@ -44,7 +44,7 @@ function finderDial() {
     ${[0, 1, 2, 3, 4, 5].map((i) => { const a = (i * 60 + 30) * Math.PI / 180; return `<circle cx="${80 + Math.cos(a) * 75}" cy="${80 + Math.sin(a) * 75}" r="2.2" fill="#3b2a10"/><circle cx="${80 + Math.cos(a) * 75 - 0.6}" cy="${80 + Math.sin(a) * 75 - 0.6}" r="1" fill="#f0d898"/>`; }).join("")}
     <circle cx="80" cy="80" r="68" fill="url(#fdf)"/>${ticks}
     <path d="M80 13l-6 10h12z" fill="#ffb35c"/>
-    <text x="80" y="36" text-anchor="middle" font-family="PT Mono" font-size="9" fill="#d9cfa8">${t("ck_finder_bow")}</text>
+    <text x="80" y="36" text-anchor="middle" font-family="PT Mono" font-size="8" fill="#d9cfa8">${t("ck_finder_bow")}</text>
     <path d="M80 66c5 0 7 5 7 12v14c0 3-3 5-7 5s-7-2-7-5V78c0-7 2-12 7-12z" fill="none" stroke="#6f8f86" stroke-width="1.4" opacity=".7"/>
     <g class="ck-needle"><path d="M80 18 L85.5 80 L80 92 L74.5 80Z" fill="#ff6a3a"/><path d="M80 18 L85.5 80 L80 80Z" fill="#ffb07a"/>
       <path d="M80 92 L83 112 L77 112Z" fill="#8a9aa0"/></g>
@@ -75,10 +75,10 @@ export function createCockpit(root, handlers) {
     <div class="ck-msg"></div>
     <div class="ck-prompt"><span class="pr"></span><b>${t("ck_grab")}</b></div>
     <div class="ck-help"><h5>${t("ck_help_title")}</h5>
-      <div><b>W</b><b>S</b> ${t("ck_help_ws")}</div><div><b>A</b><b>D</b> ${t("ck_help_ad")}</div>
+      <p>${t("ck_help_finder")}</p><p>${t("ck_help_trail")}</p><p>${t("ck_help_map")}</p>
+      <div class="ck-keys"><div><b>W</b><b>S</b> ${t("ck_help_ws")}</div><div><b>A</b><b>D</b> ${t("ck_help_ad")}</div>
       <div><b>${t("ck_mouse")}</b> ${t("ck_help_mouse")}</div><div><b>${t("ck_space")}</b> ${t("ck_help_space")}</div>
-      <div><b>E</b> ${t("ck_help_e")}</div><div><b>Q</b> ${t("ck_help_q")}</div>
-      <div class="ck-help-note">${t("ck_help_note")}</div></div>
+      <div><b>E</b> ${t("ck_help_e")}</div><div><b>Q</b> ${t("ck_help_q")}</div></div></div>
     <div class="ck-touch">
       <button data-k="l" aria-label="${t("ck_left")}">◀</button><button data-k="f" aria-label="${t("ck_fwd")}">▲</button><button data-k="r" aria-label="${t("ck_right")}">▶</button>
       <button data-k="sp">${t("ck_sonar_btn")}</button><button data-k="b" aria-label="${t("ck_back")}">▼</button><button data-k="e">${t("ck_grab_btn")}</button>
@@ -134,6 +134,16 @@ export function createCockpit(root, handlers) {
     $(".ck-tape").innerHTML = tp;
   }
   addEventListener("resize", () => { if (ck.classList.contains("on")) layout(); });
+  // while the help card is up, the right column (O2, the sonar map) steps down below it if they would overlap
+  let helpUp = false;
+  function fitHelp() {
+    const col = $(".ck-col.r"), help = $(".ck-help");
+    if (!helpUp || getComputedStyle(help).display === "none") { col.style.marginTop = "0px"; return; }
+    const shift = parseFloat(getComputedStyle(col).marginTop) || 0, h = help.getBoundingClientRect(), c = col.getBoundingClientRect();
+    const top = c.top - shift, bottom = c.bottom - shift;
+    col.style.marginTop = `${Math.max(0, Math.min(h.bottom + 12 - top, innerHeight - 14 - bottom))}px`;
+  }
+  new ResizeObserver(fitHelp).observe($(".ck-help"));
 
   let ping = { x: 0, z: 0, t: -9 };
   // the needle: a spring towards the bearing (deg, + = right of the bow), with overshoot
@@ -145,10 +155,13 @@ export function createCockpit(root, handlers) {
     get radius() { return R; },
     /** Where the finder's needle points now (deg from the bow, + = right). */
     get bearing() { return Math.round((((fd.a % 360) + 540) % 360) - 180); },
-    show() { layout(); ck.classList.add("on"); $(".ck-help").style.opacity = 1; },
+    show() {
+      layout(); ck.classList.add("on"); $(".ck-help").style.opacity = 1; helpUp = true;
+      fitHelp();
+    },
     hide() { ck.classList.remove("on", "live", "low"); },
     live(on) { ck.classList.toggle("live", on); },
-    hideHelp() { $(".ck-help").style.opacity = 0; },
+    hideHelp() { $(".ck-help").style.opacity = 0; helpUp = false; fitHelp(); },
     /** A subtitle for ms; returns its id (a newer one replaces it). */
     msg(text, ms = 3200) {
       const m = $(".ck-msg"); m.textContent = text; m.classList.add("on");

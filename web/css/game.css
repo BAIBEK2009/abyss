@@ -478,7 +478,7 @@ body.standing #overlay { opacity: 0; }
 .ck-tape span { display: inline-block; width: 40px; text-align: center; }
 .ck-col { position: absolute; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; gap: 14px; align-items: center; }
 .ck-col.l { left: max(18px, calc(50% - var(--R) - 236px)); }
-.ck-col.r { right: max(18px, calc(50% - var(--R) - 236px)); }
+.ck-col.r { right: max(18px, calc(50% - var(--R) - 236px)); transition: margin-top 0.8s ease; }
 .ck-lbl { font: 12px var(--mono); color: #aab4b8; letter-spacing: 0.04em; text-align: center; }
 .ck-hint { max-width: 190px; line-height: 1.5; }
 .ck-nixie { font: 34px/1 var(--mono); color: #ffb35c; text-shadow: 0 0 8px #ff8a2a, 0 0 20px #ff6a00aa; background: #120a05; border: 2px solid #3b4044; border-radius: 8px; padding: 8px 12px; box-shadow: inset 0 0 14px #000; }
@@ -511,11 +511,13 @@ body.standing #overlay { opacity: 0; }
 .cockpit.live .ck-surf { display: flex; }
 .ck-surf b { font: 700 12px var(--mono); color: #f2b632; background: #2a2f33; border-radius: 4px; padding: 2px 6px; }
 .ck-surf:hover { border-color: #f2b632; background: rgba(20, 30, 34, 0.95); }
-.ck-help { position: absolute; left: 18px; top: 18px; width: 300px; background: rgba(10, 12, 14, 0.88); border: 1px solid #4a5156; border-radius: 10px; padding: 12px 14px;
-  font: 13.5px/1.55 Onest, sans-serif; color: #d7e2e5; transition: opacity 0.6s; }
-.ck-help b { font: 700 13px var(--mono); color: #f2b632; background: #2a2f33; border-radius: 4px; padding: 1px 6px; margin-right: 4px; }
-.ck-help h5 { margin: 0 0 6px; font: italic 700 20px var(--serif); color: #ecc983; }
-.ck-help-note { margin-top: 6px; color: #9fb3b8; }
+.ck-help { position: absolute; z-index: 3; right: 18px; top: 14px; width: min(520px, 37vw); background: rgba(10, 12, 14, 0.9); border: 1px solid #4a5156; border-radius: 10px; padding: 10px 14px 10px;
+  font: 13px/1.45 Onest, sans-serif; color: #d7e2e5; transition: opacity 0.6s; }
+.ck-help h5 { margin: 0 0 4px; font: italic 700 19px var(--serif); color: #ecc983; }
+.ck-help p { margin: 0 0 5px; }
+.ck-help p b { color: #f2d48a; font-weight: 700; }
+.ck-keys { display: grid; grid-template-columns: 1fr 1fr; gap: 3px 10px; margin-top: 7px; padding-top: 7px; border-top: 1px solid #4a515688; font-size: 12.5px; }
+.ck-keys b { font: 700 12px var(--mono); color: #f2b632; background: #2a2f33; border-radius: 4px; padding: 1px 5px; margin-right: 3px; }
 .cockpit.low .ck-panel { animation: ck-low 1s infinite; }
 @keyframes ck-low { 50% { box-shadow: inset 0 0 160px 40px rgba(170, 20, 10, 0.45); } }
 .ck-touch { position: absolute; right: 16px; bottom: 16px; display: none; grid-template-columns: repeat(3, 58px); gap: 8px; }
@@ -555,7 +557,6 @@ body.has-goal .inst { top: calc(var(--goal-h) + 10px); }
 body.cine .goal { opacity: 0.0; pointer-events: none; }
 body.diving .goal { opacity: 0.94; transform: none; width: min(300px, 30vw); padding: 9px 12px 8px; }
 body.diving .goal .goal-who { display: none; }
-body.diving .ck-help { top: calc(var(--goal-h) + 16px); }
 /* the dive's own checklist, under the act's goal (22.3 p. 2) */
 .ck-tasks { position: absolute; left: 20px; top: 18px; width: min(300px, 30vw); padding: 8px 12px 8px; background: linear-gradient(170deg, #f4ead2, #e6d8b6);
   color: var(--ink); box-shadow: 0 10px 22px #000b; border-radius: 2px; opacity: 0; transition: opacity 0.6s; }
