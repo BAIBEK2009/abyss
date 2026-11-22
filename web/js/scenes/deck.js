@@ -581,12 +581,52 @@ export function createDeck(view, { lifeLabel = "" } = {}) {
   const topLight = new THREE.Mesh(new THREE.SphereGeometry(0.07, 12, 8), emissive(0xff2a1a, 6)); topLight.position.y = 4.5; mast.add(topLight);
   const topHalo = glowSprite(0xff3a2a, 1.4, 2); topHalo.position.y = 4.5; mast.add(topHalo);
   for (const sx of [-1.15, 1.15]) {
-    const l = new THREE.Mesh(new THREE.SphereGeometry(0.05, 10, 8), emissive(sx < 0 ? 0xff3020 : 0x30ff60, 4)); l.position.set(sx, 2.66, 0); mast.add(l);
-    const h = glowSprite(sx < 0 ? 0xff3020 : 0x30ff60, 0.8, 1.5); h.position.copy(l.position); mast.add(h);
+    const port = sx > 0;                 // facing the bow (+z) the left hand is +x: red to port, green to starboard
+    const l = new THREE.Mesh(new THREE.SphereGeometry(0.05, 10, 8), emissive(port ? 0xff3020 : 0x30ff60, 4)); l.position.set(sx, 2.66, 0); mast.add(l);
+    const h = glowSprite(port ? 0xff3020 : 0x30ff60, 0.8, 1.5); h.position.copy(l.position); mast.add(h);
   }
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.06, 10, 8), emissive(0xfff2d0, 5)); head.position.y = 2.2; head.position.z = 0.15; mast.add(head);
-  mast.add(at(glowSprite(0xfff0c8, 1.1, 1.6), 0, 2.2, 0.15));
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.06, 10, 8), emissive(0xfff2d0, 5)); head.position.y = 4.05; head.position.z = 0.12; mast.add(head);
+  mast.add(at(glowSprite(0xfff0c8, 1.1, 1.6), 0, 4.05, 0.12));          // the white masthead light, above the side lights
   ship.add(mast);
+  // signal halyards from the yard arms to the roof: thin lines the wind swings
+  const halyards = [-1.15, 1.15].map((sx) => {
+    const geo = new THREE.BufferGeometry(); geo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(16 * 3), 3));
+    const line = new THREE.Line(geo, new THREE.LineBasicMaterial({ color: 0x8a8678 }));
+    line.frustumCulled = false; ship.add(line);
+    return { line, a: new THREE.Vector3(sx, HH + 0.2 + 2.6, 7), b: new THREE.Vector3(sx * 2.4, HH + 0.12, 4.0), ph: sx };
+  });
+  // the funnel on the wheelhouse roof (white, a sky-blue band, a black top) and its smoke, blown aft by the wind
+  const funnel = new THREE.Group(); funnel.position.set(0, HH + 0.2, 4.6); ship.add(funnel);
+  { const f = mesh(lathe([[0.42, 0], [0.44, 0.9], [0.42, 1.25], [0.38, 1.3], [0.34, 1.3]], 28), whitePaint); f.scale.set(0.75, 1, 1); funnel.add(f);
+    const band = mesh(new THREE.CylinderGeometry(0.445, 0.445, 0.22, 28, 1, true), std({ color: 0x18a3c6, roughness: 0.5 })); band.scale.set(0.75, 1, 1); band.position.y = 0.72; funnel.add(band);
+    const top = mesh(new THREE.CylinderGeometry(0.43, 0.442, 0.2, 28, 1, true), std({ color: 0x141414, roughness: 0.7 })); top.scale.set(0.75, 1, 1); top.position.y = 1.18; funnel.add(top); }
+  const SMK = 36, smoke = [];
+  const smokeTex = canvasTexture(64, 64, (g) => { const gr = g.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, "rgba(255,255,255,.55)"); gr.addColorStop(0.6, "rgba(255,255,255,.18)"); gr.addColorStop(1, "rgba(255,255,255,0)"); g.fillStyle = gr; g.fillRect(0, 0, 64, 64); });
+  for (let i = 0; i < SMK; i++) {
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: smokeTex, color: 0x6a6e72, transparent: true, depthWrite: false, opacity: 0 }));
+    sp.userData.age = i / SMK * 6; scene.add(sp); smoke.push(sp);
+  }
+  // the flag of Kazakhstan on the stern staff: cloth that the wind waves (vertex shader), stronger in the storm
+  const flagStaff = mesh(lathe([[0.03, 0], [0.025, 2.4], [0.04, 2.42], [0, 2.46]], 10), whitePaint); flagStaff.position.set(0.0, 0, STERN + 0.35); ship.add(flagStaff);
+  const flagU = { uT: { value: 0 }, uWind: { value: 0.2 } };
+  const flagMat = std({ side: THREE.DoubleSide, roughness: 0.8, map: canvasTexture(256, 128, (g, w, h) => {
+    g.fillStyle = "#00afca"; g.fillRect(0, 0, w, h);
+    g.fillStyle = "#fec50c"; const cx = w * 0.55, cy = h * 0.42;
+    for (let k = 0; k < 32; k++) { const a = (k / 32) * Math.PI * 2; g.beginPath(); g.moveTo(cx + Math.cos(a) * 19, cy + Math.sin(a) * 19); g.lineTo(cx + Math.cos(a + 0.1) * 29, cy + Math.sin(a + 0.1) * 29); g.lineTo(cx + Math.cos(a - 0.1) * 29, cy + Math.sin(a - 0.1) * 29); g.fill(); }
+    g.beginPath(); g.arc(cx, cy, 16, 0, 7); g.fill();
+    g.beginPath(); g.moveTo(cx - 44, h * 0.8); g.quadraticCurveTo(cx, h * 0.62, cx + 44, h * 0.8); g.quadraticCurveTo(cx, h * 0.71, cx - 44, h * 0.8); g.fill();
+    for (let y = 6; y < h - 6; y += 14) { g.fillRect(12, y, 9, 7); g.fillRect(23, y + 3, 5, 5); }
+  }) });
+  flagMat.onBeforeCompile = (sh) => {
+    Object.assign(sh.uniforms, flagU);
+    sh.vertexShader = "uniform float uT; uniform float uWind;\n" + sh.vertexShader.replace("#include <begin_vertex>", `#include <begin_vertex>
+      float fx = clamp(-position.z / 1.2, 0.0, 1.0);                       // 0 at the staff, 1 at the fly
+      float wv = sin(fx * 7.0 - uT * (4.0 + 6.0 * uWind)) + 0.5 * sin(fx * 13.0 - uT * (7.0 + 8.0 * uWind) + position.y * 3.0);
+      transformed.x += wv * fx * (0.05 + 0.12 * uWind);
+      transformed.y -= fx * fx * 0.25 * (1.0 - uWind);                      // a light wind: the fly droops`);
+  };
+  const flag = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 0.6, 24, 8).rotateY(Math.PI / 2).translate(0, 0, -0.6), flagMat);
+  flag.position.set(0.0, 2.1, STERN + 0.35); ship.add(flag);
   // the searchlight on the roof
   const search = new THREE.Group(); search.position.set(2.5, HH + 0.35, HZ1 - 0.4);
   search.add(mesh(lathe([[0, -0.2], [0.16, -0.18], [0.2, 0.05], [0.22, 0.25], [0, 0.25]], 20), darkSteel));
@@ -1028,6 +1068,30 @@ export function createDeck(view, { lifeLabel = "" } = {}) {
     sea.material.uniforms.uHull.value.set(0, 0, 5.2, 0);
     pool.update(view.camera.position, dt);
     applyWeather(time);
+    flagU.uT.value = time; flagU.uWind.value = W.wind;
+    for (const hy of halyards) {
+      const arr = hy.line.geometry.attributes.position.array;
+      for (let i = 0; i < 16; i++) {
+        const k = i / 15, sag = Math.sin(k * Math.PI);
+        const sway = sag * (0.06 + 0.4 * W.wind) * Math.sin(time * (1.4 + 3 * W.wind) + hy.ph + k * 2.0);
+        arr[i * 3] = hy.a.x + (hy.b.x - hy.a.x) * k + sway;
+        arr[i * 3 + 1] = hy.a.y + (hy.b.y - hy.a.y) * k - sag * 0.15;
+        arr[i * 3 + 2] = hy.a.z + (hy.b.z - hy.a.z) * k + sway * 0.4;
+      }
+      hy.line.geometry.attributes.position.needsUpdate = true;
+    }
+    const fTop = funnel.localToWorld(tmpW.set(0, 1.35, 0));
+    for (const sp of smoke) {
+      const u = sp.userData;
+      u.age += dt;
+      if (u.age > 6) { u.age -= 6; u.x = fTop.x; u.y = fTop.y; u.z = fTop.z; }
+      if (u.x === undefined) { u.x = fTop.x; u.y = fTop.y; u.z = fTop.z; }
+      const k = u.age / 6;
+      u.x += (0.25 - 1.6 * W.wind) * dt * 0.4; u.y += (0.9 - 0.7 * W.wind) * dt; u.z -= (0.6 + 4.5 * W.wind) * dt;   // up, and aft with the wind
+      sp.position.set(u.x, u.y, u.z);
+      sp.scale.setScalar(0.5 + k * 3.2);
+      sp.material.opacity = Math.sin(Math.min(1, k * 1.4) * Math.PI) * 0.32 * (1 - 0.5 * W.rain);
+    }
   }
   update(0, 0);
 
