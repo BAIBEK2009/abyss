@@ -29,7 +29,8 @@ export function pickLanguage(tables, sfx = {}) {
       setTimeout(() => box.remove(), 450);
       resolve(l);
     };
-    const onKey = (e) => { const i = ["1", "2", "3"].indexOf(e.key); if (i >= 0) done(ORDER[i]); };
+    // by the physical key: in the Kazakh layout the digit row types letters (2 = ә, 3 = і)
+    const onKey = (e) => { const i = ["1", "2", "3"].indexOf(e.code.replace(/^(Digit|Numpad)/, "")); if (i >= 0) done(ORDER[i]); };
     addEventListener("keydown", onKey);
     box.querySelectorAll(".lang-card").forEach((b) => {
       b.addEventListener("click", () => done(b.dataset.lang));
