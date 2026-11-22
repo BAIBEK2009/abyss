@@ -51,9 +51,9 @@ def test_act1_ends_with_poseidon_and_act2_card():
     assert c.event("sonar") == [{"task": ["act1", 0]}]
     assert beats(c.event("first_sonar_silence")) == ["a1_2"]
     out = c.event("find:act1_dive_flap")
-    assert beats(out) == ["a1_5", "a1_7", "a1_8", "a1_end"]
-    assert out[-1] == {"act": "act2"} and c.mystery == [1] and c.rival_active
-    assert not c.ready                                       # act II beats come in M10
+    assert beats(out) == ["a1_5", "a1_7", "a1_8", "a1_end", "a2_1"]   # act II starts with Erlan's storm line
+    assert {"act": "act2"} in out and c.mystery == [1] and c.rival_active
+    assert c.ready
 
 
 def test_game_campaign_rival_arrives_after_act1():

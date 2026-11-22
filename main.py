@@ -28,13 +28,14 @@ def main() -> None:
     parser.add_argument("--exam", action="store_true", help="print every turn (Bayes, A*, MDP, rival) here")
     parser.add_argument("--no-browser", action="store_true", help="do not open the browser")
     parser.add_argument("--free", action="store_true", help="free search without the story campaign (v3 rules)")
+    parser.add_argument("--demo", action="store_true", help="demo for the defence: seed 272, fast story, one dive per act")
     args = parser.parse_args()
 
     # the port may be taken (another program, an old copy of the game): try the next ones
     server = None
     for port in range(args.port, args.port + 20):
         try:
-            server = make_server(port, seed=args.seed, lang=args.lang or "ru", exam=args.exam, campaign=not args.free)
+            server = make_server(port, seed=args.seed, lang=args.lang or "ru", exam=args.exam, campaign=not args.free, demo=args.demo)
             break
         except OSError:
             continue
@@ -42,7 +43,10 @@ def main() -> None:
         sys.exit(f"ABYSS: ports {args.port}-{args.port + 19} are all busy.")
     args.port = port
     # ?lang= would win over the player's saved choice and hide the language screen: only when asked for
-    url = f"http://127.0.0.1:{args.port}/" + (f"?lang={args.lang}" if args.lang else "")
+    q = [f"lang={args.lang}"] if args.lang else []
+    if args.demo:
+        q.append("demo=1")
+    url = f"http://127.0.0.1:{args.port}/" + ("?" + "&".join(q) if q else "")
     print(f"ABYSS: {url}  (Ctrl+C to quit)" + ("  · exam mode: turns are printed below" if args.exam else ""), flush=True)
     if not args.no_browser:
         threading.Timer(0.5, webbrowser.open, args=(url,)).start()

@@ -1,11 +1,12 @@
 """Algorithm 2 — A* search: shortest safe route on the grid.
 
-4-connected grid, every step costs 1. Reefs are impassable.
+4-connected grid, every step costs 1 (or cost(cell) >= 1 when a cost function is given: the storm
+of act II costs 3 per cell, CLAUDE.md 17.5 / 17.9). Reefs are impassable.
 
     f(n) = g(n) + h(n)
     g(n) = cost of the best known route from start to n
     h(n) = Manhattan distance from n to the goal (admissible: never overestimates,
-           because every move changes x or y by exactly 1) -> A* returns an optimal path.
+           because every move changes x or y by exactly 1 and costs at least 1) -> A* returns an optimal path.
 
 A* always expands the open node with the smallest f; it stops when the goal is expanded.
 """
@@ -21,6 +22,7 @@ MOVES = ((1, 0), (0, 1), (-1, 0), (0, -1))
 class AStarResult:
     path: list | None   # [start, ..., goal] or None if the goal cannot be reached
     expanded: int       # how many nodes were taken out of the open list
+    cost: float | None = None   # total cost of the route (= moves when every cell costs 1)
 
     @property
     def moves(self) -> int | None:
@@ -32,10 +34,11 @@ def manhattan(a, b) -> int:
     return abs(a[0] - b[0]) + abs(a[1] - b[1])
 
 
-def astar(start, goal, passable, width: int, height: int) -> AStarResult:
-    """Find a shortest path from `start` to `goal`.
+def astar(start, goal, passable, width: int, height: int, cost=None) -> AStarResult:
+    """Find a cheapest path from `start` to `goal`.
 
     passable(cell) -> bool says whether the sub may enter a cell (e.g. not a reef).
+    cost(cell) -> float >= 1: the price of entering a cell (default 1: the shortest path).
     """
     start, goal = tuple(start), tuple(goal)
 
@@ -64,13 +67,13 @@ def astar(start, goal, passable, width: int, height: int) -> AStarResult:
             while cur in came_from:
                 cur = came_from[cur]
                 path.append(cur)
-            return AStarResult(path[::-1], expanded)
+            return AStarResult(path[::-1], expanded, g[goal])
 
         for dx, dy in MOVES:
             nb = (cur[0] + dx, cur[1] + dy)
             if not inside(nb) or not passable(nb) or nb in closed:
                 continue
-            new_g = g[cur] + 1
+            new_g = g[cur] + (cost(nb) if cost else 1)
             if new_g < g.get(nb, float("inf")):
                 g[nb] = new_g
                 came_from[nb] = cur

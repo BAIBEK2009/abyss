@@ -39,6 +39,15 @@ class Rival:
         self.tasks.append({"kind": tool, "cell": target, "start": t, "end": t + dur})
         self.plan = {"target": target, "tool": tool, "path": path}
 
+    def decoy(self, cell, now: float, echoes: int = 3):
+        """Act II (17.5): a decoy buoy pings like a black box. The rival's Bayes trusts the echo just as ours
+        does: it hears `echoes` strong echoes at the buoy, its argmax moves there, and it turns at once
+        (the new plan is shown to the player like any other)."""
+        for _ in range(echoes):
+            self.P, _ = bayes.sonar(self.P, tuple(cell), True)
+        self.clock = max(self.clock, now)
+        self._replan(self.clock)
+
     def apply_clue(self, L: dict):
         """Radio clues are public: the rival always takes them into account (plan unchanged)."""
         self.P, _ = bayes.update(self.P, L)

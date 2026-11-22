@@ -13,6 +13,11 @@ it asks this server for state, sends the captain's decisions here and animates t
     POST /api/story   {event}            -> {story, state}  (campaign scene events: enter_cabin, sit_at_table, dive:start…)
     GET  /api/advice                     -> the three officers + joint advice
     GET  /api/journal                    -> records + calculations (professor's mode)
+    POST /api/new     {seed?, demo?}     -> state           (demo: "Demo for the defence", seed 272)
+    POST /api/choice  {key, option}      -> {story, state}  (act III: which recorder first; act IV: the ending)
+    POST /api/decoy   {}                 -> {events, story, state}  (act II: drop the decoy buoy here)
+    POST /api/skip    {}                 -> {story, state}  (demo only: skip to the next act)
+    POST /api/load    {save}             -> state           (a saved game from localStorage, replayed)
 
     action = {"type": "go", "target": [x, y], "tool": "sonar" | "dive" | null} | {"type": "home"}
 
@@ -47,13 +52,14 @@ class GameServer(ThreadingHTTPServer):
     allow_reuse_address = sys.platform != "win32"
 
     def __init__(self, port: int, seed: int | None = DEMO_SEED, lang: str = "ru", exam: bool = False,
-                 campaign: bool = True):
+                 campaign: bool = True, demo: bool = False):
         super().__init__(("127.0.0.1", port), Handler)  # localhost only
         self.lock = threading.Lock()
         self.exam = exam
         self.lang = lang
         self.campaign = campaign
-        self.game = Game(seed=seed, lang=lang, campaign=campaign)
+        self.demo = demo
+        self.game = Game(seed=DEMO_SEED if demo else seed, lang=lang, campaign=campaign, demo=demo)
 
     def print_new_turns(self, game, before: int):
         """Exam mode: every turn of the three algorithms goes to this terminal."""
@@ -115,8 +121,22 @@ class Handler(SimpleHTTPRequestHandler):
                     if seed is not None and (not isinstance(seed, int) or isinstance(seed, bool)):
                         raise GameError("bad_seed")
                     campaign = body.get("campaign", self.server.campaign)
-                    self.server.game = Game(seed=seed, lang=body.get("lang") or self.server.lang, campaign=bool(campaign))
+                    demo = bool(body.get("demo"))
+                    self.server.game = Game(seed=DEMO_SEED if demo else seed, lang=body.get("lang") or self.server.lang,
+                                            campaign=bool(campaign) or demo, demo=demo)
                     return self.send_json(self.server.game.state())
+                if path == "/api/load":
+                    self.server.game = Game.replay(body.get("save"))
+                    return self.send_json(self.server.game.state())
+                if path == "/api/choice":
+                    story = game.choose(str(body.get("key", "")), str(body.get("option", "")))
+                    return self.send_json({"story": story, "state": game.state()})
+                if path == "/api/decoy":
+                    events = game.drop_decoy()
+                    return self.send_json({"events": events, "story": game.pop_story(), "state": game.state()})
+                if path == "/api/skip":
+                    story = game.skip_act()
+                    return self.send_json({"story": story, "state": game.state()})
                 if path == "/api/preview":
                     return self.send_json(game.preview(body.get("action")))
                 if path == "/api/act":
@@ -170,5 +190,5 @@ class Handler(SimpleHTTPRequestHandler):
 
 
 def make_server(port: int, seed: int | None = DEMO_SEED, lang: str = "ru", exam: bool = False,
-                campaign: bool = True) -> GameServer:
-    return GameServer(port, seed=seed, lang=lang, exam=exam, campaign=campaign)
+                campaign: bool = True, demo: bool = False) -> GameServer:
+    return GameServer(port, seed=seed, lang=lang, exam=exam, campaign=campaign, demo=demo)

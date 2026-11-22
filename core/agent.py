@@ -30,16 +30,19 @@ def tool_for(P: dict, cell) -> str:
     return "dive" if P[cell] >= DIVE_P or bayes.sum_around(P, cell) >= DIVE_SUM else "sonar"
 
 
-def officers(P: dict, pos, fuel: int, base=world.BASE) -> dict:
-    """What each officer says this turn (numbers only — the frontend turns them into words)."""
+def officers(P: dict, pos, fuel: int, base=world.BASE, router=None) -> dict:
+    """What each officer says this turn (numbers only — the frontend turns them into words).
+    router(a, b) -> AStarResult: Lev's A*; in the storm of act II it prices storm cells (default: plain route)."""
     pos, base = tuple(pos), tuple(base)
+    router = router or route
     target = bayes.argmax(P, near=pos)
     tool = tool_for(P, target)
     vera = {"target": list(target), "p": P[target], "sum3": bayes.sum_around(P, target), "tool": tool}
 
-    r = route(pos, target)
+    r = router(pos, target)
+    w = r.cost if r.cost is not None else r.moves      # = moves unless storm cells cost more
     lev = {"target": list(target), "path": [list(c) for c in r.path], "cells": r.moves,
-           "hours": r.moves * world.MOVE_HOURS, "fuel": r.moves * world.MOVE_FUEL,
+           "hours": w * world.MOVE_HOURS, "fuel": w * world.MOVE_FUEL,
            "expanded": r.expanded, "here": r.moves == 0}
 
     d = mdp.decide(fuel)

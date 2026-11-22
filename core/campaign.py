@@ -14,7 +14,7 @@ A task of the act's checklist is ticked by an event (TASK_EVENTS below: the task
 strings in story.json). An act with an "act_end" beat ends when that beat fires; an act without one
 ends when all its tasks are done and no beat of it is still waiting in a chain.
 
-M9a plays the prologue and act I; later acts get their beats in M10 (READY_ACTS).
+All five parts are playable (READY_ACTS); acts II-IV since the final pass (B1-B4).
 """
 from __future__ import annotations
 import json
@@ -26,8 +26,14 @@ STORY_PATH = Path(__file__).resolve().parent.parent / "web" / "data" / "story.js
 TASK_EVENTS = {
     "prologue": ["radio_heard", "binoculars", "enter_cabin", "sit_at_table"],   # binoculars: a real scene in M12b
     "act1": ["sonar", "dive_high", "find:act1_dive_flap"],
+    # act II: round the storm (a route that detours, or the front has passed), refuel, the tail, the telegram
+    "act2": ["storm_detour", "refuel", "find:act2_dive_tail", "beat:a2_7"],
+    # act III: the choice, the data recorder, the voice recorder, the maintenance folder in the tail section
+    "act3": ["choice:act3", "find:act3_fdr", "find:act3_cvr", "find:act3_maintenance"],
+    # act IV: Van der Berg spoke, the officers spoke (Erlan's silence too), the decision
+    "act4": ["beat:a4_1", "beat:a4_4", "choice:act4"],
 }
-READY_ACTS = ("prologue", "act1")
+READY_ACTS = ("prologue", "act1", "act2", "act3", "act4")
 
 # Act I (17.4): a dive "where the hill is highest" finds the flap. "Highest" = at least this share of
 # the highest cell of the current map (the hill top and its upper slope).
@@ -49,6 +55,7 @@ class Campaign:
         self.mystery: list[int] = []        # found slots of "What happened to AQ-271"
         self.events: set[str] = set()       # every event seen (for "first_*" events)
         self.choices: dict[str, str] = {}
+        self.ending: str | None = None      # investigators | public | sell | lost (act IV, CLAUDE.md 17.7)
 
     # ------------------------------------------------------------------ helpers
     def _act(self, act_id=None) -> dict:
@@ -79,6 +86,7 @@ class Campaign:
             return
         self.fired.append(beat["id"])
         out.append({"beat": beat["id"]})
+        self._tick(f"beat:{beat['id']}", out)
         if beat.get("type") == "mystery" and beat.get("slot") not in self.mystery:
             self.mystery.append(beat["slot"])
         if beat.get("type") == "act_end":
@@ -87,6 +95,39 @@ class Campaign:
         for nxt in self._act()["beats"]:
             if nxt.get("on") == f"after:{beat['id']}":
                 self._chain(nxt, out)
+
+    def _tick(self, name: str, out: list):
+        """Tick the task of the current act that this event stands for."""
+        act = self.act
+        for i, ev in enumerate(TASK_EVENTS.get(act, [])):
+            if ev == name and not self.tasks[act][i]:
+                self.tasks[act][i] = True
+                out.append({"task": [act, i]})
+
+    def fire(self, beat_id: str) -> list:
+        """Fire one beat of the current act by id (the game decides when: e.g. a3_6 before the last dive)."""
+        out = []
+        b = next((b for b in self._act()["beats"] if b["id"] == beat_id), None)
+        if b is not None:
+            self._chain(b, out)
+        return out
+
+    def choose(self, key: str, option: str) -> list:
+        """A choice was made (act III: what first; act IV: who gets the recording)."""
+        self.choices[key] = option
+        out = []
+        self._tick(f"choice:{key}", out)
+        if key == "act4":
+            self.ending = option
+        self._maybe_finish(out)
+        return out
+
+    def enter(self, act_id: str) -> list:
+        """Jump to an act (the beacon died with a box on board -> act IV; the demo's skip)."""
+        out = []
+        if self.act != act_id:
+            self._enter(act_id, out)
+        return out
 
     def _enter(self, act_id: str, out: list):
         self.act = act_id
@@ -131,10 +172,7 @@ class Campaign:
         out = []
         self.events.add(name)
         act = self.act
-        for i, ev in enumerate(TASK_EVENTS.get(act, [])):
-            if ev == name and not self.tasks[act][i]:
-                self.tasks[act][i] = True
-                out.append({"task": [act, i]})
+        self._tick(name, out)
         trigger = name if name.startswith("dive:") else f"event:{name}"
         self._fire_on(trigger, out)
         if self.act == act:
@@ -157,4 +195,4 @@ class Campaign:
         act = self._act()
         return {"act": self.act, "ready": self.ready, "goal": act.get("goal"), "tasks": self.tasks[self.act],
                 "fired": self.fired, "mystery": self.mystery, "rival_active": self.rival_active,
-                "choices": self.choices}
+                "choices": self.choices, "ending": self.ending}
