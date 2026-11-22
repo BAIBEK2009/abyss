@@ -18,6 +18,7 @@ import { canvasTexture, rng } from "../view.js";
 import { steelPanel, watertightDoor } from "./materials.js";
 import { lightPool } from "./lightpool.js";
 import { loadEnv, pbrSet } from "./envmap.js";
+import { lifeboat } from "./lifeboat.js";
 import { createNerpa } from "./nerpa.js";
 import { t } from "../i18n.js";
 
@@ -654,12 +655,16 @@ export function createDeck(view, { lifeLabel = "" } = {}) {
     ringG.position.set(x, 0.86, z); ringG.rotation.y = Math.PI / 2;
     ship.add(ringG);
   }
-  // a lifeboat on davits outboard of the bridge (starboard)
-  const boat = new THREE.Group(); boat.position.set(6.1, 1.6, 7.2); ship.add(boat);
-  const bhull = mesh(lathe([[0, -2.6], [0.55, -2.3], [0.8, -1.5], [0.85, 0], [0.8, 1.5], [0.55, 2.3], [0, 2.6]], 28), paint(0xe8601c, { seed: 41 }));
-  bhull.rotation.x = Math.PI / 2; bhull.scale.set(1, 1, 0.75); boat.add(bhull);
-  const bcap = mesh(rbox(1.3, 0.5, 3.6, 0.22, 3), whitePaint); bcap.position.y = 0.55; boat.add(bcap);
-  for (const z of [-1.8, 1.8]) ship.add(mesh(tube([[4.7, 0, 7.2 + z], [4.75, 2.6, 7.2 + z], [5.6, 3.2, 7.2 + z], [6.1, 2.5, 7.2 + z]], 0.07, 16), greyPaint));
+  // a totally enclosed lifeboat on davits outboard of the bridge (starboard): lifeboat.js; the falls from the davit heads
+  const boat = lifeboat({ name: (lifeLabel.split("\u00b7")[0] || "").replace(/[\u00ab\u00bb"]/g, "").trim().toUpperCase() });
+  boat.position.set(6.1, 1.25, 7.2); ship.add(boat);
+  const fallM = std({ color: 0x2a2c2e, metalness: 0.7, roughness: 0.45 });
+  for (const [k, z] of [[0, -1.8], [1, 1.8]]) {
+    ship.add(mesh(tube([[4.7, 0, 7.2 + z], [4.72, 1.6, 7.2 + z], [4.85, 2.75, 7.2 + z], [5.4, 3.4, 7.2 + z], [6.0, 3.25, 7.2 + z], [6.1, 3.0, 7.2 + z]], 0.07, 64), greyPaint));
+    const head = mesh(lathe([[0, -0.09], [0.1, -0.08], [0.11, 0.08], [0, 0.09]], 16), darkSteel); head.rotation.z = Math.PI / 2; head.position.set(6.1, 2.95, 7.2 + z); ship.add(head);
+    const hk = boat.userData.hooks[k].clone().add(boat.position);
+    for (const dx of [-0.05, 0.05]) ship.add(mesh(tube([[6.1 + dx, 2.88, 7.2 + z], [hk.x + dx, hk.y + 0.05, hk.z]], 0.012, 2), fallM));
+  }
   // deck floodlights on the bridge's back edge, shining on the working deck
   const floods = [];
   for (const sx of [-2.6, 2.6]) {
