@@ -20,6 +20,7 @@ Errors: HTTP 400 {"error": "<message key>", "params": {...}}.
 """
 from __future__ import annotations
 import json
+import sys
 import threading
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -42,6 +43,8 @@ class GameServer(ThreadingHTTPServer):
     """Holds the one current mission. A lock keeps concurrent requests from mixing up turns."""
 
     daemon_threads = True
+    # on Windows SO_REUSEADDR lets a second server bind a port that is in use; then main.py could not move on
+    allow_reuse_address = sys.platform != "win32"
 
     def __init__(self, port: int, seed: int | None = DEMO_SEED, lang: str = "ru", exam: bool = False,
                  campaign: bool = True):

@@ -1,6 +1,6 @@
 #!/bin/bash
 # ABYSS · double-click in Finder: starts the game server and opens the browser at http://127.0.0.1:8765
-# Needs only Python 3.10+ (the project's .venv is used when it exists). Close this window to stop the game.
+# Needs only Python 3.9+ (the project's .venv is used when it exists). Close this window to stop the game.
 cd "$(dirname "$0")" || exit 1
 PORT="${ABYSS_PORT:-8765}"
 URL="http://127.0.0.1:$PORT/"

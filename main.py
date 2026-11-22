@@ -30,10 +30,20 @@ def main() -> None:
     parser.add_argument("--free", action="store_true", help="free search without the story campaign (v3 rules)")
     args = parser.parse_args()
 
-    server = make_server(args.port, seed=args.seed, lang=args.lang or "ru", exam=args.exam, campaign=not args.free)
+    # the port may be taken (another program, an old copy of the game): try the next ones
+    server = None
+    for port in range(args.port, args.port + 20):
+        try:
+            server = make_server(port, seed=args.seed, lang=args.lang or "ru", exam=args.exam, campaign=not args.free)
+            break
+        except OSError:
+            continue
+    if server is None:
+        sys.exit(f"ABYSS: ports {args.port}-{args.port + 19} are all busy.")
+    args.port = port
     # ?lang= would win over the player's saved choice and hide the language screen: only when asked for
     url = f"http://127.0.0.1:{args.port}/" + (f"?lang={args.lang}" if args.lang else "")
-    print(f"ABYSS: {url}  (Ctrl+C to quit)" + ("  · exam mode: turns are printed below" if args.exam else ""))
+    print(f"ABYSS: {url}  (Ctrl+C to quit)" + ("  · exam mode: turns are printed below" if args.exam else ""), flush=True)
     if not args.no_browser:
         threading.Timer(0.5, webbrowser.open, args=(url,)).start()
     try:
