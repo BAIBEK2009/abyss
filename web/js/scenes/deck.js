@@ -1195,6 +1195,45 @@ export function createDeck(view, { lifeLabel = "" } = {}) {
   for (const [hx, y, z, col, sz] of [[0, 14, 4, 0xfff2d8, 9], [0, 10, -6, 0xfff2d8, 7], [4.5, 5, 2, 0xff3020, 6], [-2, 4, -10, 0xffc890, 8], [2, 4, 8, 0xffc890, 8]]) {
     const sp = glowSprite(col, sz, 1.4); sp.position.set(hx, y, z); poseidonFar.add(sp);
   }
+  // C12: act IV — «Poseidon-2» alongside at dawn, 25 m off the starboard side: black hull with a red boot top,
+  // red superstructure in three tiers, bridge wings, a funnel with the red trident, a big crane, a mast; Van der Berg
+  // in a dark jacket on the bridge wing. Shown only at dawn (the act IV weather).
+  const poseidonNear = new THREE.Group(); poseidonNear.position.set(38, 0, -6); poseidonNear.rotation.y = 0.12; scene.add(poseidonNear);
+  {
+    const black = std({ color: 0x15171a, roughness: 0.6, metalness: 0.3 }), red = std({ color: 0xa32a22, roughness: 0.55, metalness: 0.2 });
+    const whiteP = std({ color: 0xd9d6cf, roughness: 0.6 }), glassD = std({ color: 0x1a2630, roughness: 0.1, metalness: 0.6 });
+    const outline = [[-4.2, -18], [4.2, -18], [4.6, 6], [3.2, 16], [0, 22], [-3.2, 16], [-4.6, 6]];
+    const hs = new THREE.Shape(outline.map(([x, z]) => new THREE.Vector2(x, z)));
+    const hg = new THREE.ExtrudeGeometry(hs, { depth: 5.2, bevelEnabled: true, bevelThickness: 0.2, bevelSize: 0.2, bevelSegments: 2, curveSegments: 8 }); hg.rotateX(Math.PI / 2);
+    poseidonNear.add(at(mesh(hg, black, { cast: false }), 0, 2.6, 0));
+    const bt = new THREE.ExtrudeGeometry(hs, { depth: 0.9, bevelEnabled: false }); bt.rotateX(Math.PI / 2); bt.scale(1.012, 1, 1.006);
+    poseidonNear.add(at(mesh(bt, red, { cast: false }), 0, 1.25, 0));                                   // the boot top at the waterline
+    const tiers = [[8.2, 2.6, 12, 4.0], [7.0, 2.4, 9, 6.5], [6.2, 2.2, 6, 8.8]];
+    tiers.forEach(([w, h, d, y], i) => {
+      poseidonNear.add(at(mesh(rbox(w, h, d, 0.15), red), 0, y, 2 + i * 0.6));
+      poseidonNear.add(at(mesh(rbox(w + 0.04, 0.7, d * 0.85, 0.05), glassD), 0, y + 0.3, 2 + i * 0.6));     // the window bands
+    });
+    poseidonNear.add(at(mesh(rbox(12, 0.25, 2.2, 0.08), red), 0, 9.9, 5.4));                          // the bridge wings
+    const trident = canvasTexture(256, 256, (g2, w2) => { g2.fillStyle = "#15171a"; g2.fillRect(0, 0, w2, w2); g2.strokeStyle = "#c2302a"; g2.lineWidth = 16; g2.lineCap = "round";
+      g2.beginPath(); g2.moveTo(128, 220); g2.lineTo(128, 50); g2.moveTo(70, 70); g2.quadraticCurveTo(70, 140, 128, 150); g2.quadraticCurveTo(186, 140, 186, 70); g2.stroke();
+      g2.fillStyle = "#c2302a"; for (const x of [70, 128, 186]) { g2.beginPath(); g2.moveTo(x - 16, 74); g2.lineTo(x, 36); g2.lineTo(x + 16, 74); g2.fill(); } });
+    const funnel = mesh(new THREE.CylinderGeometry(1.5, 1.8, 4.2, 20), std({ map: trident, roughness: 0.6 })); funnel.position.set(0, 11.9, 1.6); funnel.rotation.y = -Math.PI / 2; poseidonNear.add(funnel);
+    poseidonNear.add(at(mesh(new THREE.CylinderGeometry(0.15, 0.2, 9, 8), whiteP), 0, 14, 4));         // the mast
+    const crane = new THREE.Group(); crane.position.set(-2.4, 2.6, -11);
+    crane.add(at(mesh(new THREE.CylinderGeometry(0.7, 0.9, 4, 12), std({ color: 0xd4a017, roughness: 0.5 })), 0, 2, 0));
+    const jib = mesh(rbox(0.7, 0.7, 14, 0.1), std({ color: 0xd4a017, roughness: 0.5 })); jib.position.set(0, 6.5, 4.5); jib.rotation.x = -0.6; crane.add(jib);
+    poseidonNear.add(crane);
+    // Van der Berg on the starboard bridge wing (facing us): a dark jacket with a red patch, a white cap
+    const berg = new THREE.Group();
+    berg.add(at(mesh(lathe([[0, 0], [0.22, 0.02], [0.26, 0.8], [0.3, 1.35], [0.12, 1.5], [0, 1.5]], 14), std({ color: 0x1a1d22, roughness: 0.8 })), 0, 0, 0));
+    berg.add(at(mesh(new THREE.SphereGeometry(0.13, 14, 10), std({ color: 0xd8b49a, roughness: 0.7 })), 0, 1.66, 0));
+    berg.add(at(mesh(new THREE.CylinderGeometry(0.14, 0.13, 0.08, 14), whiteP), 0, 1.78, 0));
+    berg.add(at(mesh(rbox(0.12, 0.08, 0.02, 0.01), red), -0.15, 1.25, 0.25));
+    berg.position.set(-5.4, 10.0, 5.4); poseidonNear.add(berg);
+    for (const [x, y, z, col] of [[0, 18.4, 4, 0xfff2d8], [-6, 10.6, 5.4, 0x40ff60], [5.5, 4.5, 8, 0xffc890]]) { const sp = glowSprite(col, 1.6, 1.3); sp.position.set(x, y, z); poseidonNear.add(sp); }
+  }
+  poseidonNear.visible = false;
+
   // the weather (weather.js): rain round the camera, none inside the wheelhouse
   const rain = createRain({ shelter: { min: new THREE.Vector3(-HX - 0.1, -0.5, HZ0 - 0.15), max: new THREE.Vector3(HX + 0.1, HH + 0.4, HZ1 + 0.1) } });
   scene.add(rain.object);
@@ -1210,6 +1249,8 @@ export function createDeck(view, { lifeLabel = "" } = {}) {
     sky.userData.stars.material.opacity = W.stars * (1 - W.cloud * 0.8);
     sky.userData.moon.material.opacity = W.moon; sky.userData.halo.material.opacity = W.moon;
     poseidonFar.visible = W.haze > 0.4;
+    poseidonNear.visible = W.sun > 0.5 && W.day < 0.5;                          // act IV: alongside at dawn
+    if (poseidonNear.visible) { poseidonNear.position.y = seaHeight(38, -6, time) * 0.8 - 0.4; poseidonNear.rotation.z = Math.sin(time * 0.45) * 0.03; }
     const hz = 0.55 + 0.9 * W.haze + 0.35 * W.rain;
     for (const h of HALOS) if (h.s !== sky.userData.halo) { h.s.scale.setScalar(h.size * hz); h.s.material.opacity = Math.min(1, 0.65 + 0.35 * hz); }
     scene.fog.color.copy(W.fogCol); scene.fog.density = W.fogD;
