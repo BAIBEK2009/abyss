@@ -506,7 +506,7 @@ export function createDeck(view, { lifeLabel = "" } = {}) {
   hull.position.y = -0.14;           // its bevelled top cap stays under the deck plates
   ship.add(hull);
   // fix 5: the hull outside — a red boot top at the waterline, the rubbing strake, a row of portholes, the name
-  // «ТҰЛПАР» at the bow on both sides and on the stern with «АҚТАУ» under it, draft marks at the stem, anchors in
+  // the ship name at the bow on both sides and on the stern with the home port under it, draft marks at the stem, anchors in
   // their hawse pipes, rust streaks running down from the scuppers
   {
     const WL = -DECK_Y;                                                        // the waterline in ship coordinates
