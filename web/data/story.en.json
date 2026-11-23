@@ -646,5 +646,8 @@
    "poseidon_watch": "Through the binoculars you can see «Poseidon». Its arrow on the chart shows where it is heading.",
    "storm_watch": "Clouds to the southwest. In a few hours the storm will be here."
   }
+ },
+ "dive_lines": {
+  "sturgeon": "A sturgeon! So even this deep, the Caspian is alive."
  }
 }

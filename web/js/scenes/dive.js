@@ -19,6 +19,8 @@ import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.j
 import { SimplexNoise } from "three/addons/math/SimplexNoise.js";
 import { sfx } from "../audio.js";
 import { createCockpit } from "../ui/cockpit.js";
+import { makeSeal, makeSprats, makeSturgeon, makeGobies } from "./fauna.js";
+import { story } from "../story.js";
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 function hash(x, y) { const s = Math.sin(x * 127.1 + y * 311.7) * 43758.5453; return s - Math.floor(s); }
@@ -308,22 +310,10 @@ function createLife(deep, lampPos, lampDir) {
     c.position.set(Math.cos(a) * d, 0, Math.sin(a) * d); c.userData.y0 = 0.8 + hash(i, 23) * 2.0; c.userData.ph = hash(i, 24) * 6;
     deep.add(c); jellies.push(c);
   }
-  // a sturgeon gliding slowly near the bottom: long body, pointed snout, rows of bony scutes, a shark-like tail
-  const sturgeon = new THREE.Group();
+  // fix 2c: the sturgeon — a rare encounter near the bottom (lofted body, five rows of scutes, barbels, heterocercal tail)
+  const sturgeon = makeSturgeon(); sturgeon.visible = false;
+  sturgeon.userData.st = { on: false, t: 0, seen: false, x0: 0, z0: 0, dx: 0, dz: 0 };
   {
-    const back = std({ color: 0x4a4f44, roughness: 0.55, metalness: 0.15 }), belly = std({ color: 0xb8b2a2, roughness: 0.6 });
-    const body = new THREE.Mesh(new THREE.LatheGeometry([[0, -0.85], [0.03, -0.8], [0.06, -0.65], [0.1, -0.35], [0.12, 0], [0.11, 0.3], [0.08, 0.55], [0.04, 0.72], [0, 0.8]].map(([a, b]) => new THREE.Vector2(a, b)), 20), back);
-    body.rotation.x = Math.PI / 2; body.scale.set(1, 1, 0.8); sturgeon.add(body);
-    const under = new THREE.Mesh(new THREE.LatheGeometry([[0, -0.6], [0.08, -0.3], [0.1, 0], [0.09, 0.3], [0, 0.5]].map(([a, b]) => new THREE.Vector2(a, b)), 16), belly);
-    under.rotation.x = Math.PI / 2; under.scale.set(0.95, 1, 0.6); under.position.y = -0.03; sturgeon.add(under);
-    for (let k = 0; k < 9; k++) { const sc = new THREE.Mesh(new THREE.ConeGeometry(0.012, 0.03, 4), belly); sc.position.set(0, 0.105 - Math.abs(k - 4) * 0.004, -0.5 + k * 0.11); sturgeon.add(sc); }
-    const tailShape = new THREE.Shape([new THREE.Vector2(0, 0), new THREE.Vector2(0.06, -0.32), new THREE.Vector2(0.02, -0.28), new THREE.Vector2(-0.12, -0.18)]);
-    const tail = new THREE.Mesh(new THREE.ExtrudeGeometry(tailShape, { depth: 0.01, bevelEnabled: false }).rotateY(Math.PI / 2), back);
-    tail.position.set(0, 0.02, -0.78); tail.rotation.x = -0.4; sturgeon.add(tail);
-    for (const sx of [-1, 1]) { const fin = new THREE.Mesh(new THREE.SphereGeometry(0.07, 10, 6), back); fin.scale.set(1, 0.12, 0.6); fin.position.set(sx * 0.12, -0.05, 0.42); fin.rotation.z = sx * 0.4; sturgeon.add(fin); }
-    for (const sx of [-0.02, 0.02]) { const bar = new THREE.Mesh(new THREE.ConeGeometry(0.004, 0.05, 4), belly); bar.position.set(sx, -0.05, 0.68); bar.rotation.x = Math.PI; sturgeon.add(bar); }   // the barbels
-    sturgeon.scale.setScalar(1.25);
-    sturgeon.userData = { a: 0, tail };
     deep.add(sturgeon);
   }
   // silt clouds from the thrusters, plankton that sparks when the vehicle moves, a school of fish
@@ -333,6 +323,15 @@ function createLife(deep, lampPos, lampDir) {
     p.userData.life = -1; deep.add(p); silt.push(p);
   }
   let siltNext = 0;
+  function puffAt(x, y, z, size = 1) {            // a little cloud of silt (the gobies dart, the sturgeon's wake)
+    const p = silt.find((q) => q.userData.life < 0);
+    if (!p) return;
+    p.userData.life = 0; p.position.set(x, y + 0.05, z); p.userData.v = new THREE.Vector3((Math.random() - 0.5) * 0.3, 0.15 * size, (Math.random() - 0.5) * 0.3);
+  }
+  // fix 2d: gobies lying on the silt; they dart away from the light and the vehicle
+  const gobies = makeGobies(16); deep.add(gobies);
+  const _bp = new THREE.Vector3(), _bd = new THREE.Vector3();
+  const inBeam = (p) => { if (!lampDir) return false; _bp.copy(lampPos()); lampDir(_bd); const d = p.clone().sub(_bp), L = d.length(); return L < 7 && d.dot(_bd) / L > 0.93; };
   const PK = 700, pk = new Float32Array(PK * 3);
   for (let i = 0; i < PK; i++) pk.set([(Math.random() - 0.5) * 12, (Math.random() - 0.5) * 6, (Math.random() - 0.5) * 12], i * 3);
   const pkGeo = new THREE.BufferGeometry(); pkGeo.setAttribute("position", new THREE.BufferAttribute(pk, 3));
@@ -362,17 +361,24 @@ function createLife(deep, lampPos, lampDir) {
   });
   const plankton = new THREE.Points(pkGeo, pkMat);
   plankton.frustumCulled = false; deep.add(plankton);
-  const school = { c: new THREE.Vector3(7, 0, -5), a: 0, fish: [] };
+  const school = { c: new THREE.Vector3(7, 0, -5), a: 0, fish: [] };       // (the sprats live higher up now: hidden at 950 m)
   {
     const fm = std({ color: 0xdce6ec, metalness: 0.95, roughness: 0.18 }), fg = new THREE.ConeGeometry(0.022, 0.12, 6); fg.rotateX(-Math.PI / 2);   // Caspian sprats (kilka)
     for (let i = 0; i < 46; i++) {
       const f = new THREE.Mesh(fg, fm);
       f.userData = { o: new THREE.Vector3((Math.random() - 0.5) * 2.4, (Math.random() - 0.5) * 1.2, (Math.random() - 0.5) * 2.4), ph: Math.random() * 6 };
-      deep.add(f); school.fish.push(f);
+      f.visible = false; deep.add(f); school.fish.push(f);
     }
   }
   const v = new THREE.Vector3();
-  return {
+  const lifeApi = {
+    /** A new dive: gobies round the landing spot; the sturgeon comes by once, 55 % of dives, 10-25 s after landing. */
+    reset(T0) {
+      const pos = [];
+      for (let i = 0; i < 16; i++) { const a = Math.random() * 6.28, d = 2.5 + Math.random() * 9; const x = Math.cos(a) * d, z = Math.sin(a) * d; pos.push(new THREE.Vector3(x, bedH(x, z) + 0.012, z)); }
+      gobies.userData.place(pos);
+      const st = sturgeon.userData.st; st.on = false; st.seen = false; sturgeon.visible = false; st.when = Math.random() < 0.55 ? T0 + 10 + Math.random() * 15 : 0;
+    },
     update(dt, T, D, thrusting) {
       for (const c of jellies) {
         const u = c.userData;
@@ -382,11 +388,22 @@ function createLife(deep, lampPos, lampDir) {
         u.mat.uniforms.uT.value = T + u.ph; u.mat.uniforms.uLit.value = clamp(1.4 - near / 6, 0.12, 1);
       }
       {
-        const sd = sturgeon.userData; sd.a += dt * 0.035;
-        const x = Math.cos(sd.a) * 12, z = Math.sin(sd.a) * 9 - 3;
-        sturgeon.position.set(x, bedH(x, z) + 0.55, z);
-        sturgeon.rotation.y = -sd.a + Math.PI;            // heading along the circle
-        sd.tail.rotation.y = Math.sin(T * 2.2) * 0.35;
+        const st = sturgeon.userData.st;
+        if (st.on) {
+          st.t += dt;
+          const x = st.x0 + st.dx * st.t * 0.32, z = st.z0 + st.dz * st.t * 0.32;
+          sturgeon.position.set(x, bedH(x, z) + 0.45, z); sturgeon.rotation.y = Math.atan2(st.dx, st.dz);
+          sturgeon.userData.update(T);
+          if (Math.random() < dt * 3) puffAt(x, sturgeon.position.y - 0.4, z, 0.5);
+          const lx = x - D.x, lz = z - D.z;
+          if (!st.seen && Math.hypot(lx, lz) < 7) { st.seen = true; lifeApi.onSturgeon?.(); }
+          if (st.t > 34) { st.on = false; sturgeon.visible = false; }
+        } else if (st.when && T > st.when) {               // it crosses in front of the vehicle, slowly, low over the silt
+          st.when = 0; st.on = true; st.t = 0; sturgeon.visible = true;
+          const fx = -Math.sin(D.yaw), fz = -Math.cos(D.yaw), sx = Math.cos(D.yaw), sz = -Math.sin(D.yaw);
+          st.x0 = D.x + fx * 6 - sx * 5; st.z0 = D.z + fz * 6 - sz * 5; st.dx = sx; st.dz = sz;
+        }
+        gobies.userData.update(dt, new THREE.Vector3(D.x, D.y, D.z), (p) => inBeam(p), (x, y, z) => puffAt(x, y, z, 0.35), bedH);
       }
       if (thrusting && T > siltNext) {
         siltNext = T + 0.09;
@@ -430,6 +447,7 @@ function createLife(deep, lampPos, lampDir) {
       }
     },
   };
+  return lifeApi;
 }
 
 const rbox = (w, h, d, r = 0.03, seg = 3) => new RoundedBoxGeometry(w, h, d, seg, Math.min(r, w / 2.01, h / 2.01, d / 2.01));
@@ -571,15 +589,9 @@ export function createDive(view) {
     hullUnder.position.set(-3.6, 0, 18.2);       // her stern right over the spot where Nerpa went in: the propeller in Snell's window
   }
   // a Caspian seal near the surface (only in these shots, CLAUDE.md 23.3-G)
-  const seal = new THREE.Group(); surf.add(seal);
-  {
-    const fur = std({ color: 0x5a564e, roughness: 0.7 });
-    const body = new THREE.Mesh(new THREE.LatheGeometry([[0, -0.6], [0.12, -0.52], [0.2, -0.3], [0.22, 0], [0.18, 0.3], [0.1, 0.48], [0.07, 0.56], [0, 0.6]].map(([a, b]) => new THREE.Vector2(a, b)), 20), fur);
-    body.rotation.x = Math.PI / 2; seal.add(body);
-    for (const sx of [-1, 1]) { const f = new THREE.Mesh(new THREE.SphereGeometry(0.12, 10, 6), fur); f.scale.set(1, 0.2, 0.6); f.position.set(sx * 0.2, -0.05, 0.25); f.rotation.z = sx * 0.5; seal.add(f); }
-    const tail = new THREE.Mesh(new THREE.SphereGeometry(0.14, 10, 6), fur); tail.scale.set(1.2, 0.15, 0.6); tail.position.z = -0.62; seal.add(tail);
-    seal.userData.tail = tail;
-  }
+  const seal = makeSeal(); surf.add(seal);           // fix 2a: a lofted seal that bends as it swims
+  // fix 2b: a school of sprats in the twilight zone (shot 4)
+  const sprats = makeSprats(200); sprats.visible = false; deep.add(sprats);
   // mnemiopsis comb jellies that drift past the camera in the twilight zone (shot 4)
   const combs = [ctenophore(0.16), ctenophore(0.11), ctenophore(0.13)];
   combs.forEach((c) => { c.visible = false; deep.add(c); });
@@ -1094,6 +1106,11 @@ export function createDive(view) {
   const _lp = new THREE.Vector3();
   const life = createLife(deep, () => spot.getWorldPosition(_lp), (out) => {
     spot.target.getWorldPosition(out); return out.sub(spot.getWorldPosition(_lp)).normalize(); });
+  life.onSturgeon = () => {               // Dana, the first time a sturgeon comes into the light (story*.json → dive_lines)
+    if (life.sturgeonSaid) return; life.sturgeonSaid = true;
+    const line = story()?.dive_lines?.sturgeon;
+    if (line) cockpit.msg(t("dv_says", { name: who("dana").name, text: line }), 4600);
+  };
 
   // ---- the cockpit and the controls
   const cockpit = createCockpit(document.getElementById("ui").parentElement, {
@@ -1231,7 +1248,7 @@ export function createDive(view) {
     sfx.creak(); sfx.thud();
     cockpit.msg(D.task ?? t("dv_bottom"), 3600);              // a story dive: its task from the briefing
     mode = "dive"; D.t0 = T; cockpit.live(true);
-    D.onEvent("start"); cockpit.pulseFinder();            // Dana: "the needle of the finder — swim where it points"
+    D.onEvent("start"); cockpit.pulseFinder(); life.reset(T);            // Dana: "the needle of the finder — swim where it points"
     later(15000, () => cockpit.hideHelp());
   }
 
@@ -1473,6 +1490,7 @@ export function createDive(view) {
     // bubbles from the thrusters and the vents on top of the fairing
     const emitHull = (v) => {
       const props = model.props, r = Math.random();
+      if (surf.visible && r > 0.93) { seal.localToWorld(v.copy(seal.userData.nose)); return v; }       // bubbles from the seal's nostrils
       if (surf.visible && r < 0.25) { hullUnder.userData.prop.getWorldPosition(v); v.x += (Math.random() - 0.5) * 1.2; v.y += (Math.random() - 0.5) * 1.2; v.z -= Math.random() * 2; return v; }   // the ship's propeller wash
       if (r < 0.7) props[Math.floor(Math.random() * props.length)].getWorldPosition(v);
       else v.set((Math.random() - 0.5) * 1.6, 2.0, -0.6 + Math.random() * 1.2).applyMatrix4(nerpa.userData.model.matrixWorld);
@@ -1503,8 +1521,12 @@ export function createDive(view) {
       camera.lookAt(nerpa.position.x - 0.6 - (1 - e) * 1.2, nerpa.position.y + 1.2 + (1 - k) * 2.5, nerpa.position.z + (1 - e) * 1.0);   // first the stern and her propeller, then Nerpa
       surfPlane.material.uniforms.uCam.value.copy(camera.position);
       hullUnder.userData.prop.rotation.z += dt * 3;
-      seal.position.set(-7 + k * 13, Y0 + 12.2 + Math.sin(k * 6) * 0.15, -3 + k * 2); seal.rotation.set(0, Math.PI / 2 - 0.3, Math.sin(time * 6) * 0.15);
-      seal.userData.tail.rotation.y = Math.sin(time * 8) * 0.5;
+      {   // the seal circles Nerpa in an arc, then goes up to the light
+        const a = -1.2 + k * 3.6, rr = 2.6, up = Math.max(0, k - 0.62) / 0.38;
+        seal.position.set(nerpa.position.x + Math.cos(a) * rr, nerpa.position.y + 0.8 + up * up * 9 + Math.sin(k * 9) * 0.15 - Y0, nerpa.position.z + Math.sin(a) * rr);
+        seal.rotation.set(-up * 1.1, -a, Math.sin(time * 2) * 0.1);
+        seal.userData.update(time);
+      }
       for (const m of shafts) m.material.opacity = 0.3 + 0.2 * Math.sin(time * 0.8 + m.userData.ph);
       caustic.intensity = 90 * (1 - k * 0.6); causticTex.offset.set(Math.sin(time * 0.31) * 0.2 + time * 0.03, Math.cos(time * 0.27) * 0.2);
       trail.update(dt, time, emitHull, k < 0.12 ? 6 : 1);          // the ballast vents: a burst of air as she goes under
@@ -1545,10 +1567,18 @@ export function createDive(view) {
         c.rotation.set(Math.sin(time + i) * 0.3, time * 0.2 + i, 0.2);
         c.userData.mat.uniforms.uT.value = time + c.userData.ph; c.userData.mat.uniforms.uLit.value = lit ? 1 : 0.15;
       });
+      // the sprats between 50 and 300 m: a school that turns away from Nerpa in a wave, silver flashes in the beams
+      sprats.visible = depth > 40 && depth < 320;
+      if (sprats.visible) {
+        if (!sprats.userData.placed) { sprats.userData.placed = true; sprats.userData.place(new THREE.Vector3(camera.position.x * 0.5, ny, camera.position.z * 0.5)); }
+        camera.getWorldDirection(tmpV);
+        sprats.userData.update(dt, time, new THREE.Vector3().copy(camera.position).addScaledVector(tmpV, 3.2).setY(ny - 0.4), nerpa.position);
+      }
       if (Math.random() < 0.01) sounds.creak?.();
       model.update(dt, time, 0.3); glare(); trail.update(dt, time, k < 0.7 ? emitHull : null);
     });
     combs.forEach((c) => { c.visible = false; });
+    sprats.visible = false; sprats.userData.placed = false;
 
     // ---- shot 5: the seabed comes up in the light; the skids touch, a cloud of silt; then into the cockpit
     if (!lit) { lampsOn(true); snow.mat.uniforms.uOn.value = 1; }
