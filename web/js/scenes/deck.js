@@ -242,6 +242,19 @@ export function seaHeight(x, z, t) {
   return h;
 }
 
+/** Float a body on the Gerstner swell: height and pitch / roll from four points along its hull (the same waves as
+ *  the water and «Tulpar»). obj.position.x/z and rotation.y stay; draft = how deep the origin sits (waterline at 0). */
+const _fp = new THREE.Vector3();
+export function floatOnWaves(obj, time, { len = 10, beam = 4, draft = 0, k = 1 } = {}) {
+  const ry = obj.rotation.y, c = Math.cos(ry), sn = Math.sin(ry), x = obj.position.x, z = obj.position.z;
+  const at = (fx, fz) => seaHeight(x + fx * c + fz * sn, z - fx * sn + fz * c, time);
+  const f = at(0, len / 2), b = at(0, -len / 2), l = at(beam / 2, 0), r = at(-beam / 2, 0);
+  obj.rotation.order = "YXZ";
+  obj.position.y = ((f + b + l + r) / 4) * k - draft;
+  obj.rotation.x = -Math.atan2(f - b, len) * k;
+  obj.rotation.z = Math.atan2(l - r, beam) * k;
+}
+
 function createSky(moonDir) {
   const g = new THREE.Group();
   const dome = new THREE.Mesh(new THREE.SphereGeometry(6000, 48, 24), new THREE.ShaderMaterial({
@@ -1206,8 +1219,15 @@ export function createDeck(view, { lifeLabel = "" } = {}) {
     const hs = new THREE.Shape(outline.map(([x, z]) => new THREE.Vector2(x, z)));
     const hg = new THREE.ExtrudeGeometry(hs, { depth: 5.2, bevelEnabled: true, bevelThickness: 0.2, bevelSize: 0.2, bevelSegments: 2, curveSegments: 8 }); hg.rotateX(Math.PI / 2);
     poseidonNear.add(at(mesh(hg, black, { cast: false }), 0, 2.6, 0));
-    const bt = new THREE.ExtrudeGeometry(hs, { depth: 0.9, bevelEnabled: false }); bt.rotateX(Math.PI / 2); bt.scale(1.012, 1, 1.006);
-    poseidonNear.add(at(mesh(bt, red, { cast: false }), 0, 1.25, 0));                                   // the boot top at the waterline
+    // the boot top: red, round the hull at the waterline (outside the hull's 0.2 bevel), and the foam where it meets the sea
+    const bt = new THREE.ExtrudeGeometry(hs, { depth: 0.7, bevelEnabled: true, bevelThickness: 0.02, bevelSize: 0.26, bevelSegments: 1 }); bt.rotateX(Math.PI / 2);
+    poseidonNear.add(at(mesh(bt, red, { cast: false }), 0, 0.35, 0));
+    const fs = new THREE.Shape(outline.map(([x, z]) => new THREE.Vector2(x * 1.22 + Math.sign(x) * 0.6, z * 1.06)));
+    fs.holes.push(new THREE.Path(outline.map(([x, z]) => new THREE.Vector2(x, z)).reverse()));
+    const foamTex = canvasTexture(256, 256, (g2, w2) => { const rr = rng(77); g2.clearRect(0, 0, w2, w2); for (let i = 0; i < 1600; i++) { g2.fillStyle = `rgba(255,255,255,${0.2 + rr() * 0.6})`; g2.beginPath(); g2.arc(rr() * w2, rr() * w2, 1 + rr() * 3, 0, 7); g2.fill(); } });
+    foamTex.wrapS = foamTex.wrapT = THREE.RepeatWrapping; foamTex.repeat.set(0.25, 0.25);
+    const foamRing = new THREE.Mesh(new THREE.ShapeGeometry(fs).rotateX(Math.PI / 2), new THREE.MeshBasicMaterial({ map: foamTex, transparent: true, depthWrite: false, opacity: 0.8, side: THREE.DoubleSide }));
+    foamRing.position.y = 0.04; poseidonNear.add(foamRing);
     const tiers = [[8.2, 2.6, 12, 4.0], [7.0, 2.4, 9, 6.5], [6.2, 2.2, 6, 8.8]];
     tiers.forEach(([w, h, d, y], i) => {
       poseidonNear.add(at(mesh(rbox(w, h, d, 0.15), red), 0, y, 2 + i * 0.6));
@@ -1276,7 +1296,8 @@ export function createDeck(view, { lifeLabel = "" } = {}) {
     sky.userData.moon.material.opacity = W.moon; sky.userData.halo.material.opacity = W.moon;
     poseidonFar.visible = W.haze > 0.4;
     poseidonNear.visible = W.sun > 0.5 && W.day < 0.5;                          // act IV: alongside at dawn
-    if (poseidonNear.visible) { poseidonNear.position.y = seaHeight(38, -6, time) * 0.8 - 0.4; poseidonNear.rotation.z = Math.sin(time * 0.45) * 0.03; }
+    if (poseidonNear.visible) floatOnWaves(poseidonNear, time, { len: 36, beam: 9 });
+    if (poseidonFar.visible) floatOnWaves(poseidonFar, time, { len: 36, beam: 9, draft: 0.3 });
     const hz = 0.55 + 0.9 * W.haze + 0.35 * W.rain;
     for (const h of HALOS) if (h.s !== sky.userData.halo) { h.s.scale.setScalar(h.size * hz); h.s.material.opacity = Math.min(1, 0.65 + 0.35 * hz); }
     scene.fog.color.copy(W.fogCol); scene.fog.density = W.fogD;
@@ -1354,8 +1375,7 @@ export function createDeck(view, { lifeLabel = "" } = {}) {
     pools[0].set(water.x, water.z, 7, 1.0);
     boats.forEach((b, k) => {
       const sd = b.userData.seed;
-      b.position.y = seaHeight(b.position.x, b.position.z, time) * 0.6;
-      b.rotation.z = Math.sin(time * 0.7 + sd) * 0.05;
+      floatOnWaves(b, time + sd, { len: 9, beam: 3 });
       b.userData.strobe.material.opacity = ((time * 1.6 + k * 0.37) % 1 < 0.08 || (time * 1.6 + k * 0.37) % 1 > 0.16 && (time * 1.6 + k * 0.37) % 1 < 0.24) ? 1 : 0;   // a double flash
       const target = new THREE.Vector3(C.x + Math.sin(time * 0.2 + sd) * 10, 0, C.z + Math.cos(time * 0.17 + sd) * 8);
       target.y = seaHeight(target.x, target.z, time);
@@ -1364,8 +1384,9 @@ export function createDeck(view, { lifeLabel = "" } = {}) {
     });
     for (const g of debris) {
       const bp = g.userData.base, tl = g.userData.tilt;
-      g.position.set(bp.x, seaHeight(bp.x, bp.z, time) + 0.06, bp.z);
-      g.rotation.set(Math.sin(time * 0.8 + bp.x) * tl, bp.z * 0.3 + Math.sin(time * 0.1 + bp.x) * 0.3, Math.cos(time * 0.7 + bp.z) * tl);
+      g.position.set(bp.x, 0, bp.z); g.rotation.y = bp.z * 0.3 + Math.sin(time * 0.1 + bp.x) * 0.3;
+      floatOnWaves(g, time, { len: 1.2, beam: 1.0, draft: -0.06 });
+      g.rotation.x += Math.sin(time * 0.8 + bp.x) * tl * 0.4; g.rotation.z += Math.cos(time * 0.7 + bp.z) * tl * 0.4;
     }
     sea.material.uniforms.uHull.value.set(0, 0, 5.2, 0);
     pool.update(view.camera.position, dt);
