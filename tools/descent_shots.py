@@ -31,7 +31,7 @@ if not args.free:
         g.story_event(ev)
     g.pop_story()
 threading.Thread(target=server.serve_forever, daemon=True).start()
-url = f"http://127.0.0.1:{server.server_address[1]}/?lang={args.lang}&nointro=1"
+url = f"http://127.0.0.1:{server.server_address[1]}/?lang={args.lang}&nointro=1&sturgeon=1"
 errors = []
 with sync_playwright() as pw:
     b = pw.chromium.launch(channel="chrome", headless=True, args=["--use-angle=metal", "--enable-gpu"])

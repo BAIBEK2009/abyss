@@ -377,7 +377,7 @@ function createLife(deep, lampPos, lampDir) {
       const pos = [];
       for (let i = 0; i < 16; i++) { const a = Math.random() * 6.28, d = 2.5 + Math.random() * 9; const x = Math.cos(a) * d, z = Math.sin(a) * d; pos.push(new THREE.Vector3(x, bedH(x, z) + 0.012, z)); }
       gobies.userData.place(pos);
-      const st = sturgeon.userData.st; st.on = false; st.seen = false; sturgeon.visible = false; st.when = Math.random() < 0.55 ? T0 + 10 + Math.random() * 15 : 0;
+      const st = sturgeon.userData.st; st.on = false; st.seen = false; sturgeon.visible = false; st.when = /[?&]sturgeon=1/.test(location.search) ? T0 + 1 : Math.random() < 0.55 ? T0 + 10 + Math.random() * 15 : 0;      // ?sturgeon=1: for the screenshots
     },
     update(dt, T, D, thrusting) {
       for (const c of jellies) {
