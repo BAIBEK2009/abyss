@@ -355,5 +355,7 @@
  "fp_talk": "Сөйлесу: {name}",
  "hull_name": "ТҰЛПАР",
  "hull_port": "АҚТАУ",
- "sign_workshop": "ШЕБЕРХАНА"
+ "sign_workshop": "ШЕБЕРХАНА",
+ "loading_python": "Python жүктелуде…",
+ "loading_python_failed": "Python жүктелмеді. Интернетті тексеріп, бетті жаңартыңыз"
 }

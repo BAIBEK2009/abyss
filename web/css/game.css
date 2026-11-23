@@ -904,3 +904,14 @@ body.cine .skip-act, body.diving .skip-act, body.descent .skip-act { display: no
 @keyframes pt-talk { 50% { opacity: 1; } }
 .speech .medal .pt-noise { animation: pt-static 0.35s steps(3) infinite; }
 @keyframes pt-static { 0% { opacity: 0.08; transform: translateY(0); } 50% { opacity: 0.16; transform: translateY(2px); } 100% { opacity: 0.05; transform: translateY(-1px); } }
+
+/* ---- the online build (docs/, Pyodide): «Loading Python…» over everything until the engine is up */
+.py-loading { position: fixed; inset: 0; z-index: 95; display: grid; place-items: center; padding: 16px;
+  background: radial-gradient(ellipse at 50% 30%, #1d2a33 0%, #0b1015 60%, #050709 100%); color: #ecdcb8; transition: opacity 0.45s; }
+.py-loading.off { opacity: 0; pointer-events: none; }
+.py-loading-card { display: flex; flex-direction: column; align-items: center; gap: 18px; width: min(460px, 100%); text-align: center; }
+.py-loading-text { display: flex; flex-direction: column; gap: 6px; font: 600 clamp(16px, 2.2vw, 20px)/1.35 var(--print); color: #e8c987; }
+.py-loading-bar { width: 100%; height: 8px; border-radius: 4px; background: #ffffff14; border: 1px solid #b8893b66; overflow: hidden; }
+.py-loading-bar i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #b8893b, #ecc983); }
+.py-loading-note { min-height: 1em; font: 500 13px/1.5 var(--print); color: #d9573b; }
+.py-loading.failed .py-loading-bar i { background: #d9573b; }

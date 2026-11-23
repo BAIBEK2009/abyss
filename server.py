@@ -33,20 +33,16 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
 from core.exam import format_turn
-from core.game import DEMO_SEED, Game, GameError
+from core.game import DEMO_SEED
+from core.router import Session, story_file  # noqa: F401  (story_file: kept for older imports)
 
 WEB_DIR = Path(__file__).resolve().parent / "web"
 MAX_BODY = 64 * 1024
-# the three story files have the same structure (CLAUDE.md 23.1); ru is the original
-STORY_FILES = {"ru": "story.json", "kk": "story.kk.json", "en": "story.en.json"}
-
-
-def story_file(lang: str | None) -> Path:
-    return WEB_DIR / "data" / STORY_FILES.get(lang or "ru", STORY_FILES["ru"])
 
 
 class GameServer(ThreadingHTTPServer):
-    """Holds the one current mission. A lock keeps concurrent requests from mixing up turns."""
+    """Holds the one current mission (core.router.Session: the same routes the online build calls in
+    Pyodide). A lock keeps concurrent requests from mixing up turns."""
 
     daemon_threads = True
     # on Windows SO_REUSEADDR lets a second server bind a port that is in use; then main.py could not move on
@@ -60,7 +56,15 @@ class GameServer(ThreadingHTTPServer):
         self.lang = lang
         self.campaign = campaign
         self.demo = demo
-        self.game = Game(seed=DEMO_SEED if demo else seed, lang=lang, campaign=campaign, demo=demo)
+        self.session = Session(seed=seed, lang=lang, campaign=campaign, demo=demo, on_turns=self.print_new_turns)
+
+    @property
+    def game(self):
+        return self.session.game
+
+    @game.setter
+    def game(self, value):
+        self.session.game = value
 
     def print_new_turns(self, game, before: int):
         """Exam mode: every turn of the three algorithms goes to this terminal."""
@@ -70,7 +74,7 @@ class GameServer(ThreadingHTTPServer):
 
 
 class Handler(SimpleHTTPRequestHandler):
-    """Static files from web/ plus JSON routes under /api/."""
+    """Static files from web/ plus JSON routes under /api/ (core.router)."""
 
     server: GameServer
 
@@ -89,23 +93,12 @@ class Handler(SimpleHTTPRequestHandler):
     # ------------------------------------------------------------------ routing
     def do_GET(self):
         url = urlsplit(self.path)
-        path = url.path
-        if not path.startswith("/api/"):
+        if not url.path.startswith("/api/"):
             return super().do_GET()
-        if path == "/api/story":
-            lang = (parse_qs(url.query).get("lang") or ["ru"])[0]
-            return self.send_json(json.loads(story_file(lang).read_text(encoding="utf-8")))
+        query = {k: v[0] for k, v in parse_qs(url.query).items()}
         with self.server.lock:
-            game = self.server.game
-            if path == "/api/state":
-                return self.send_json(game.state())
-            if path == "/api/advice":
-                if game.status != "playing":
-                    return self.send_json({"error": "game_over", "params": {}}, 400)
-                return self.send_json(game.advice())
-            if path == "/api/journal":
-                return self.send_json({"feed": game.feed, "turns": game.turns})
-        return self.send_json({"error": "unknown_endpoint"}, 404)
+            status, data = self.server.session.handle("GET", url.path, query=query)
+        return self.send_json(data, status)
 
     def do_POST(self):
         path = urlsplit(self.path).path
@@ -113,58 +106,9 @@ class Handler(SimpleHTTPRequestHandler):
             body = self.read_json()
         except ValueError:
             return self.send_json({"error": "bad_json", "params": {}}, 400)
-
         with self.server.lock:
-            game = self.server.game
-            try:
-                if path == "/api/new":
-                    seed = body.get("seed", DEMO_SEED)
-                    if seed is not None and (not isinstance(seed, int) or isinstance(seed, bool)):
-                        raise GameError("bad_seed")
-                    campaign = body.get("campaign", self.server.campaign)
-                    demo = bool(body.get("demo"))
-                    self.server.game = Game(seed=DEMO_SEED if demo else seed, lang=body.get("lang") or self.server.lang,
-                                            campaign=bool(campaign) or demo, demo=demo)
-                    return self.send_json(self.server.game.state())
-                if path == "/api/load":
-                    self.server.game = Game.replay(body.get("save"))
-                    return self.send_json(self.server.game.state())
-                if path == "/api/choice":
-                    story = game.choose(str(body.get("key", "")), str(body.get("option", "")))
-                    return self.send_json({"story": story, "state": game.state()})
-                if path == "/api/focus":
-                    game.set_focus(str(body.get("kind", "")))
-                    return self.send_json({"state": game.state()})
-                if path == "/api/decoy":
-                    events = game.drop_decoy()
-                    return self.send_json({"events": events, "story": game.pop_story(), "state": game.state()})
-                if path == "/api/skip":
-                    story = game.skip_act()
-                    return self.send_json({"story": story, "state": game.state()})
-                if path == "/api/preview":
-                    return self.send_json(game.preview(body.get("action")))
-                if path == "/api/act":
-                    before = len(game.turns)
-                    events = game.act(body.get("action"), live=bool(body.get("live")))
-                    self.server.print_new_turns(game, before)
-                    return self.send_json({"events": events, "story": game.pop_story(), "state": game.state()})
-                if path == "/api/dive":
-                    before = len(game.turns)
-                    find = body.get("find") if isinstance(body.get("find"), str) else None
-                    events = game.dive_end(bool(body.get("found")), body.get("coverage", 0), bool(body.get("debris")), find)
-                    self.server.print_new_turns(game, before - 1)      # the dive's turn now has its result
-                    return self.send_json({"events": events, "story": game.pop_story(), "state": game.state()})
-                if path == "/api/story":
-                    story = game.story_event(str(body.get("event", "")))
-                    return self.send_json({"story": story, "state": game.state()})
-                if path == "/api/clue":
-                    before = len(game.turns)
-                    events = game.clue(body.get("id"), bool(body.get("accept")))
-                    self.server.print_new_turns(game, before)
-                    return self.send_json({"events": events, "story": game.pop_story(), "state": game.state()})
-            except GameError as e:
-                return self.send_json({"error": e.key, "params": e.params}, 400)
-        return self.send_json({"error": "unknown_endpoint"}, 404)
+            status, data = self.server.session.handle("POST", path, body)
+        return self.send_json(data, status)
 
     # ------------------------------------------------------------------ io helpers
     def read_json(self) -> dict:

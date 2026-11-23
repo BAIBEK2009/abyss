@@ -355,5 +355,7 @@
  "fp_talk": "Talk: {name}",
  "hull_name": "ТҰЛПАР",
  "hull_port": "АҚТАУ",
- "sign_workshop": "ШЕБЕРХАНА"
+ "sign_workshop": "ШЕБЕРХАНА",
+ "loading_python": "Loading Python…",
+ "loading_python_failed": "Python did not load. Check the connection and reload the page"
 }

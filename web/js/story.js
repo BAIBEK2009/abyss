@@ -2,13 +2,14 @@
 // the engine only shows them. loadStory(lang) is awaited once at start-up; after that the helpers are
 // synchronous.
 import { nobreakAll } from "./i18n.js";
+import { api } from "./api.js";
 
 let S = null;
 let KEYS = {};
 
 export async function loadStory(lang) {
   const [story, keys] = await Promise.all([
-    fetch(`/api/story?lang=${encodeURIComponent(lang)}`).then((r) => r.json()),
+    api.storyText(lang),
     fetch("data/map_keys.json").then((r) => r.json()),
   ]);
   S = nobreakAll(story); KEYS = keys;      // the flight number never wraps (i18n.js)
