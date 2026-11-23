@@ -157,6 +157,7 @@ function createSea(moonDir) {
   const mat = new THREE.ShaderMaterial({
     uniforms: { uTime: { value: 0 }, uMoon: { value: moonDir.clone() }, uFogCol: { value: new THREE.Color(0x0b1626) }, uPools: { value: [0, 1, 2, 3].map(() => new THREE.Vector4()) },
                 uAmp: { value: 1 }, uFoam: { value: 0 }, uCloud: { value: 0 }, uMoonVis: { value: 1 }, uFlash: { value: 0 }, uSun: { value: 0 }, uFogD: { value: 0 }, uDay: { value: 0 },
+                uLights: { value: [0, 1, 2, 3, 4, 5].map(() => new THREE.Vector4()) }, uLightCol: { value: [0, 1, 2, 3, 4, 5].map(() => new THREE.Color()) },
                 uHull: { value: new THREE.Vector4(0, 0, 5.2, 0) }, uHullZ: { value: new THREE.Vector2(STERN, BOW) } },
     vertexShader: /* glsl */`
       uniform float uTime; uniform float uAmp; varying vec3 vW; varying float vH; varying vec3 vN; varying float vCr;
@@ -172,6 +173,7 @@ function createSea(moonDir) {
     fragmentShader: /* glsl */`
       uniform float uTime; uniform vec3 uMoon; uniform vec3 uFogCol; uniform vec4 uHull; uniform vec2 uHullZ; uniform vec4 uPools[4];
       uniform float uAmp; uniform float uFoam; uniform float uCloud; uniform float uMoonVis; uniform float uFlash; uniform float uSun; uniform float uFogD; uniform float uDay;
+      uniform vec4 uLights[6]; uniform vec3 uLightCol[6];
       varying vec3 vW; varying float vH; varying vec3 vN; varying float vCr;
       float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
       float vn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
@@ -193,12 +195,25 @@ function createSea(moonDir) {
         // the body of the water: #0B2A3A deep, #1E5A6E where a crest is thin enough for light to pass (scaled by the light)
         float lightK = 0.18 + 0.5 * uSun + 0.25 * uMoonVis;
         float thin = smoothstep(0.1, 0.75, vCr) * smoothstep(-0.1, 0.6, vH);
-        vec3 deep = mix(vec3(0.043, 0.165, 0.227), vec3(0.118, 0.353, 0.431), thin) * lightK * 0.35;
+        vec3 deep = mix(mix(vec3(0.027, 0.102, 0.149), vec3(0.075, 0.227, 0.29), thin), mix(vec3(0.043, 0.165, 0.227), vec3(0.118, 0.353, 0.431), thin), uSun) * lightK * 0.3;   // night #071A26 / #133A4A
         sky = mix(sky, mix(vec3(0.6, 0.68, 0.74), vec3(0.3, 0.48, 0.72), max(r.y, 0.0)) + vec3(1.0, 0.85, 0.6) * pow(max(dot(r, normalize(vec3(0.9, 0.27, -0.3))), 0.0), 400.0) * 12.0, uDay);
         vec3 col = mix(deep * (1.0 + 4.0 * uDay), sky, fres);
         float spec = pow(max(dot(r, uMoon), 0.0), 220.0);
         float glint = pow(max(dot(r, uMoon), 0.0), 28.0);
-        col += vec3(0.85, 0.9, 1.0) * (spec * 6.0 + glint * 0.18) * uMoonVis;
+        col *= 1.0 - 0.35 * (1.0 - uSun) * uMoonVis;                                   // a darker night sea
+        // the moon path: a broad glitter towards the moon, broken up by the swell
+        float sparkle = smoothstep(0.55, 0.95, vn(vW.xz * vec2(0.9, 2.4) + vec2(uTime * 0.35, -uTime * 0.2))) * smoothstep(0.4, 0.9, vn(vW.xz * 3.1 - uTime * 0.6));
+        float path = pow(max(dot(r, uMoon), 0.0), 9.0) * sparkle;
+        col += vec3(0.85, 0.9, 1.0) * (spec * 6.0 + glint * 0.1 + path * 1.6) * uMoonVis;
+        // the ship's lights on the water: long vertical streaks towards the camera, glittering on the ripples
+        for (int i = 0; i < 6; i++) {
+          vec4 L = uLights[i]; if (L.w <= 0.0) continue;
+          vec2 q = L.xy, toCam = normalize(cameraPosition.xz - q), d = vW.xz - q;
+          float along = dot(d, toCam), across = abs(d.x * toCam.y - d.y * toCam.x);
+          float w = 0.35 + along * 0.03, len = L.z * 4.0 + 6.0;
+          float st = exp(-across * across / (w * w)) * smoothstep(-1.0, 0.5, along) * (1.0 - smoothstep(len * 0.5, len, along));
+          col += uLightCol[i] * L.w * st * (0.25 + 1.5 * sparkle) * (1.0 - uSun * 0.8);
+        }
         col += vec3(0.55, 0.6, 0.75) * uFlash * (0.15 + fres);                            // lightning on the water
         // foam: crests and the water pushed along the hull
         float crest = smoothstep(0.55, 0.85, vCr + (vn(vW.xz * 0.35 + uTime * 0.05) - 0.5) * 0.25);
@@ -1289,6 +1304,18 @@ export function createDeck(view, { lifeLabel = "" } = {}) {
   function applyWeather(time) {
     const su = sea.material.uniforms, ku = sky.userData.dome.material.uniforms;
     SEA.amp = W.amp; su.uAmp.value = W.amp; su.uFoam.value = W.foam; su.uCloud.value = W.cloud; su.uMoonVis.value = W.moon;
+    // the ship's lamps reflected in the sea: the 6 nearest outside lamps (their halos), as streaks (fix 3)
+    if (!shipLamps) { shipLamps = []; ship.traverse((o) => { if (o.isSprite && o.material.blending === THREE.AdditiveBlending && o.scale.x >= 0.6 && o.scale.x < 3) shipLamps.push(o); }); }
+    {
+      const cam = view.camera, near = shipLamps.map((o) => ({ o, w: o.getWorldPosition(_lw).clone() })).filter((l) => l.w.y > DECK_Y + 0.8);
+      if (cam) near.sort((a, b) => a.w.distanceToSquared(cam.position) - b.w.distanceToSquared(cam.position));
+      for (let i = 0; i < 6; i++) {
+        const l = near[i];
+        if (!l) { su.uLights.value[i].w = 0; continue; }
+        su.uLights.value[i].set(l.w.x, l.w.z, l.w.y, l.o.visible ? 0.55 : 0);
+        su.uLightCol.value[i].copy(l.o.material.color).multiplyScalar(0.33);
+      }
+    }
     su.uFlash.value = W.flash; su.uSun.value = W.sun; su.uDay.value = W.day; su.uFogCol.value.copy(W.fogCol); su.uFogD.value = W.fogD * 0.6;
     ku.uTime.value = time; ku.uCloud.value = W.cloud; ku.uFlash.value = W.flash; ku.uMoonVis.value = W.moon; ku.uSun.value = W.sun; ku.uDay.value = W.day; ku.uFogCol.value.copy(W.fogCol); ku.uHaze.value = W.haze * 0.85;
     if (W.flash > 0.99) ku.uBolt.value.set((Math.random() - 0.5) * 1.6, (Math.random() - 0.2) * 1.6);
@@ -1322,6 +1349,7 @@ export function createDeck(view, { lifeLabel = "" } = {}) {
   radarTargets.push({ x: C.x, z: C.z, col: "#c8ff6a", s: 5 }, { x: C.x + 60, z: C.z - 40, col: "#c8ff6a", s: 4 }, { x: C.x - 70, z: C.z + 30, col: "#c8ff6a", s: 4 },
     { x: rig.position.x, z: rig.position.z, col: "#ffd36a", s: 7 }, { x: poseidonFar.position.x * 20, z: poseidonFar.position.z * 20, col: "#ff6a50", s: 6 });
   horizon.children.forEach((sp, i) => { if (i < 9 && i % 2 === 0) radarTargets.push({ x: sp.position.x, z: sp.position.z, col: "#7dffb0", s: 4 }); });
+  let shipLamps = null; const _lw = new THREE.Vector3();
   function update(dt, time) {
     updateScreens(dt, time); updateGulls(dt, time);
     sea.material.uniforms.uTime.value = time;
