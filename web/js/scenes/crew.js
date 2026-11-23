@@ -95,6 +95,7 @@ export function makePerson(kind = "deck") {
       if (name === "type") { spine.rotation.x = 0.15; shL.rotation.x = -0.9; shR.rotation.x = -0.9; elL.rotation.x = -0.6 + Math.sin(t * 14) * 0.08; elR.rotation.x = -0.6 + Math.sin(t * 13 + 1) * 0.08; }
     }
   };
+  root.traverse((o) => { if (o.isMesh && o !== torso) o.castShadow = false; });       // one shadow caster per person
   root.userData.pose("idle", 0);
   return root;
 }

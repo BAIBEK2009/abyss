@@ -229,19 +229,31 @@ export function cabinProps(outer, room) {
     group.add(at(mesh(rbox(3.4, hgt, 0.5, 0.15), wood), sx, F + hgt / 2, z0 + w));
     group.add(at(mesh(rbox(0.3, hgt, w, 0.1), darkWood), X1 - 0.15, F + hgt / 2, z0 + w / 2));
     const labels = [t("shelf_pilot"), t("shelf_log"), t("shelf_tables"), t("shelf_charts"), t("shelf_signals"), t("shelf_rules")];
+    const COLS = ["#1f3d6b", "#7a2620", "#2f5a35", "#5a3a24", "#2a2a33", "#6b5a3a", "#3a4a5a", "#8a6a2a", "#4a2a4a", "#1d5a5a", "#9a8a6a", "#6a1f1a", "#2a3a2a", "#3a2a1a", "#5a6a7a", "#7a5a3a"];
+    const atlas = canvasTexture(1024, 256, (g, W, H) => {
+      const cw = W / 16;
+      COLS.forEach((c, i) => {
+        g.fillStyle = c; g.fillRect(i * cw, 0, cw, H);
+        g.fillStyle = "rgba(0,0,0,.18)"; for (let k = 0; k < 40; k++) g.fillRect(i * cw + Math.random() * cw, Math.random() * H, 1, 2);
+        if (i % 3 !== 2) { g.fillStyle = "#e9dfc4"; g.fillRect(i * cw + 10, 30, cw - 20, 150);
+          g.save(); g.translate(i * cw + cw / 2, 105); g.rotate(-Math.PI / 2); g.fillStyle = "#23222b"; g.font = "700 15px Onest, sans-serif"; g.textAlign = "center"; g.textBaseline = "middle"; g.fillText(labels[i % labels.length], 0, 0, 140); g.restore(); }
+        g.fillStyle = "#e8b04a"; g.fillRect(i * cw + 8, 200, cw - 16, 5); g.fillRect(i * cw + 8, 214, cw - 16, 2);
+      });
+    });
+    const bookMat = std({ map: atlas, roughness: 0.65 });
     const r = rng(23);
     for (let s = 0; s < 4; s++) {
       const y = F + 1 + s * 4.6;
       group.add(at(mesh(rbox(3.4, 0.45, w, 0.12), wood), sx, y, z0 + w / 2));
       if (s === 3) { group.add(at(mesh(rbox(2.8, 2.2, 6, 0.15), std({ color: 0x8a7a5a, roughness: 0.9 })), sx, y + 1.35, z0 + 4)); continue; }   // a box of charts
       for (let z = z0 + 0.6, k = 0; z < z0 + w - 1.4; k++) {
-        const th = s === 0 ? 1.1 : 0.55 + r() * 0.5, hh = s === 0 ? 3.6 : 2.6 + r() * 1;
-        const col = s === 0 ? ["#1f3d6b", "#7a2620", "#2f5a35"][k % 3] : ["#5a3a24", "#2a2a33", "#6b5a3a", "#3a4a5a"][k % 4];
-        const m = s === 0 ? [std({ color: col, roughness: 0.6 }), std({ color: col, roughness: 0.6 }), std({ color: col }), std({ color: col }), std({ color: col }), std({ map: spineTex(labels[k % labels.length], col, k + 3), roughness: 0.6 })]
-          : std({ color: col, roughness: 0.7 });
-        const b = new THREE.Mesh(new THREE.BoxGeometry(2.6, hh, th), m); b.castShadow = true;
-        b.rotation.y = -Math.PI / 2;
-        at(b, sx - 0.2, y + 0.23 + hh / 2, z + th / 2, s === 0 ? -Math.PI / 2 : 0); group.add(b);
+        // fix 7: books of different colours, heights and thickness, every one with a lettered spine; all of them
+        // sample one atlas (16 spines), so they merge into a single draw call
+        const th = 0.55 + r() * 0.75, hh = 2.6 + r() * 1.2, col = Math.floor(r() * 16);
+        const geo = new THREE.BoxGeometry(2.6, hh, th), uv = geo.attributes.uv;
+        for (let q = 0; q < uv.count; q++) uv.setX(q, (col + 0.1 + uv.getX(q) * 0.8) / 16);
+        const b = new THREE.Mesh(geo, bookMat); b.castShadow = true;
+        at(b, sx - 0.2, y + 0.23 + hh / 2, z + th / 2, 0); group.add(b);
         z += th + 0.06;
       }
       group.add(at(mesh(rbox(0.15, 0.5, w - 0.4, 0.07), std({ color: 0x8e2a1a, roughness: 0.8 })), sx - 1.75, y + 2.2, z0 + w / 2));   // the strap against the roll
@@ -284,12 +296,22 @@ export function cabinProps(outer, room) {
     group.add(at(mesh(rbox(3.2, 0.7, 0.4, 0.15), darkWood), hx, 9.6, hz + 0.3));
     for (const dx of [-0.9, 0.9]) group.add(at(mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0.2, -0.8), new THREE.Vector3(0, 0.7, -1.0)]), 8, 0.1, 6), brassM), hx + dx, 9.5, hz));
     const navy = std({ color: 0x1c2638, roughness: 0.85 });
-    const jacket = new THREE.Group();
-    const body = mesh(new THREE.LatheGeometry([[0, 0], [2.2, 0.1], [2.5, 2], [2.3, 5], [2.6, 7.2], [1.0, 7.7], [0, 7.8]].map(([a, b]) => new THREE.Vector2(a, b)), 20), navy);
-    body.scale.z = 0.45; jacket.add(body);
-    for (const sx of [-1, 1]) { const sl = mesh(new THREE.CylinderGeometry(0.75, 0.9, 6.2, 10), navy); sl.position.set(sx * 2.5, 4.1, 0.1); sl.rotation.z = sx * 0.12; jacket.add(sl); }
-    for (let k = 0; k < 4; k++) for (const sx of [-0.6, 0.6]) { const b = mesh(new THREE.SphereGeometry(0.16, 8, 6), brassM); b.position.set(sx, 5.6 - k * 1.3, 1.1); jacket.add(b); }
-    for (const sx of [-1, 1]) { const ep = mesh(rbox(1.5, 0.15, 0.9, 0.06), std({ color: 0xc9a646, metalness: 0.7, roughness: 0.35 })); ep.position.set(sx * 1.9, 7.45, 0); jacket.add(ep); }
+    // fix 7: a jacket hanging from its loop — a cloth body with sloping shoulders that narrows to the waist, sleeves
+    // hanging straight, a turned-down collar, lapels, two rows of brass buttons, gold shoulder boards, pockets
+    const jacket = new THREE.Group(), navyD = std({ color: 0x141c2c, roughness: 0.9 });
+    const prof = [[1.6, 0], [2.3, 0.3], [2.35, 2.2], [2.05, 4.0], [2.3, 5.6], [2.55, 6.6], [2.0, 7.3], [0.9, 7.6], [0.0, 7.65]];
+    const bodyG = new THREE.LatheGeometry(prof.map(([a, b]) => new THREE.Vector2(a, b)), 24); bodyG.scale(1, 1, 0.42);
+    jacket.add(mesh(bodyG, navy));
+    for (const sx of [-1, 1]) {
+      const sh = mesh(new THREE.SphereGeometry(0.95, 14, 10), navy); sh.scale.set(1, 0.8, 0.85); sh.position.set(sx * 2.35, 6.6, 0); jacket.add(sh);
+      const sl = mesh(new THREE.CapsuleGeometry(0.72, 5.2, 4, 10), navy); sl.position.set(sx * 2.55, 3.6, 0.15); sl.rotation.z = sx * 0.06; jacket.add(sl);
+      const cuff = mesh(new THREE.TorusGeometry(0.7, 0.12, 6, 14), std({ color: 0xc9a646, metalness: 0.7, roughness: 0.35 })); cuff.rotation.x = Math.PI / 2; cuff.position.set(sx * 2.62, 1.3, 0.15); jacket.add(cuff);
+      const lap = mesh(rbox(0.9, 2.6, 0.12, 0.05), navyD); lap.position.set(sx * 0.6, 6.0, 1.02); lap.rotation.z = -sx * 0.32; jacket.add(lap);
+      const pk = mesh(rbox(1.2, 0.12, 0.12, 0.04), navyD); pk.position.set(sx * 1.2, 2.4, 0.98); jacket.add(pk);
+      const ep = mesh(rbox(1.5, 0.15, 0.9, 0.06), std({ color: 0xc9a646, metalness: 0.7, roughness: 0.35 })); ep.position.set(sx * 1.9, 7.35, 0); ep.rotation.z = -sx * 0.18; jacket.add(ep);
+    }
+    const collar = mesh(new THREE.TorusGeometry(0.85, 0.25, 8, 20, Math.PI * 1.3), navyD); collar.rotation.set(Math.PI / 2 + 0.4, 0, -Math.PI * 0.15 - Math.PI / 2); collar.position.y = 7.45; collar.scale.z = 0.6; jacket.add(collar);
+    for (let k = 0; k < 4; k++) for (const sx of [-0.55, 0.55]) { const b = mesh(new THREE.SphereGeometry(0.15, 8, 6), brassM); b.position.set(sx, 4.9 - k * 1.1, 0.99); jacket.add(b); }
     jacket.position.set(hx - 0.9, 1.5, hz - 1.2); group.add(jacket);
     const cap = new THREE.Group();
     cap.add(mesh(new THREE.CylinderGeometry(1.25, 1.05, 0.9, 20), std({ color: 0xf1efe8, roughness: 0.7 })));

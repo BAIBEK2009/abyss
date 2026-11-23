@@ -8,6 +8,8 @@
 // rival's course + target (red dashed thread + red flag). The advice route (brass thread), the
 // rival's forecast outline and tool zones appear only on hover (table UI).
 import * as THREE from "three";
+import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
+import { mergeByMaterial } from "./cabin_props.js";
 import { createKalka, withOverlay } from "./kalka.js";
 import { drawChart, CH0, CHS } from "./chart.js";
 import { canvasTexture, deg, rng } from "../view.js";
@@ -327,16 +329,16 @@ export function createMap(view, state) {
   // stones on the reefs
   {
     const rock = std({ color: 0x7b7468, roughness: 0.95, flatShading: true });
-    const r = rng(41);
+    const r = rng(41), geos = [], o = new THREE.Object3D();
     state.reefs.forEach(([x, y]) => {
       for (let q = 0; q < 3; q++) {
-        const m = mesh(new THREE.DodecahedronGeometry(0.09 + r() * 0.1, 0), rock);
-        m.position.copy(toWorld(x + 0.5 + (r() - 0.5) * 0.32, y + 0.5 + (r() - 0.5) * 0.28)).setY(0.04);
-        m.scale.y = 0.55 + r() * 0.5;
-        m.rotation.set(r() * 3, r() * 3, 0);
-        root.add(m);
+        const g = new THREE.DodecahedronGeometry(0.09 + r() * 0.1, 0);
+        o.position.copy(toWorld(x + 0.5 + (r() - 0.5) * 0.32, y + 0.5 + (r() - 0.5) * 0.28)).setY(0.04);
+        o.scale.set(1, 0.55 + r() * 0.5, 1); o.rotation.set(r() * 3, r() * 3, 0); o.updateMatrix();
+        geos.push(g.applyMatrix4(o.matrix));
       }
     });
+    root.add(mesh(mergeGeometries(geos), rock));                   // one draw call for all the stones
   }
 
   // light: the warm lamp from above-left (soft shadows); the cold moonlight is set by the view
@@ -375,7 +377,7 @@ export function createMap(view, state) {
     [pencil(), [7.1, 0.07, 1.6], 1.25],
     [magnifier(), [-9.4, 0.05, 2.6], -0.5],
   ];
-  for (const [obj, p, ry] of props) { obj.position.set(p[0], p[1], p[2]); obj.rotation.y = ry; root.add(obj); }
+  for (const [obj, p, ry] of props) { obj.position.set(p[0], p[1], p[2]); obj.rotation.y = ry; mergeByMaterial(obj); root.add(obj); }
   const steam = emitter(root, puffTex, 0xffffff, 10, (v) => v.set(-7.1 + (Math.random() - 0.5) * 0.2, 0.9, -7.0 + (Math.random() - 0.5) * 0.2));
 
   // ---- ships, name tags, flag, gold pin, forecast outline
@@ -386,6 +388,11 @@ export function createMap(view, state) {
   const forecastGhost = dashedShip();
   forecastGhost.group.visible = false;
   root.add(aurora.group, rival.group, flag.group, goldPin, forecastGhost.group);
+  for (const sh of [aurora, rival]) {          // fix 7: each ship's static parts in one mesh per material (what moves stays)
+    for (const k of ["bathy", "cable", "wake"]) if (sh[k]) sh[k].userData.noMerge = true;
+    (sh.lights || []).forEach((l) => { l.userData.noMerge = true; });
+    mergeByMaterial(sh.body);
+  }
   const smokes = [
     emitter(root, puffTex, 0xdcd6ca, 16, (v) => aurora.body.localToWorld(v.copy(aurora.funnelTop))),
     emitter(root, puffTex, 0x5e5c5c, 16, (v) => rival.body.localToWorld(v.copy(rival.funnelTop))),
@@ -395,7 +402,7 @@ export function createMap(view, state) {
   // paper-craft storm clouds: three flattened balls each, opaque, casting their shadow on the chart
   const storm = new THREE.Group(); root.add(storm);
   const stormPuffs = [];
-  const cloudMat = std({ color: 0x59606b, roughness: 0.95 }), cloudMatLight = std({ color: 0x9aa1aa, roughness: 0.95 });
+  const cloudMat = std({ color: 0x59606b, roughness: 0.95, transparent: true, opacity: 0.72, depthWrite: false }), cloudMatLight = std({ color: 0x9aa1aa, roughness: 0.95, transparent: true, opacity: 0.45, depthWrite: false });
   const ball = new THREE.SphereGeometry(0.32, 14, 10);
   for (let i = 0; i < 46; i++) {
     const sp = new THREE.Group();
@@ -504,12 +511,13 @@ export function createMap(view, state) {
     if (!th.dashed) {
       grp.add(mesh(new THREE.TubeGeometry(curve, Math.max(40, th.path.length * 24), 0.022, 6), mat));
     } else {
-      const L = curve.getLength(), n = Math.floor(L / 0.24);
+      const L = curve.getLength(), n = Math.floor(L / 0.24), dashes = [];
       for (let i = 0; i < n; i++) {
         const a = i / n, b = a + 0.55 / n;
         const sub = new THREE.CatmullRomCurve3([curve.getPointAt(a), curve.getPointAt((a + b) / 2), curve.getPointAt(Math.min(1, b))]);
-        grp.add(mesh(new THREE.TubeGeometry(sub, 6, 0.02, 5), mat));
+        dashes.push(new THREE.TubeGeometry(sub, 6, 0.02, 5));
       }
+      if (dashes.length) grp.add(mesh(mergeGeometries(dashes), mat));   // the dashes in one draw call
     }
     th.obj = grp;
     root.add(grp);

@@ -357,6 +357,9 @@ export function createCabin(scene) {
   };
 
   mergeByMaterial(group);           // the static cabin: one mesh per material (C2: draw calls)
+  // only what stands by the table casts a shadow from the lamp (fix 7: the shadow pass was ~190 draw calls)
+  const near = new THREE.Box3(new THREE.Vector3(-23, FLOOR_Y, -15), new THREE.Vector3(17, 6, 14)), bb = new THREE.Box3();
+  group.traverse((o) => { if (o.isMesh && !o.userData.keepShadow) { o.geometry.computeBoundingBox(); bb.copy(o.geometry.boundingBox).applyMatrix4(o.matrixWorld); if (!near.intersectsBox(bb) || bb.max.y < FLOOR_Y + 0.5) o.castShadow = false; } });
   return {
     group, space, things, drawBoard,
     /** First person: where the captain stands coming down the stairs / getting up from the table. */
