@@ -352,5 +352,8 @@
  "shelf_signals": "Сигналдар жинағы",
  "shelf_rules": "ТСАЕХЕ",
  "evac_title": "ЭВАКУАЦИЯ ЖОСПАРЫ",
- "fp_talk": "Сөйлесу: {name}"
+ "fp_talk": "Сөйлесу: {name}",
+ "hull_name": "ТҰЛПАР",
+ "hull_port": "АҚТАУ",
+ "sign_workshop": "ШЕБЕРХАНА"
 }

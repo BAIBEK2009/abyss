@@ -441,7 +441,8 @@ export function createDeck(view, { lifeLabel = "" } = {}) {
   const DECK_Y = 1.6;                 // freeboard above the mean sea level
   const hullPaint = (() => {       // painted steel with rust running from the seams (CC0 scan), tinted to the hull's orange
     const h = pbrSet("rusty_painted_metal", [0.45, 0.45]);
-    return std({ ...h, color: new THREE.Color(1.25, 0.82, 0.62), roughness: 1, metalness: 0.2 });
+    const { map, ...rest } = h;                // fix 5: dark blue paint (the scan's orange colour map dropped, its relief and wear kept)
+    return std({ ...rest, color: 0x1f3358, roughness: 0.85, metalness: 0.3 });
   })();
   const whitePaint = paint(0xe9e6de, { seams: 1.5, streaks: 0.7, repeat: [2, 1], seed: 6 });
   const greyPaint = paint(0x8c9298, { seams: 1.4, streaks: 0.6, seed: 8 });
@@ -470,6 +471,60 @@ export function createDeck(view, { lifeLabel = "" } = {}) {
   const hull = mesh(hullGeo, hullPaint, { cast: false });
   hull.position.y = -0.14;           // its bevelled top cap stays under the deck plates
   ship.add(hull);
+  // fix 5: the hull outside — a red boot top at the waterline, the rubbing strake, a row of portholes, the name
+  // «ТҰЛПАР» at the bow on both sides and on the stern with «АҚТАУ» under it, draft marks at the stem, anchors in
+  // their hawse pipes, rust streaks running down from the scuppers
+  {
+    const WL = -DECK_Y;                                                        // the waterline in ship coordinates
+    const halfW = (z) => { if (z <= BODY) return 5; const k = Math.min(1, (z - BODY) / (BOW - BODY)); return 5 * Math.pow(1 - k * k, 0.7); };
+    const boot = new THREE.ExtrudeGeometry(hullShape, { depth: 0.55, bevelEnabled: true, bevelThickness: 0.01, bevelSize: 0.15, bevelSegments: 1, curveSegments: 14 }); boot.rotateX(Math.PI / 2);
+    ship.add(at(mesh(boot, std({ color: 0x9e2a22, roughness: 0.7 }), { cast: false }), 0, WL + 0.3, 0));
+    const strake = HULL.filter(([, z]) => z > STERN + 0.01).map(([x, z]) => [x * 1.035 + Math.sign(x) * 0.05, -0.55, z]);
+    ship.add(mesh(tube(strake, 0.07, 120), std({ color: 0x20283a, roughness: 0.6, metalness: 0.3 })));
+    const portG = new THREE.CircleGeometry(0.11, 16), ringG = new THREE.TorusGeometry(0.12, 0.022, 6, 16);
+    const ports = [], rings = [];
+    for (let z = -11; z <= 12; z += 1.6) for (const sx of [-1, 1]) { const hw = halfW(z) + 0.135; ports.push([sx * hw, -0.95, z, sx]); }
+    const portI = new THREE.InstancedMesh(portG, std({ color: 0x0c1418, roughness: 0.05, metalness: 0.8, emissive: 0x2a2010 }), ports.length);
+    const ringI = new THREE.InstancedMesh(ringG, std({ color: 0xbfc4c4, metalness: 0.8, roughness: 0.35 }), ports.length);
+    const m4 = new THREE.Matrix4(), q4 = new THREE.Quaternion(), e4 = new THREE.Euler(), one = new THREE.Vector3(1, 1, 1), pv = new THREE.Vector3();
+    ports.forEach(([x, y, z, sx], i) => { q4.setFromEuler(e4.set(0, sx * Math.PI / 2, 0)); m4.compose(pv.set(x, y, z), q4, one); portI.setMatrixAt(i, m4); ringI.setMatrixAt(i, m4); });
+    ship.add(portI, ringI);
+    const lettering = (text, w, h, size) => canvasTexture(1024, Math.round(1024 * h / w), (g2, cw, ch) => { g2.clearRect(0, 0, cw, ch); g2.fillStyle = "#f3f1ea"; g2.font = `700 ${size}px Onest, sans-serif`; g2.textAlign = "center"; g2.textBaseline = "middle"; g2.fillText(text, cw / 2, ch / 2); });
+    const decal = (tex, w, h, x, y, z, ry) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshStandardMaterial({ map: tex, transparent: true, roughness: 0.6, polygonOffset: true, polygonOffsetFactor: -2 })); at(m, x, y, z, ry); ship.add(m); return m; };
+    const nameTex = lettering(t("hull_name"), 4, 0.8, 300);
+    for (const sx of [-1, 1]) {
+      const z = BOW - 7, hw = halfW(z) + 0.14, slope = Math.atan2(halfW(z + 1) - halfW(z - 1), 2);
+      decal(nameTex, 4, 0.8, sx * hw, -0.35, z, sx * Math.PI / 2 - sx * slope);
+      // draft marks at the stem: 2 4 6 (metres) stepping up from the waterline
+      const marks = canvasTexture(256, 512, (g2, cw, ch) => { g2.clearRect(0, 0, cw, ch); g2.fillStyle = "#f3f1ea"; g2.font = "700 64px Onest, sans-serif"; g2.textAlign = "center"; ["6", "5", "4", "3", "2"].forEach((n, i) => g2.fillText(n, cw / 2, 70 + i * 100)); });
+      const zm = BOW - 2.2, hwm = halfW(zm) + 0.16, sl = Math.atan2(halfW(zm + 0.5) - halfW(zm - 0.5), 1);
+      decal(marks, 0.35, 1.4, sx * hwm, WL + 0.95, zm, sx * Math.PI / 2 - sx * sl);
+      // the anchor in its hawse pipe
+      const zh = BOW - 4.2, hwh = halfW(zh) + 0.12;
+      const hawse = mesh(new THREE.TorusGeometry(0.28, 0.07, 8, 20), darkSteel); at(hawse, sx * hwh, -0.25, zh, sx * Math.PI / 2); ship.add(hawse);
+      const anchor = mesh(rbox(0.12, 0.7, 0.42, 0.04), darkSteel); at(anchor, sx * (hwh + 0.05), -0.62, zh, sx * Math.PI / 2); ship.add(anchor);
+      // rust streaks down from the scuppers
+      const streak = canvasTexture(64, 256, (g2, cw, ch) => { const gr = g2.createLinearGradient(0, 0, 0, ch); gr.addColorStop(0, "rgba(120,58,28,.85)"); gr.addColorStop(1, "rgba(120,58,28,0)"); g2.fillStyle = gr; g2.fillRect(cw * 0.35, 0, cw * 0.3, ch); });
+      for (let z2 = -12; z2 < 12; z2 += 3.1) decal(streak, 0.18, 0.9, sx * (halfW(z2) + 0.135), -0.5, z2 + 0.4, sx * Math.PI / 2);
+    }
+    decal(nameTex, 4, 0.8, 0, -0.25, STERN - 0.14, Math.PI);
+    decal(lettering(t("hull_port"), 3, 0.5, 260), 3, 0.5, 0, -0.85, STERN - 0.14, Math.PI);
+  }
+  // deck fittings: mushroom vents, a fire station (red cabinet, hose reel), life-raft canisters on cradles
+  {
+    const red = std({ color: 0xb8241c, roughness: 0.5 }), white = std({ color: 0xeeeeea, roughness: 0.5 });
+    for (const [x, z] of [[-4.0, 3.5], [4.0, 3.5], [-3.9, -12.6], [3.9, 9]]) {
+      const v = mesh(lathe([[0.09, 0], [0.09, 0.55], [0.24, 0.6], [0.26, 0.68], [0.12, 0.74], [0, 0.75]], 16), white); at(v, x, 0, z); ship.add(v);
+    }
+    const fire = new THREE.Group(); fire.position.set(4.25, 0, 1.0); fire.rotation.y = -Math.PI / 2; ship.add(fire);
+    fire.add(at(mesh(rbox(0.7, 0.9, 0.3, 0.04), red), 0, 0.85, 0));
+    fire.add(at(mesh(new THREE.TorusGeometry(0.2, 0.06, 8, 20), std({ color: 0xd8c27a, roughness: 0.8 })), 0, 0.85, 0.2));
+    for (const z of [5.5, 7.0]) for (const sx of [-1, 1]) {
+      const cyl = mesh(new THREE.CylinderGeometry(0.32, 0.32, 1.1, 18).rotateZ(Math.PI / 2), white); at(cyl, sx * 4.05, 0.62, z); ship.add(cyl);
+      ship.add(at(mesh(rbox(0.9, 0.25, 0.5, 0.05), darkSteel), sx * 4.05, 0.2, z));
+    }
+  }
+
   // bulwark cap and the rails: posts every 1.5 m, three tubes, the stern left open between the A-frame legs
   const railPts = HULL.filter(([, z]) => z > STERN + 0.01).map(([x, z]) => [x * 0.985, z]);
   const sides = [railPts.filter(([x]) => x >= 0).sort((a, b) => a[1] - b[1]), railPts.filter(([x]) => x <= 0).sort((a, b) => a[1] - b[1])];
@@ -961,6 +1016,11 @@ export function createDeck(view, { lifeLabel = "" } = {}) {
   corr.wrapS = corr.wrapT = THREE.RepeatWrapping; corr.repeat.set(4, 1);
   const contPaint = paint(0x3d6b8a, { seams: 0.5, streaks: 1.5, seed: 31 }); contPaint.bumpMap = corr; contPaint.bumpScale = 2.5;
   const cont = new THREE.Group(); cont.position.set(-3.08, 0, -6.0); ship.add(cont);
+  {   // the workshop's sign over its doors (fix 5)
+    const tx = canvasTexture(512, 128, (g2, w2, h2) => { g2.fillStyle = "#f2c230"; g2.fillRect(0, 0, w2, h2); g2.strokeStyle = "#1a1a1a"; g2.lineWidth = 8; g2.strokeRect(6, 6, w2 - 12, h2 - 12);
+      g2.fillStyle = "#1a1a1a"; g2.font = "800 70px Onest, sans-serif"; g2.textAlign = "center"; g2.textBaseline = "middle"; g2.fillText(t("sign_workshop"), w2 / 2, h2 / 2 + 4, w2 - 40); });
+    cont.add(at(new THREE.Mesh(new THREE.PlaneGeometry(1.5, 0.38), new THREE.MeshStandardMaterial({ map: tx, roughness: 0.5 })), 0, 2.3, -3.07, Math.PI));
+  }
   cont.add(at(mesh(rbox(2.44, 2.6, 6.06, 0.05), contPaint), 0, 1.3, 0));
   for (const [x, z] of [[-1.17, -2.98], [1.17, -2.98], [-1.17, 2.98], [1.17, 2.98]]) cont.add(at(mesh(rbox(0.16, 2.62, 0.16, 0.03), darkSteel), x, 1.31, z));
   for (const sx of [-0.62, 0.62]) {
