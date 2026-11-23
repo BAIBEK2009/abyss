@@ -70,6 +70,7 @@ async function start() {
   const view = createView($("scene"));
   view.onResize((w, h) => aimCamera(view, w, h));
   const cabin = createCabin(view.scene);
+  view.scene.userData.eye = view.camera.position;          // the crew turn their heads to the captain
   view.onFrame((dt, time, sway) => cabin.update(dt, time, sway));
   const map = createMap(view, state);
   const dive = createDive(view);

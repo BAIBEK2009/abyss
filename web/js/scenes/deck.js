@@ -23,6 +23,7 @@ import { W } from "../weather.js";
 import { createRain } from "./rain.js";
 import { createNerpa } from "./nerpa.js";
 import { mergeByMaterial } from "./cabin_props.js";
+import { makePerson, patrol } from "./crew.js";
 import { t } from "../i18n.js";
 
 const std = (o) => new THREE.MeshStandardMaterial(o);
@@ -1195,18 +1196,46 @@ export function createDeck(view, { lifeLabel = "" } = {}) {
   ];
   const proxyMat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false, colorWrite: false });
   function proxy(w, h, d, x, y, z) { const p = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), proxyMat); p.position.set(x, y, z); ship.add(p); return p; }
+  // fix 4: the crew — Murat-aga at the winch, a deckhand walking the rails, Erlan on the bridge, two signalmen at the
+  // A-frame while Nerpa goes over the side. People are solid (colliders) and can be talked to ([E]).
+  const murat = makePerson("murat"); murat.position.set(2.45, 0, -4.4); murat.rotation.y = Math.PI / 2; ship.add(murat);
+  const sailor = makePerson("sailor"); ship.add(sailor);
+  const erlan = makePerson("erlan"); erlan.position.set(-1.25, 0, HZ1 - 1.75); ship.add(erlan);
+  const signalmen = [makePerson("deck"), makePerson("deck")];
+  signalmen[0].position.set(-2.2, 0, STERN + 2.2); signalmen[1].position.set(2.7, 0, STERN + 2.3);
+  signalmen.forEach((p) => { p.rotation.y = Math.PI; p.visible = false; ship.add(p); });
+  const sailorWalk = patrol(sailor, [[-1.25, -1.6], [-1.25, -12.9], [2.9, -13.3], [4.25, -8.2], [4.25, -1.2], [1.3, -0.7]], { speed: 0.85, pause: 4 });
+  const sailorBox = [0, 0, 0, 0];
+  const crewTalk = (who, p, r = 0.6) => ({ show: [p], hit: (() => { const h = new THREE.Mesh(new THREE.BoxGeometry(0.7, 1.8, 0.7), proxyMat); h.position.y = 0.9; p.add(h); return h; })(),
+    get stand() { return [p.position.x + Math.sin(p.rotation.y) * 1.1, p.position.z + Math.cos(p.rotation.y) * 1.1]; }, get look() { return [p.position.x, 1.55, p.position.z]; }, who });
+  const crewT = { wipeT: 8, binoT: 6 };
+  function updateCrew(dt, time) {
+    crewT.wipeT -= dt; crewT.binoT -= dt;
+    murat.userData.pose(crewT.wipeT < 0 && crewT.wipeT > -3 ? "wipe" : "work", time);
+    if (crewT.wipeT < -3) crewT.wipeT = 20;
+    erlan.userData.pose(crewT.binoT < 0 && crewT.binoT > -4 ? "bino" : "idle", time);
+    if (crewT.binoT < -4) crewT.binoT = 14;
+    sailorWalk(dt, time);
+    sailorBox[0] = sailor.position.x - 0.3; sailorBox[1] = sailor.position.z - 0.3; sailorBox[2] = sailor.position.x + 0.3; sailorBox[3] = sailor.position.z + 0.3;
+    signalmen.forEach((p, i) => { if (p.visible) p.userData.pose("signal", time + i * 1.3); });
+    const eye = view.camera.position;
+    for (const p of [murat, sailor, erlan]) p.userData.look(eye);
+  }
+  colliders.push([2.15, -4.75, 2.75, -4.05], [-1.55, HZ1 - 2.05, -0.95, HZ1 - 1.45], sailorBox);
+
   const objects = {
     radio: { show: [radio], hit: proxy(0.8, 0.6, 0.6, -2.25, 1.25, HZ1 - 0.75), stand: [-2.1, HZ1 - 1.55], look: [-2.25, 1.2, HZ1 - 0.6] },
     binoculars: { show: [binos], hit: proxy(0.5, 0.4, 0.5, HX + 0.3, 1.15, HZ1 - 0.2), stand: [HX + 0.8, HZ1 + 0.5], look: [HX + 0.3, 1.13, HZ1 - 0.2] },
     stairs: { show: [comp], hit: proxy(1.4, 2.1, 1.9, -2.2, 1.05, 1.3), stand: [-2.2, -0.15], look: [-2.2, 0.9, 0.6] },
     nerpa: { show: [nerpa, cradle], hit: proxy(2.9, 2.6, 4.0, 0.6, 1.4, -10.2), stand: [0.6, -7.5], look: [0.6, 1.5, -9.6] },
+    murat: crewTalk("murat", murat), sailor: crewTalk("sailor", sailor), erlan: crewTalk("erlan", erlan),
     workshop: { show: [cont], hit: proxy(2.6, 2.7, 6.2, -3.08, 1.3, -6.0), stand: [-1.2, -9.6], look: [-3.08, 1.3, -9.0] },
   };
 
   // the static wheelhouse: one mesh per material (draw calls); what can be outlined or moves stays as it is
   for (const o of Object.values(objects)) for (const sh of o.show) {
     sh.userData.noMerge = true;
-    if (sh !== nerpa && sh !== cradle) mergeByMaterial(sh);          // merged inside itself: the outline still finds it
+    if (sh !== nerpa && sh !== cradle && !o.who) mergeByMaterial(sh);          // merged inside itself: the outline still finds it
   }
   mergeByMaterial(house);
   mergeByMaterial(ship, { shallow: true });                           // the rails, posts, bollards, lamps standing on the deck
@@ -1351,7 +1380,7 @@ export function createDeck(view, { lifeLabel = "" } = {}) {
   horizon.children.forEach((sp, i) => { if (i < 9 && i % 2 === 0) radarTargets.push({ x: sp.position.x, z: sp.position.z, col: "#7dffb0", s: 4 }); });
   let shipLamps = null; const _lw = new THREE.Vector3();
   function update(dt, time) {
-    updateScreens(dt, time); updateGulls(dt, time);
+    updateScreens(dt, time); updateGulls(dt, time); updateCrew(dt, time);
     sea.material.uniforms.uTime.value = time;
     slick.material.uniforms.uTime.value = time;
     // the ship rolls +-3 deg, pitches a little and heaves with the swell (CLAUDE.md 23.2)
@@ -1531,7 +1560,7 @@ export function createDeck(view, { lifeLabel = "" } = {}) {
   };
   const deckSpace = { toWorld: (x, y, z, out) => out.set(x, y, z).applyMatrix4(ship.matrixWorld) };
   const launch = {
-    start() { floods[0].shadow.needsUpdate = true; cable.visible = false; wire.visible = true; splashed = false; hang(0.5, 1.0, 0); },
+    start() { floods[0].shadow.needsUpdate = true; cable.visible = false; wire.visible = true; splashed = false; hang(0.5, 1.0, 0); signalmen.forEach((p) => { p.visible = true; }); },
     /** Shot 1 (k 0..1): the A-frame swings out from inboard, Nerpa sways on the cable. */
     lift(k, dt, time, cam) {
       lastT = time; floods[0].shadow.needsUpdate = true;
@@ -1553,7 +1582,7 @@ export function createDeck(view, { lifeLabel = "" } = {}) {
       cam.lookAt(w.x - 0.4, 0.02, w.z + 1.5);
       return w;
     },
-    end() { floods[0].shadow.needsUpdate = true; aframe.rotation.x = 0; nerpa.position.copy(home.pos); nerpa.rotation.copy(home.rot); cable.visible = true; wire.visible = false;
+    end() { signalmen.forEach((p) => { p.visible = false; }); floods[0].shadow.needsUpdate = true; aframe.rotation.x = 0; nerpa.position.copy(home.pos); nerpa.rotation.copy(home.rot); cable.visible = true; wire.visible = false;
             for (let i = 0; i < SPL; i++) { splL[i] = -1; splP[i * 3 + 1] = -100; } splG.attributes.position.needsUpdate = true; foamT = -1; foam.visible = false; },
   };
 

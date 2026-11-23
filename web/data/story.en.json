@@ -45,6 +45,10 @@
    "name": "Families of flight AQ-271 passengers",
    "role": "via Maritime Rescue",
    "channel": "radio"
+  },
+  "sailor": {
+   "name": "Nurlan",
+   "role": "deckhand"
   }
  },
  "map_names": {
@@ -649,5 +653,23 @@
  },
  "dive_lines": {
   "sturgeon": "A sturgeon! So even this deep, the Caspian is alive."
+ },
+ "crew": {
+  "murat": [
+   "The cable's new, it holds. Not like the old one.",
+   "You watch the fuel, captain, I'll watch the winch."
+  ],
+  "sailor": [
+   "Captain, the helicopter's back to the south.",
+   "The gulls fly low before a storm. Murat-aga says it'll blow by evening."
+  ],
+  "erlan": [
+   "Holding course. The current sets us east, I'm correcting.",
+   "«Poseidon» runs without a stern light. Odd ways they have."
+  ],
+  "dana": [
+   "The map's recalculated. The hills don't lie — only witnesses do.",
+   "Get some rest if you're tired, captain. The numbers can wait, the beacon can't."
+  ]
  }
 }

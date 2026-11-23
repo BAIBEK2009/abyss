@@ -351,5 +351,6 @@
  "shelf_charts": "Карталар каталогы",
  "shelf_signals": "Сигналдар жинағы",
  "shelf_rules": "ТСАЕХЕ",
- "evac_title": "ЭВАКУАЦИЯ ЖОСПАРЫ"
+ "evac_title": "ЭВАКУАЦИЯ ЖОСПАРЫ",
+ "fp_talk": "Сөйлесу: {name}"
 }

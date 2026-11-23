@@ -351,5 +351,6 @@
  "shelf_charts": "Chart catalogue",
  "shelf_signals": "Signal code",
  "shelf_rules": "COLREGS",
- "evac_title": "EVACUATION PLAN"
+ "evac_title": "EVACUATION PLAN",
+ "fp_talk": "Talk: {name}"
 }

@@ -6,7 +6,7 @@ import * as THREE from "three";
 import { createDeck } from "./scenes/deck.js";
 import { createFirstPerson } from "./fp.js";
 import { createFpUi } from "./ui/fpui.js";
-import { story } from "./story.js";
+import { story, who } from "./story.js";
 import { sfx } from "./audio.js";
 import { fade, sleep } from "./anim.js";
 import { el } from "./ui/fmt.js";
@@ -55,8 +55,18 @@ export function createWalk(ctx) {
       { id: "stairs", ...o.stairs, prompt: () => P.stairs, use: gate(() => (!prologue() || tasks()[1]) && camp()?.act !== "act4", () => ctx.flow().downstairs(),
                                                                           () => ui.note(t(camp()?.act === "act4" ? "fp_act4" : tasks()[0] ? "fp_need_bino" : "fp_need_radio"))) },
       { id: "nerpa", ...o.nerpa, prompt: () => P.nerpa, use: gate(canDive, () => ctx.onDive(), () => ui.note(t(noDiveWhy()))) },
+      ...["murat", "sailor", "erlan"].map((id) => ({ id, show: o[id].show, hit: o[id].hit, get stand() { return o[id].stand; }, get look() { return o[id].look; },
+        prompt: () => t("fp_talk", { name: who(id).name }), use: () => talk(id) })),
       { id: "workshop", ...o.workshop, prompt: () => P.workshop, use: () => (ctx.onWorkshop ? ctx.onWorkshop() : ui.note(t("fp_workshop"))) },
     ];
+  }
+  // fix 4: [E] on a crew member — one of their two lines (story*.json → crew), in turn
+  const talked = {};
+  function talk(id) {
+    const lines = story()?.crew?.[id] ?? [];
+    if (!lines.length || speech.open) return;
+    const k = (talked[id] = (talked[id] ?? -1) + 1) % lines.length;
+    speech.say({ speaker: id, text: lines[k] });
   }
   function cabinThings() {
     const o = cabin.things, P = prompts();
@@ -66,6 +76,7 @@ export function createWalk(ctx) {
     ];
     if (o.radio) list.push({ id: "radio_cabin", ...o.radio, prompt: () => t("fp_radio"), use: () => (ctx.onRadio ? ctx.onRadio() : ui.note(t("fp_radio_idle"))) });
     if (o.board) list.push({ id: "board", ...o.board, prompt: () => P.board, use: () => { fp.unlock?.(); ctx.onBoard(); } });
+    if (o.dana) list.push({ id: "dana", show: o.dana.show, hit: o.dana.hit, stand: o.dana.stand, look: o.dana.look, prompt: () => t("fp_talk", { name: who("dana").name }), use: () => talk("dana") });
     for (const k of ["porthole_l", "porthole_r"]) if (o[k]) list.push({ id: k, ...o[k], prompt: () => P.porthole, use: () => ui.note(t(`fp_porthole_${weatherNow()}`), 4200) });
     return list;
   }

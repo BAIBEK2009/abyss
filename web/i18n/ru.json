@@ -351,5 +351,6 @@
  "shelf_charts": "Каталог карт",
  "shelf_signals": "Свод сигналов",
  "shelf_rules": "МППСС",
- "evac_title": "ПЛАН ЭВАКУАЦИИ"
+ "evac_title": "ПЛАН ЭВАКУАЦИИ",
+ "fp_talk": "Поговорить: {name}"
 }

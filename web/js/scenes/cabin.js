@@ -10,6 +10,7 @@ import { canvasTexture, rng } from "../view.js";
 import { walnut, brass, glass, steelPanel, watertightDoor } from "./materials.js";
 import { t } from "../i18n.js";
 import { cabinProps, mergeByMaterial } from "./cabin_props.js";
+import { makePerson } from "./crew.js";
 import { W as WX } from "../weather.js";      // (W is the cabin width below)
 
 export const FLOOR_Y = -10;
@@ -325,6 +326,14 @@ export function createCabin(scene) {
   }
   drawBoard();
 
+  // fix 4: Dana at her laptop at the left side of the table (sitting, typing; turns to the captain)
+  const dana = makePerson("dana"); dana.scale.setScalar(12); dana.position.set(-20.2, FLOOR_Y, -1.5); dana.rotation.y = Math.PI / 2;
+  dana.userData.noMerge = true; group.add(dana);
+  const laptop = new THREE.Group(); laptop.userData.noMerge = true;
+  laptop.add(mesh(new THREE.BoxGeometry(3.6, 0.2, 2.6), std({ color: 0x2a2d33, roughness: 0.4, metalness: 0.5 })));
+  const scr = new THREE.Mesh(new THREE.BoxGeometry(3.6, 2.4, 0.12), std({ color: 0x1a1c20, emissive: 0x6fb8c8, emissiveIntensity: 0.6, roughness: 0.3 }));
+  scr.position.set(0, 1.2, -1.25); scr.rotation.x = 0.25; laptop.add(scr);
+  laptop.position.set(-12.6, 0.12, -1.5); laptop.rotation.y = Math.PI / 2; group.add(laptop);
   const proxy = (w, h, d, x, y, z) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), proxyMat); m.position.set(x, y, z); group.add(m); return m; };
   const M = 12, q = new THREE.Quaternion(), e = new THREE.Euler();
   const space = {
@@ -341,6 +350,7 @@ export function createCabin(scene) {
     table: { show: [], hit: proxy(28, 3, 22.6, -0.5, 0, -0.5), stand: [0.0, 1.5], look: [0.0, 0.85, 0.2] },
     stairs_up: { show: [stairs], hit: proxy(11, 22, 4, 19, FLOOR_Y + 11, Z1 - 2.5), stand: [1.58, 1.95], look: [1.58, 1.4, 2.5] },
     radio: { show: [], hit: proxy(8, 7, 5, X0 + 6, FLOOR_Y + 11, Z0 + 3.5), stand: [-1.55, -2.35], look: [-2.0, 0.95, -2.9] },
+    dana: { show: [dana], hit: proxy(8, 16, 8, -20.2, FLOOR_Y + 8, -1.5), stand: [-1.3, 0.6], look: [-1.7, 1.2, -0.12] },
     board: { show: [], hit: proxy(1.5, 11, 16, X0 + 0.8, 6.2, 8), stand: [-1.75, 0.67], look: [-2.45, 1.35, 0.67] },
     porthole_l: { show: [], hit: proxy(8, 8, 1.5, -13, 6.5, Z0 + 0.6), stand: [-1.08, -2.5], look: [-1.08, 1.4, -3.1] },
     porthole_r: { show: [], hit: proxy(8, 8, 1.5, 13, 6.5, Z0 + 0.6), stand: [1.08, -2.5], look: [1.08, 1.4, -3.1] },
@@ -354,6 +364,7 @@ export function createCabin(scene) {
     /** Where the camera stands when the captain gets up from the table: a view of the whole cabin. */
     standPose: { target: new THREE.Vector3(1, 2.5, -10), dist: 41, tilt: 15, yaw: 20 },
     update(dt, time, sway) {
+      dana.userData.pose("type", time); dana.userData.look(scene.userData.eye ?? null);
       const pu = portholeUniforms;
       pu.uT.value = time; pu.uCloud.value = WX.cloud; pu.uRain.value = WX.rain; pu.uFlash.value = WX.flash; pu.uAmp.value = WX.amp;
       pu.uFog.value = WX.haze; pu.uSun.value = WX.sun; pu.uMoon.value = WX.moon; pu.uFogCol.value.copy(WX.fogCol);
