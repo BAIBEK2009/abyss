@@ -290,27 +290,15 @@ function createSky(moonDir) {
         vec3 col = mix(vec3(0.045, 0.075, 0.12), vec3(0.008, 0.016, 0.04), pow(up, 0.45));
         col += vec3(0.05, 0.065, 0.09) * pow(max(dot(vD, uMoon), 0.0), 18.0) * uMoonVis;
         // dawn: a warm band at the horizon towards the sun (east), rising into a pale sky
-        vec3 sunD = normalize(vec3(0.9, mix(0.06, 0.27, uDay), -0.3));
+        vec3 sunD = normalize(vec3(0.9, mix(0.06, 0.28, uDay), -0.3));
         float toSun = max(dot(normalize(vec3(vD.x, 0.0, vD.z)), normalize(vec3(sunD.x, 0.0, sunD.z))), 0.0);
         vec3 dawn = mix(vec3(0.95, 0.52, 0.28) * (0.55 + 0.9 * pow(toSun, 3.0)), vec3(0.32, 0.42, 0.6), smoothstep(0.0, 0.45, up));
         dawn += vec3(1.0, 0.75, 0.45) * pow(max(dot(vD, sunD), 0.0), 60.0) * 2.5;
         // morning: a clear sky, deep blue overhead, pale and warm at the horizon, a white-gold sun with a halo
-        vec3 day = mix(vec3(0.6, 0.67, 0.72), vec3(0.2, 0.38, 0.66), smoothstep(0.0, 0.5, up));
-        day += vec3(1.0, 0.86, 0.6) * (pow(max(dot(vD, sunD), 0.0), 900.0) * 30.0 + pow(max(dot(vD, sunD), 0.0), 12.0) * 0.45);
+        vec3 day = mix(vec3(0.62, 0.6, 0.55), vec3(0.11, 0.28, 0.58), smoothstep(0.0, 0.45, up));      // warm at the horizon, blue at the zenith (fix 6)
+        day += vec3(1.0, 0.86, 0.6) * (pow(max(dot(vD, sunD), 0.0), 900.0) * 18.0 + pow(max(dot(vD, sunD), 0.0), 16.0) * 0.25);
         dawn = mix(dawn, day, uDay);
         col = mix(col, dawn, uSun);
-        // clouds: a moving layer low over the sea, dense and dark in the storm; lightning lights them from inside
-        vec2 cp = vD.xz / (vD.y + 0.12) * 1.6 + vec2(uTime * 0.012, uTime * 0.004);
-        float n = fbm(cp), cov = smoothstep(1.0 - uCloud * 0.95, 1.05 - uCloud * 0.45, n + uCloud * 0.35);
-        // a second, higher and slower layer (parallax): thin streaks, lit by the sun's side
-        vec2 cp2 = vD.xz / (vD.y + 0.3) * 0.9 + vec2(uTime * 0.004, -uTime * 0.002);
-        float n2 = fbm(cp2 * vec2(1.0, 3.0)), cov2 = smoothstep(0.62, 0.9, n2) * (0.35 + 0.4 * uCloud) * smoothstep(0.02, 0.2, vD.y);
-        col = mix(col, mix(uFogCol * 1.3, vec3(1.0, 0.9, 0.78) * (0.3 + 0.7 * uSun), 0.4 + 0.5 * uSun) * (0.5 + 0.5 * max(dot(vD, sunD), 0.0)), cov2 * (1.0 - uCloud * 0.6));
-        vec3 cloud = mix(uFogCol * 1.2, mix(vec3(0.62, 0.66, 0.74), mix(vec3(0.95, 0.72, 0.55), vec3(1.0, 0.97, 0.92), uDay), uSun) * (0.12 + 0.25 * uSun + 0.55 * uDay + 0.08 * (1.0 - uCloud)), n);
-        cloud += vec3(1.0, 0.85, 0.6) * pow(max(dot(vD, sunD), 0.0), 6.0) * 0.5 * uSun * (1.0 - n);      // edges lit by the sun
-        float lit = uFlash * (0.35 + 1.6 * exp(-dot(vD.xz - uBolt, vD.xz - uBolt) * 6.0)) * (0.5 + n);
-        cloud += vec3(0.75, 0.8, 1.0) * lit;
-        col = mix(col, cloud, cov * smoothstep(-0.05, 0.08, vD.y));
         col += vec3(0.12, 0.14, 0.2) * uFlash * 0.4;
         col = mix(col, uFogCol, 1.0 - smoothstep(-0.02, 0.06 + uCloud * 0.1, vD.y));
         col = mix(col, uFogCol * 1.15, uHaze * (1.0 - 0.55 * smoothstep(0.0, 0.6, vD.y)));      // fog: the sky goes milky
@@ -342,6 +330,52 @@ function createSky(moonDir) {
       for (let i = 0; i < 26; i++) { c.fillStyle = `rgba(150,150,140,${0.12 + rr() * 0.2})`; c.beginPath(); c.arc(40 + rr() * 176, 40 + rr() * 176, 6 + rr() * 26, 0, 7); c.fill(); }
     }), color: new THREE.Color(1, 1, 1).multiplyScalar(2.2), transparent: true }));
   moon.position.copy(moonDir).multiplyScalar(5200);
+  // fix 6: the clouds on their own dome inside the stars — three layers with their own speeds (parallax), fbm with
+  // a threshold and soft edges, lit on the side towards the sun or the moon, dark underneath; low and dense in the storm
+  const cloudDome = new THREE.Mesh(new THREE.SphereGeometry(5000, 48, 24), new THREE.ShaderMaterial({
+    side: THREE.BackSide, depthWrite: false, transparent: true, fog: false, uniforms: dome.material.uniforms,
+    vertexShader: "varying vec3 vD; void main() { vD = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }",
+    fragmentShader: /* glsl */`
+      uniform vec3 uMoon; uniform float uTime; uniform float uCloud; uniform float uFlash; uniform float uMoonVis; uniform vec3 uFogCol;
+      uniform float uSun; uniform vec2 uBolt; uniform float uHaze; uniform float uDay; varying vec3 vD;
+      float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+      float vn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+        return mix(mix(hash(i), hash(i + vec2(1, 0)), f.x), mix(hash(i + vec2(0, 1)), hash(i + vec2(1, 1)), f.x), f.y); }
+      float fbm(vec2 p) { float a = 0.5, s = 0.0; for (int i = 0; i < 5; i++) { s += a * vn(p); p = p * 2.03 + 7.1; a *= 0.5; } return s; }
+      void main() {
+        if (vD.y < -0.02) discard;
+        vec3 sunD = normalize(vec3(0.9, mix(0.06, 0.28, uDay), -0.3));
+        vec3 lightD = normalize(mix(uMoon, sunD, uSun));
+        vec2 ld = normalize(lightD.xz) * 0.12;
+        vec3 lightCol = mix(vec3(0.42, 0.48, 0.62) * uMoonVis + vec3(0.05), mix(vec3(1.0, 0.72, 0.5), vec3(1.0, 0.95, 0.88), uDay), uSun);
+        vec3 shadowCol = mix(uFogCol * 0.9, mix(vec3(0.42, 0.38, 0.44), vec3(0.5, 0.56, 0.66), uDay), uSun * (1.0 - uCloud * 0.6));
+        vec4 acc = vec4(0.0);
+        for (int L = 0; L < 3; L++) {
+          float fl = float(L);
+          float h = mix(0.12, 0.45, fl / 2.0) + uCloud * 0.05 * (2.0 - fl);
+          vec2 cp = vD.xz / (vD.y + h) * (1.7 - fl * 0.45) + vec2(uTime * (0.014 - fl * 0.004), uTime * (0.005 - fl * 0.002)) + fl * 13.7;
+          float n = fbm(L == 2 ? cp * vec2(1.0, 3.2) : cp);
+          float thr = L == 2 ? 0.62 : 1.0 - uCloud * 0.9 - (L == 0 ? 0.0 : 0.08);
+          float cov = smoothstep(thr, thr + 0.22 - uCloud * 0.08, n + uCloud * (L == 0 ? 0.38 : 0.2));
+          if (L == 2) cov *= 0.45 * (1.0 - uCloud * 0.7);
+          float lit = clamp((n - fbm(cp + ld)) * 6.0 + 0.5, 0.0, 1.0);                 // brighter on the light's side
+          float base = smoothstep(0.0, 0.5, n - thr + 0.25);                            // darker underneath the thick parts
+          vec3 c = mix(shadowCol, lightCol, lit * (0.55 + 0.45 * (1.0 - base)) * (1.0 - uCloud * 0.55));
+          c += lightCol * pow(max(dot(vD, lightD), 0.0), 8.0) * 0.6 * (1.0 - n);          // silver lining
+          c += vec3(0.75, 0.8, 1.0) * uFlash * (0.35 + 1.6 * exp(-dot(vD.xz - uBolt, vD.xz - uBolt) * 6.0)) * (0.5 + n);
+          float a = cov * smoothstep(-0.02, 0.1, vD.y) * (1.0 - acc.a);
+          acc.rgb += c * a; acc.a += a;
+        }
+        if (acc.a < 0.005) discard;
+        vec3 col = acc.rgb / acc.a;
+        col = mix(col, uFogCol * 1.15, uHaze * 0.6);
+        gl_FragColor = vec4(col, acc.a);
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+      }`,
+  }));
+  cloudDome.frustumCulled = false; cloudDome.renderOrder = 1; stars.renderOrder = 0;
+  g.add(cloudDome);
   g.userData = { dome, stars, moon };
   moon.lookAt(0, 0, 0);
   g.add(moon);
@@ -1420,9 +1454,9 @@ export function createDeck(view, { lifeLabel = "" } = {}) {
     SUN_DIR.set(0.9, 0.12 + 0.3 * W.day, -0.3).normalize();                       // the morning sun stands higher (C5)
     moonLight.color.copy(MOON_C).lerp(SUN_C, W.sun).lerp(DAY_C, W.day);
     moonLight.position.copy(moonDir).lerp(SUN_DIR, W.sun).normalize().multiplyScalar(100);
-    moonLight.intensity = 0.65 * W.moon + 2.6 * W.sun + 1.8 * W.day + 0.12 * (1 - W.moon) + 7 * W.flash;
+    moonLight.intensity = 0.65 * W.moon + 2.6 * W.sun + 0.9 * W.day + 0.12 * (1 - W.moon) + 7 * W.flash;
     hemi.color.copy(HEMI_SKY).lerp(HEMI_DAWN, W.sun);
-    hemi.intensity = 0.42 + 0.5 * W.sun + 0.9 * W.day + 2.5 * W.flash;
+    hemi.intensity = 0.42 + 0.5 * W.sun + 0.4 * W.day + 2.5 * W.flash;
     scene.environmentIntensity = ENV_I * W.env * (1 + W.flash * 2);
     if (W.envName !== envName) { envName = W.envName; loadEnv(view.renderer, envName).then((t) => { if (t && envName === W.envName) scene.environment = t; }); }
     deckMat.roughness = 1.05 - 0.78 * W.wet;                        // wet steel: the lamps shine in it

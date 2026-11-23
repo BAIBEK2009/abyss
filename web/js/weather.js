@@ -20,8 +20,8 @@ export const STATES = {
           env: 1.4, envName: "night", wet: 0.1, lightning: 0, sun: 1, haze: 0.25,
           sat: 1.12, con: 1.04, shR: 0.022, shG: -0.01, shB: 0.042, hiR: 0.065, hiG: 0.025, hiB: -0.045 },
   // act I (C5): morning — the sun 15 degrees up, a clear pale-blue sky, golden light
-  morning: { amp: 0.95, foam: 0, cloud: 0.32, rain: 0, wind: 0.25, roll: 1, fogD: 0.00035, fogCol: C(0xa9bccb), moon: 0, stars: 0,
-             env: 1.7, envName: "night", wet: 0, lightning: 0, sun: 1, haze: 0.1, day: 1,
+  morning: { amp: 0.95, foam: 0, cloud: 0.32, rain: 0, wind: 0.25, roll: 1, fogD: 0.00028, fogCol: C(0x8aa2b4), moon: 0, stars: 0,
+             env: 1.1, envName: "night", wet: 0, lightning: 0, sun: 1, haze: 0.0, day: 1,
              sat: 1.08, con: 1.03, shR: -0.005, shG: 0.008, shB: 0.025, hiR: 0.045, hiG: 0.02, hiB: -0.03 },
 };
 for (const st of Object.values(STATES)) st.day ??= 0;
