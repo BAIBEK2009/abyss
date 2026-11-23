@@ -72,8 +72,11 @@ export function makeSprats(n = 200) {
   for (let i = 0; i < n; i++) { P.push(new THREE.Vector3((r() - 0.5) * 3, (r() - 0.5) * 1.2, (r() - 0.5) * 3)); V.push(new THREE.Vector3(r() - 0.5, 0, r() - 0.5).normalize().multiplyScalar(0.8)); }
   const centre = new THREE.Vector3(), m = new THREE.Matrix4(), q = new THREE.Quaternion(), z = new THREE.Vector3(0, 0, 1), tmp = new THREE.Vector3(), sc = new THREE.Vector3(1.6, 1.6, 1.6);
   /** home: the point the school circles; avoid: a point to flee (the vehicle); dt: seconds. */
+  let last = null;
   mesh.userData.update = (dt, t, home, avoid) => {
     mat.userData.bend.uT.value = t;
+    if (last) { const dy = home.y - last.y; if (Math.abs(dy) < 5) for (const p of P) p.y += dy; }       // the school sinks with the camera
+    last = home.clone();
     centre.set(0, 0, 0); for (const p of P) centre.add(p); centre.multiplyScalar(1 / n);
     const goal = tmp.set(home.x + Math.cos(t * 0.25) * 2.5, home.y + Math.sin(t * 0.4) * 0.6, home.z + Math.sin(t * 0.25) * 2.5);
     for (let i = 0; i < n; i++) {
@@ -92,7 +95,7 @@ export function makeSprats(n = 200) {
     }
     mesh.instanceMatrix.needsUpdate = true;
   };
-  mesh.userData.place = (at) => { for (const p of P) p.add(at); };
+  mesh.userData.place = (at) => { last = null; for (const p of P) p.add(at); };
   return mesh;
 }
 function mergeTwo(a, b) {
@@ -137,6 +140,7 @@ export function makeGobies(n = 16) {
   const m = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), sc = new THREE.Vector3();
   /** spots: bed positions [{x,z,y}]; scatter around the landing spot */
   mesh.userData.place = (pos) => { F.forEach((f, i) => f.p.copy(pos[i % pos.length])); };
+  mesh.userData.first = () => F[0].p.toArray();
   /** near: the vehicle position; lit(p) -> true when in the searchlight; puff(x,y,z) throws silt */
   mesh.userData.update = (dt, near, lit, puff, bedH) => {
     F.forEach((f, i) => {

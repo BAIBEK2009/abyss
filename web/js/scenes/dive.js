@@ -372,6 +372,7 @@ function createLife(deep, lampPos, lampDir) {
   }
   const v = new THREE.Vector3();
   const lifeApi = {
+    debug: () => ({ sturgeon: sturgeon.visible ? sturgeon.position.toArray() : null, goby: gobies.userData.first?.() ?? null }),
     /** A new dive: gobies round the landing spot; the sturgeon comes by once, 55 % of dives, 10-25 s after landing. */
     reset(T0) {
       const pos = [];
@@ -1570,7 +1571,7 @@ export function createDive(view) {
       // the sprats between 50 and 300 m: a school that turns away from Nerpa in a wave, silver flashes in the beams
       sprats.visible = depth > 40 && depth < 320;
       if (sprats.visible) {
-        if (!sprats.userData.placed) { sprats.userData.placed = true; sprats.userData.place(new THREE.Vector3(camera.position.x * 0.5, ny, camera.position.z * 0.5)); }
+        if (!sprats.userData.placed) { sprats.userData.placed = true; sprats.userData.place(new THREE.Vector3(camera.position.x * 0.6, ny - 0.4, camera.position.z * 0.6)); }
         camera.getWorldDirection(tmpV);
         sprats.userData.update(dt, time, new THREE.Vector3().copy(camera.position).addScaledVector(tmpV, 3.2).setY(ny - 0.4), nerpa.position);
       }
@@ -1630,7 +1631,7 @@ export function createDive(view) {
   }
   /** Test hook: where the dive's main find and the debris lie. */
   const debugWhere = () => ({ hint: [D.bestD, D.strongAt, D.hintT, T, [...(D.sent || [])]].map((v) => (typeof v === "number" ? +v.toFixed(1) : v)), bearing: cockpit.bearing, buoys: buoys.filter((g) => g.visible).map((g) => g.position.toArray()), box: box.visible ? box.position.toArray() : null, debris: debris.filter((g) => g.visible).map((g) => g.position.toArray()),
-    o2: D.o2 == null ? null : +D.o2.toFixed(2), mode, time: +T.toFixed(2),
+    o2: D.o2 == null ? null : +D.o2.toFixed(2), mode, time: +T.toFixed(2), life: life.debug(),
                              keys: debris.filter((g) => g.visible).map((g) => g.userData.key), rocks: bigRocks.slice().sort((a, b) => b[2] - a[2]).slice(0, 4) });
   return { deep, cinematic, search, leave, debugFaceBox, debugLook, debugWhere, stepPuffs };
 }
